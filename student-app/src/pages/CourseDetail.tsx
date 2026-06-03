@@ -22,8 +22,8 @@ export default function CourseDetail() {
     return <div className="page-content flex items-center justify-center"><div className="w-8 h-8 border-3 border-primary-500 border-t-transparent rounded-full animate-spin" /></div>;
   }
 
-  const completedCount = Math.floor(topics.length * 0.3); // demo uchun
-  const progressPercent = topics.length > 0 ? Math.round((completedCount / topics.length) * 100) : 0;
+  const freeTopics = topics.filter(t => !t.isPremium).length;
+  const progressPercent = topics.length > 0 ? Math.round((freeTopics / topics.length) * 100) : 0;
 
   return (
     <div className="page-content">
@@ -52,7 +52,7 @@ export default function CourseDetail() {
           <div className="flex-1 h-2 bg-white/20 rounded-full">
             <div className="h-full bg-white rounded-full transition-all" style={{ width: `${progressPercent}%` }} />
           </div>
-          <span className="text-white/80 text-xs ml-3">{completedCount} / {topics.length} Lessons</span>
+          <span className="text-white/80 text-xs ml-3">{freeTopics} / {topics.length} Lessons</span>
         </div>
       </div>
 
@@ -64,14 +64,15 @@ export default function CourseDetail() {
 
       <div className="px-5 space-y-3">
         {topics.map((topic, i) => {
-          const isDone = i < completedCount;
-          const isProgress = i === completedCount;
-          const isLocked = i > completedCount;
-          const topicProgress = isDone ? 100 : isProgress ? 65 : 0;
+          // Qulf faqat premium mavzularda ko'rsatiladi (admin belgilaydi)
+          const isLocked = topic.isPremium;
+          const topicProgress = isLocked ? 0 : (i < 3 ? 100 : i === 3 ? 65 : 0);
+          const isDone = !isLocked && topicProgress === 100;
+          const isProgress = !isLocked && !isDone && topicProgress > 0;
 
           return (
             <Link
-              to={topic.isPremium && isLocked ? "/premium-gate" : `/course/${courseId}/topic/${topic.id}`}
+              to={isLocked ? "/premium-gate" : `/course/${courseId}/topic/${topic.id}`}
               key={topic.id}
               className="flex items-center border border-gray-100 rounded-xl p-4 gap-3 hover:shadow-sm transition-shadow"
             >
