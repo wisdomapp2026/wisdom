@@ -79,7 +79,6 @@ export default function CourseDetail() {
             <div className="flex items-center gap-4 mt-4 text-sm text-gray-500">
               <span>📚 {topics.length} mavzu</span>
               <span>👥 {(course.totalStudents || 0).toLocaleString()} o'quvchi</span>
-              <span>✅ Har {course.testAfterEvery} darsdan keyin test</span>
               <span className={course.isPremium ? "text-yellow-600 font-medium" : "text-green-600 font-medium"}>
                 {course.isPremium ? "Premium" : "Bepul"}
               </span>
