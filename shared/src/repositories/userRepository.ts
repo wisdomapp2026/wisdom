@@ -56,6 +56,12 @@ export async function getAllProgressByUser(userId: string): Promise<UserProgress
   return snap.docs.map((d) => d.data() as UserProgress);
 }
 
+export async function getStudentCountByCourse(courseId: string): Promise<number> {
+  const q = query(collection(db, "progress"), where("courseId", "==", courseId));
+  const snap = await getDocs(q);
+  return snap.size;
+}
+
 // ============ TEST RESULTS ============
 
 export async function saveTestResult(result: TestResult): Promise<void> {

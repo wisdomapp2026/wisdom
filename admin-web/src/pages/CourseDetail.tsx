@@ -2,6 +2,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
 import { Plus, Edit, Trash2, Lock, Unlock, ChevronRight, Loader2 } from "lucide-react";
 import { getCourseById, getTopicsByCourse, getTestsByCourse, deleteCourse, updateCourse, updateTopic } from "@shared/repositories";
+import { getStudentCountByCourse } from "@shared/repositories";
 import type { Course, Topic, Test } from "@shared/types";
 import CreateTopicModal from "../components/CreateTopicModal";
 
@@ -16,6 +17,7 @@ export default function CourseDetail() {
   const [editingCourse, setEditingCourse] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editDesc, setEditDesc] = useState("");
+  const [studentCount, setStudentCount] = useState(0);
 
   useEffect(() => {
     if (courseId) loadData(courseId);
@@ -23,14 +25,16 @@ export default function CourseDetail() {
 
   async function loadData(id: string) {
     try {
-      const [c, t, te] = await Promise.all([
+      const [c, t, te, sc] = await Promise.all([
         getCourseById(id),
         getTopicsByCourse(id),
         getTestsByCourse(id),
+        getStudentCountByCourse(id),
       ]);
       setCourse(c);
       setTopics(t);
       setTests(te);
+      setStudentCount(sc);
       if (c) { setEditTitle(c.title); setEditDesc(c.description); }
     } catch (err) {
       console.error("Xatolik:", err);
@@ -78,7 +82,7 @@ export default function CourseDetail() {
             <p className="text-gray-500 mt-1">{course.description}</p>
             <div className="flex items-center gap-4 mt-4 text-sm text-gray-500">
               <span>📚 {topics.length} mavzu</span>
-              <span>👥 {(course.totalStudents || 0).toLocaleString()} o'quvchi</span>
+              <span>👥 {studentCount.toLocaleString()} o'quvchi</span>
               <span className={course.isPremium ? "text-yellow-600 font-medium" : "text-green-600 font-medium"}>
                 {course.isPremium ? "Premium" : "Bepul"}
               </span>
