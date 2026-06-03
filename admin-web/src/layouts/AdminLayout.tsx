@@ -21,7 +21,12 @@ import clsx from "clsx";
 const sidebarItems = [
   { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { path: "/courses", label: "Kurslar", icon: BookOpen },
+  { path: "/tests", label: "Testlar", icon: FileText },
   { path: "/students", label: "O'quvchilar", icon: Users },
+  { path: "/news", label: "Yangiliklar", icon: Newspaper },
+  { path: "/payments", label: "To'lovlar", icon: FileEdit },
+  { path: "/promos", label: "Promo kodlar", icon: Tag },
+  { path: "/drafts", label: "Draftlar", icon: FileText },
   { path: "/analytics", label: "Statistikalar", icon: BarChart3 },
   { path: "/settings", label: "Sozlamalar", icon: Settings },
 ];
