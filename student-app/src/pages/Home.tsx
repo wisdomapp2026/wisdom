@@ -1,14 +1,32 @@
 import { Search, Bell, ChevronRight, Play } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { getAllCourses } from "@shared/repositories";
+import { getAllCourses, getTopicsByCourse } from "@shared/repositories";
+import { getStudentCountByCourse } from "@shared/repositories";
 import type { Course } from "@shared/types";
 
+interface CourseWithMeta extends Course {
+  topicCount: number;
+  studentCount: number;
+}
+
 export default function Home() {
-  const [courses, setCourses] = useState<Course[]>([]);
+  const [courses, setCourses] = useState<CourseWithMeta[]>([]);
 
   useEffect(() => {
-    getAllCourses().then(setCourses).catch(console.error);
+    getAllCourses().then(async (data) => {
+      // Har bir kurs uchun mavzular va o'quvchilar sonini olish
+      const withMeta = await Promise.all(
+        data.map(async (c) => {
+          const [topics, students] = await Promise.all([
+            getTopicsByCourse(c.id),
+            getStudentCountByCourse(c.id),
+          ]);
+          return { ...c, topicCount: topics.length, studentCount: students };
+        })
+      );
+      setCourses(withMeta);
+    }).catch(console.error);
   }, []);
 
   return (
@@ -67,14 +85,14 @@ export default function Home() {
         </div>
         <div className="grid grid-cols-2 gap-3">
           {(courses.length > 0 ? courses : [
-            { id: "demo-boshlangich-matematika", title: "Attestatsiya", totalStudents: 12400, category: "Matematika" },
-            { id: "demo-boshlangich-matematika", title: "Milliy sertifikat", totalStudents: 8200, category: "Matematika" },
+            { id: "demo-boshlangich-matematika", title: "Yuklanmoqda...", topicCount: 0, studentCount: 0, category: "Matematika" },
           ] as any[]).slice(0, 4).map((c: any, i: number) => (
             <Link to={`/course/${c.id}`} key={i} className="border border-gray-100 rounded-xl p-3.5 hover:shadow-sm transition-shadow">
               <div className="w-9 h-9 bg-primary-50 rounded-lg flex items-center justify-center mb-2">
                 <span className="text-primary-500 font-bold">⚡</span>
               </div>
               <p className="text-sm font-semibold text-gray-900">{c.title}</p>
+              <p className="text-[11px] text-gray-500 mt-1">📚 {c.topicCount} mavzu · 👥 {c.studentCount} o'quvchi</p>
               <div className="flex items-center justify-between mt-2 text-[10px]">
                 <span className="text-gray-400">Progress:</span>
                 <span className="text-primary-500 font-semibold">{c.progress || 0}%</span>
