@@ -1,0 +1,32 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+  body {
+    @apply text-gray-900 antialiased bg-gray-50;
+    font-family: "Inter", system-ui, sans-serif;
+  }
+  /* Mobile frame — web da telefon shaklida ko'rsatish */
+  #root {
+    @apply max-w-mobile mx-auto min-h-screen bg-white relative shadow-xl;
+  }
+}
+
+@layer components {
+  .bottom-nav {
+    @apply fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-mobile bg-white border-t border-gray-100 flex items-center justify-around py-2 pb-3 z-50;
+  }
+  .nav-item {
+    @apply flex flex-col items-center gap-0.5 text-gray-400 text-[10px] font-medium;
+  }
+  .nav-item.active {
+    @apply text-primary-500;
+  }
+  .page-content {
+    @apply pb-20 min-h-screen;
+  }
+}
