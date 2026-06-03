@@ -27,6 +27,10 @@ export default function TopicDetail() {
   const [editingTopic, setEditingTopic] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editDesc, setEditDesc] = useState("");
+  const [editingProblemId, setEditingProblemId] = useState<string | null>(null);
+  const [editProblemContent, setEditProblemContent] = useState("");
+  const [editProblemVideo, setEditProblemVideo] = useState("");
+  const [editProblemDifficulty, setEditProblemDifficulty] = useState<string>("easy");
 
   useEffect(() => {
     if (courseId && topicId) loadData(courseId, topicId);
@@ -53,6 +57,26 @@ export default function TopicDetail() {
     await updateTopic(courseId, topicId, { title: editTitle, description: editDesc });
     setTopic((prev) => prev ? { ...prev, title: editTitle, description: editDesc } : prev);
     setEditingTopic(false);
+  }
+
+  function startEditProblem(problem: Problem) {
+    setEditingProblemId(problem.id);
+    setEditProblemContent(problem.content);
+    setEditProblemVideo(problem.videoUrl || "");
+    setEditProblemDifficulty(problem.difficulty);
+  }
+
+  async function handleSaveProblem(problemId: string) {
+    if (!courseId || !topicId) return;
+    await updateProblem(courseId, topicId, problemId, {
+      content: editProblemContent,
+      videoUrl: editProblemVideo || undefined,
+      difficulty: editProblemDifficulty as any,
+    });
+    setProblems((prev) => prev.map((p) =>
+      p.id === problemId ? { ...p, content: editProblemContent, videoUrl: editProblemVideo, difficulty: editProblemDifficulty as any } : p
+    ));
+    setEditingProblemId(null);
   }
 
   async function handleDeleteTopic() {
@@ -170,6 +194,37 @@ export default function TopicDetail() {
       <div className="space-y-4">
         {problems.map((problem, index) => (
           <div key={problem.id} className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
+            {editingProblemId === problem.id ? (
+              /* EDIT MODE */
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-primary-600">#{index + 1} tahrirlash</span>
+                  <select value={editProblemDifficulty} onChange={(e) => setEditProblemDifficulty(e.target.value)} className="text-xs border border-gray-200 rounded-lg px-2 py-1">
+                    <option value="easy">Oson</option>
+                    <option value="medium">O'rta</option>
+                    <option value="hard">Qiyin</option>
+                  </select>
+                </div>
+                <textarea
+                  value={editProblemContent}
+                  onChange={(e) => setEditProblemContent(e.target.value)}
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+                  placeholder="Misol matni (LaTeX: $$formula$$)"
+                />
+                <input
+                  value={editProblemVideo}
+                  onChange={(e) => setEditProblemVideo(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  placeholder="Video URL (YouTube)"
+                />
+                <div className="flex gap-2">
+                  <button onClick={() => handleSaveProblem(problem.id)} className="btn-primary text-sm">Saqlash</button>
+                  <button onClick={() => setEditingProblemId(null)} className="btn-outline text-sm">Bekor</button>
+                </div>
+              </div>
+            ) : (
+              /* VIEW MODE */
             <div className="flex items-start justify-between">
               <div className="flex items-start gap-4">
                 <div className="w-8 h-8 bg-primary-50 rounded-full flex items-center justify-center text-primary-600 font-bold text-sm shrink-0">
@@ -213,7 +268,7 @@ export default function TopicDetail() {
                 </div>
               </div>
               <div className="flex items-center gap-1">
-                <button className="p-2 text-gray-400 hover:text-primary-600 rounded-lg hover:bg-gray-50" title="Tahrirlash">
+                <button onClick={() => startEditProblem(problem)} className="p-2 text-gray-400 hover:text-primary-600 rounded-lg hover:bg-gray-50" title="Tahrirlash">
                   <Edit className="w-4 h-4" />
                 </button>
                 <button
@@ -225,6 +280,7 @@ export default function TopicDetail() {
                 </button>
               </div>
             </div>
+            )}
           </div>
         ))}
 
