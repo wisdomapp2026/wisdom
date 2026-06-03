@@ -97,6 +97,8 @@ export interface Problem {
   image?: string; // Storage URL
   difficulty: Difficulty;
   order: number;
+  /** Premium misol (login + obuna talab etiladi) */
+  isPremium?: boolean;
   /** Video yechim — YouTube URL yoki upload */
   videoUrl?: string;
   videoType?: "youtube" | "upload";

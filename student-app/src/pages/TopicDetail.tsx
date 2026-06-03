@@ -66,9 +66,10 @@ export default function TopicDetail() {
 
       <div className="px-5 space-y-4">
         {problems.map((p, i) => {
-          const isDone = i < completedCount;
-          const isActive = i === completedCount;
-          const isLocked = i > completedCount;
+          // Qulf: agar misol premium bo'lsa — qulflangan
+          const isLocked = p.isPremium === true;
+          const isDone = !isLocked && i < completedCount;
+          const isActive = !isLocked && i === completedCount;
 
           return (
             <div key={p.id} className={`bg-white rounded-xl p-5 border transition-all ${isActive ? "border-primary-300 shadow-sm shadow-primary-100" : "border-gray-100"}`}>

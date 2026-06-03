@@ -235,6 +235,9 @@ export default function TopicDetail() {
                     <span className={`text-xs px-2 py-0.5 rounded-full ${difficultyColors[problem.difficulty] || ""}`}>
                       {difficultyLabels[problem.difficulty] || problem.difficulty}
                     </span>
+                    {problem.isPremium && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700">Premium</span>
+                    )}
                     {problem.tags?.map((tag) => (
                       <span key={tag} className="text-xs text-gray-500">#{tag}</span>
                     ))}
@@ -268,6 +271,22 @@ export default function TopicDetail() {
                 </div>
               </div>
               <div className="flex items-center gap-1">
+                {/* Premium toggle */}
+                <button
+                  onClick={async () => {
+                    const v = !problem.isPremium;
+                    await updateProblem(courseId!, topicId!, problem.id, { isPremium: v });
+                    setProblems((prev) => prev.map((p) => p.id === problem.id ? { ...p, isPremium: v } : p));
+                  }}
+                  className={`px-2 py-1 rounded text-[10px] font-medium border ${
+                    problem.isPremium
+                      ? "border-green-200 text-green-600 hover:bg-green-50"
+                      : "border-yellow-200 text-yellow-600 hover:bg-yellow-50"
+                  }`}
+                  title={problem.isPremium ? "Free qilish" : "Premium qilish"}
+                >
+                  {problem.isPremium ? "🔓 Free" : "🔒 Premium"}
+                </button>
                 <button onClick={() => startEditProblem(problem)} className="p-2 text-gray-400 hover:text-primary-600 rounded-lg hover:bg-gray-50" title="Tahrirlash">
                   <Edit className="w-4 h-4" />
                 </button>
