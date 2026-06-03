@@ -52,14 +52,14 @@ export default function CourseDetail() {
           <div className="flex-1 h-2 bg-white/20 rounded-full">
             <div className="h-full bg-white rounded-full transition-all" style={{ width: `${progressPercent}%` }} />
           </div>
-          <span className="text-white/80 text-xs ml-3">{freeTopics} / {topics.length} Lessons</span>
+          <span className="text-white/80 text-xs ml-3">{freeTopics} / {topics.length} dars</span>
         </div>
       </div>
 
-      {/* Topics */}
+      {/* Mavzular */}
       <div className="px-5 mt-6 flex justify-between items-center mb-4">
-        <h3 className="text-lg font-bold">Topics</h3>
-        <button className="text-sm text-primary-500 font-medium">View All</button>
+        <h3 className="text-lg font-bold">Mavzular</h3>
+        <button className="text-sm text-primary-500 font-medium">Barchasi</button>
       </div>
 
       <div className="px-5 space-y-3">
@@ -101,14 +101,14 @@ export default function CourseDetail() {
         })}
       </div>
 
-      {/* Daily Quiz */}
+      {/* Kunlik test */}
       <div className="mx-5 mt-6 bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
         <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center shrink-0">
           <span className="text-white text-sm">✓</span>
         </div>
         <div>
-          <p className="font-semibold text-gray-900 text-sm">Daily Quiz Available!</p>
-          <p className="text-xs text-gray-500">Complete today's challenge to earn 50 XP.</p>
+          <p className="font-semibold text-gray-900 text-sm">Kunlik test mavjud!</p>
+          <p className="text-xs text-gray-500">Bugungi topshiriqni bajaring va 50 XP oling.</p>
         </div>
       </div>
     </div>

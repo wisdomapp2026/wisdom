@@ -5,6 +5,7 @@ import type { Topic, Problem } from "@shared/types";
 import { ChevronLeft, Star, Play, Lock, CheckCircle } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import AuthModal from "../components/AuthModal";
+import VideoModal from "../components/VideoModal";
 
 const diffColors: Record<string, string> = { easy: "bg-green-100 text-green-700", medium: "bg-yellow-100 text-yellow-700", hard: "bg-red-100 text-red-700" };
 const diffLabels: Record<string, string> = { easy: "Easy", medium: "Medium", hard: "Hard" };
@@ -17,6 +18,8 @@ export default function TopicDetail() {
   const [problems, setProblems] = useState<Problem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [videoUrl, setVideoUrl] = useState("");
+  const [showVideoModal, setShowVideoModal] = useState(false);
 
   useEffect(() => {
     if (!courseId || !topicId) return;
@@ -55,10 +58,10 @@ export default function TopicDetail() {
       {/* Topic Mastery */}
       <div className="mx-5 mt-4 bg-white rounded-xl p-4 border border-gray-100">
         <div className="flex items-center justify-between">
-          <p className="font-semibold text-gray-900 text-sm">Topic Mastery</p>
+          <p className="font-semibold text-gray-900 text-sm">Mavzu darajasi</p>
           <p className="text-2xl font-bold text-primary-500">{mastery}%</p>
         </div>
-        <p className="text-xs text-gray-500 mt-1">{freeProblems} of {problems.length} lessons completed today</p>
+        <p className="text-xs text-gray-500 mt-1">{freeProblems} / {problems.length} ta misol ochiq</p>
         <div className="h-2 bg-gray-100 rounded-full mt-2">
           <div className="h-full bg-primary-500 rounded-full transition-all" style={{ width: `${mastery}%` }} />
         </div>
@@ -67,14 +70,14 @@ export default function TopicDetail() {
             <div className="w-5 h-5 bg-gray-300 rounded-full border-2 border-white" />
             <div className="w-5 h-5 bg-gray-400 rounded-full border-2 border-white" />
           </div>
-          <p className="text-[11px] text-gray-500">You and 12 others are studying this now</p>
+          <p className="text-[11px] text-gray-500">Siz va 12 nafar boshqalar hozir shu mavzuni o'rganmoqda</p>
         </div>
       </div>
 
       {/* Misollar */}
       <div className="px-5 mt-6 flex justify-between items-center mb-4">
         <h3 className="font-bold text-gray-900">Misollar</h3>
-        <button className="text-sm text-primary-500 font-medium">View All →</button>
+        <button className="text-sm text-primary-500 font-medium">Barchasi →</button>
       </div>
 
       <div className="px-5 space-y-4">
@@ -113,20 +116,22 @@ export default function TopicDetail() {
                   {/* Solution (done items) */}
                   {isDone && p.solution && p.solution.length > 0 && (
                     <button className="mt-3 flex items-center gap-2 text-sm text-gray-600 font-medium">
-                      <span>📖</span> Review Solution
+                      <span>📖</span> Yechimni ko'rish
                     </button>
                   )}
 
-                  {/* Video button (active) */}
+                  {/* Video button (active) — modal ochadi */}
                   {isActive && p.videoUrl && (
-                    <a href={p.videoUrl} target="_blank" rel="noreferrer" className="mt-4 w-full bg-primary-500 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2">
-                      <Play size={16} fill="white" /> Watch Video Solution
-                    </a>
+                    <button
+                      onClick={() => { setVideoUrl(p.videoUrl!); setShowVideoModal(true); }}
+                      className="mt-4 w-full bg-primary-500 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2"
+                    >
+                      <Play size={16} fill="white" /> Video yechimni ko'rish
+                    </button>
                   )}
                 </>
               )}
 
-              {/* Premium — yechim/video o'rniga qulf xabari */}
               {isPremium && (
                 <div className="mt-3 flex items-center gap-2 text-sm text-gray-400">
                   <Lock size={14} />
@@ -138,17 +143,20 @@ export default function TopicDetail() {
         })}
       </div>
 
-      {/* Refresher tip */}
+      {/* Eslatma */}
       <div className="mx-5 mt-6 bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
         <span className="text-primary-500">📖</span>
         <div>
-          <p className="font-semibold text-gray-900 text-sm">Need a refresher?</p>
-          <p className="text-xs text-gray-600 mt-0.5">Re-watch the introduction video for a quick summary of formulas.</p>
+          <p className="font-semibold text-gray-900 text-sm">Esdan chiqardingizmi?</p>
+          <p className="text-xs text-gray-600 mt-0.5">Formulalarni tez takrorlash uchun kirish videosini qayta ko'ring.</p>
         </div>
       </div>
 
       {/* Auth Modal */}
       <AuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} />
+
+      {/* Video Modal */}
+      <VideoModal open={showVideoModal} videoUrl={videoUrl} onClose={() => setShowVideoModal(false)} />
     </div>
   );
 }

@@ -82,8 +82,8 @@ export default function Courses() {
                     <span className="text-[10px] font-bold px-2 py-0.5 rounded-full ml-2 shrink-0" style={{ backgroundColor: color + "15", color }}>{course.category}</span>
                   </div>
                   <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
-                    <span>👥 {(course.totalStudents || 0).toLocaleString()} o'quvchi</span>
                     {course.isPremium && <span className="text-yellow-600 font-medium">Premium</span>}
+                    {!course.isPremium && <span className="text-green-600 font-medium">Bepul</span>}
                   </div>
                   <p className="text-sm text-gray-500 mt-1 line-clamp-2">{course.description}</p>
                   <div className="flex items-center mt-2.5">

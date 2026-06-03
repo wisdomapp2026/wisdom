@@ -75,7 +75,6 @@ export default function Home() {
                 <span className="text-primary-500 font-bold">⚡</span>
               </div>
               <p className="text-sm font-semibold text-gray-900">{c.title}</p>
-              <p className="text-[11px] text-gray-500 mt-0.5">👥 {(c.totalStudents || 0).toLocaleString()} o'quvchi</p>
               <div className="flex items-center justify-between mt-2 text-[10px]">
                 <span className="text-gray-400">Progress:</span>
                 <span className="text-primary-500 font-semibold">{c.progress || 0}%</span>
