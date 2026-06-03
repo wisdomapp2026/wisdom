@@ -1,12 +1,18 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Plus, Search, Users, BookOpen, Loader2 } from "lucide-react";
-import { getAllCourses } from "@shared/repositories";
+import { getAllCourses, getTopicsByCourse } from "@shared/repositories";
+import { getStudentCountByCourse } from "@shared/repositories";
 import type { Course } from "@shared/types";
 import CreateCourseModal from "../components/CreateCourseModal";
 
+interface CourseWithMeta extends Course {
+  topicCount: number;
+  studentCount: number;
+}
+
 export default function Courses() {
-  const [courses, setCourses] = useState<Course[]>([]);
+  const [courses, setCourses] = useState<CourseWithMeta[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -18,7 +24,16 @@ export default function Courses() {
   async function loadCourses() {
     try {
       const data = await getAllCourses();
-      setCourses(data);
+      const withMeta = await Promise.all(
+        data.map(async (c) => {
+          const [topics, students] = await Promise.all([
+            getTopicsByCourse(c.id),
+            getStudentCountByCourse(c.id),
+          ]);
+          return { ...c, topicCount: topics.length, studentCount: students };
+        })
+      );
+      setCourses(withMeta);
     } catch (err) {
       console.error("Kurslarni yuklashda xatolik:", err);
     } finally {
@@ -105,10 +120,10 @@ export default function Courses() {
                 <div className="flex items-center justify-between text-sm text-gray-500">
                   <span className="flex items-center gap-1">
                     <Users className="w-4 h-4" />
-                    {(course.totalStudents || 0).toLocaleString()} o'quvchi
+                    {course.studentCount} o'quvchi
                   </span>
                   <span className="text-xs">
-                    {course.tags?.map((t) => `#${t}`).join(" ")}
+                    📚 {course.topicCount} mavzu
                   </span>
                 </div>
               </div>
