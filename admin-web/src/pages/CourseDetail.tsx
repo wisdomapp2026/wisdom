@@ -1,7 +1,7 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { Plus, Edit, Trash2, Lock, ChevronRight, Loader2 } from "lucide-react";
-import { getCourseById, getTopicsByCourse, getTestsByCourse, deleteCourse } from "@shared/repositories";
+import { Plus, Edit, Trash2, Lock, Unlock, ChevronRight, Loader2 } from "lucide-react";
+import { getCourseById, getTopicsByCourse, getTestsByCourse, deleteCourse, updateCourse, updateTopic } from "@shared/repositories";
 import type { Course, Topic, Test } from "@shared/types";
 import CreateTopicModal from "../components/CreateTopicModal";
 
@@ -13,6 +13,9 @@ export default function CourseDetail() {
   const [tests, setTests] = useState<Test[]>([]);
   const [loading, setLoading] = useState(true);
   const [showTopicModal, setShowTopicModal] = useState(false);
+  const [editingCourse, setEditingCourse] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDesc, setEditDesc] = useState("");
 
   useEffect(() => {
     if (courseId) loadData(courseId);
@@ -28,6 +31,7 @@ export default function CourseDetail() {
       setCourse(c);
       setTopics(t);
       setTests(te);
+      if (c) { setEditTitle(c.title); setEditDesc(c.description); }
     } catch (err) {
       console.error("Xatolik:", err);
     } finally {
@@ -58,6 +62,16 @@ export default function CourseDetail() {
 
       {/* Course header */}
       <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
+        {editingCourse ? (
+          <div className="space-y-3">
+            <input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-xl font-bold focus:outline-none focus:ring-2 focus:ring-primary-500" />
+            <textarea value={editDesc} onChange={(e) => setEditDesc(e.target.value)} rows={2} className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none" />
+            <div className="flex gap-2">
+              <button onClick={async () => { await updateCourse(courseId!, { title: editTitle, description: editDesc }); setCourse((p) => p ? { ...p, title: editTitle, description: editDesc } : p); setEditingCourse(false); }} className="btn-primary text-sm">Saqlash</button>
+              <button onClick={() => setEditingCourse(false)} className="btn-outline text-sm">Bekor</button>
+            </div>
+          </div>
+        ) : (
         <div className="flex items-start justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">{course.title}</h1>
@@ -72,7 +86,15 @@ export default function CourseDetail() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button className="btn-outline flex items-center gap-2 text-sm">
+            {/* Premium/Free toggle */}
+            <button
+              onClick={async () => { const v = !course.isPremium; await updateCourse(courseId!, { isPremium: v }); setCourse((p) => p ? { ...p, isPremium: v } : p); }}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border ${course.isPremium ? "border-green-200 text-green-700 hover:bg-green-50" : "border-yellow-200 text-yellow-700 hover:bg-yellow-50"}`}
+            >
+              {course.isPremium ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+              {course.isPremium ? "Free qilish" : "Premium qilish"}
+            </button>
+            <button onClick={() => setEditingCourse(true)} className="btn-outline flex items-center gap-2 text-sm">
               <Edit className="w-4 h-4" />
               Tahrirlash
             </button>
@@ -90,6 +112,7 @@ export default function CourseDetail() {
             </button>
           </div>
         </div>
+        )}
       </div>
 
       {/* Actions */}
@@ -114,25 +137,37 @@ export default function CourseDetail() {
         </div>
         <div className="divide-y divide-gray-50">
           {topics.map((topic) => (
-            <Link
-              key={topic.id}
-              to={`/courses/${courseId}/topics/${topic.id}`}
-              className="flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
-            >
-              <div className="flex items-center gap-4">
+            <div key={topic.id} className="flex items-center justify-between p-4 hover:bg-gray-50 transition-colors">
+              <Link
+                to={`/courses/${courseId}/topics/${topic.id}`}
+                className="flex items-center gap-4 flex-1 min-w-0"
+              >
                 <div className="w-10 h-10 bg-primary-50 rounded-lg flex items-center justify-center text-primary-600 font-bold text-sm">
                   {topic.order}
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <h4 className="font-medium text-gray-900">{topic.title}</h4>
                     {topic.isPremium && <Lock className="w-3.5 h-3.5 text-yellow-500" />}
                   </div>
-                  <p className="text-sm text-gray-500">{topic.description}</p>
+                  <p className="text-sm text-gray-500 truncate">{topic.description}</p>
                 </div>
+              </Link>
+              <div className="flex items-center gap-2 ml-2">
+                <button
+                  onClick={async () => {
+                    const v = !topic.isPremium;
+                    await updateTopic(courseId!, topic.id, { isPremium: v });
+                    setTopics((prev) => prev.map((t) => t.id === topic.id ? { ...t, isPremium: v } : t));
+                  }}
+                  className={`text-[10px] font-medium px-2 py-1 rounded border ${topic.isPremium ? "border-green-200 text-green-600 hover:bg-green-50" : "border-yellow-200 text-yellow-600 hover:bg-yellow-50"}`}
+                  title={topic.isPremium ? "Free qilish" : "Premium qilish"}
+                >
+                  {topic.isPremium ? "Free" : "Premium"}
+                </button>
+                <ChevronRight className="w-4 h-4 text-gray-400" />
               </div>
-              <ChevronRight className="w-4 h-4 text-gray-400" />
-            </Link>
+            </div>
           ))}
         </div>
       </div>

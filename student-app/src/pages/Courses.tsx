@@ -14,7 +14,10 @@ export default function Courses() {
     getAllCourses().then((data) => {
       setCourses(data);
       setLoading(false);
-    }).catch(() => setLoading(false));
+    }).catch((err) => {
+      console.error("Kurslarni yuklashda xato:", err);
+      setLoading(false);
+    });
   }, []);
 
   // Agar Firestore'dan kurslar bo'sh bo'lsa, demo ko'rsatamiz

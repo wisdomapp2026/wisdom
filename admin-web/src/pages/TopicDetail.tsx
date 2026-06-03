@@ -1,7 +1,7 @@
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { ChevronRight, Plus, Edit, Trash2, Play, Loader2 } from "lucide-react";
-import { getTopicById, getProblemsByTopic } from "@shared/repositories";
+import { ChevronRight, Plus, Edit, Trash2, Play, Loader2, Lock, Unlock } from "lucide-react";
+import { getTopicById, getProblemsByTopic, updateTopic, deleteTopic, deleteProblem, updateProblem } from "@shared/repositories";
 import type { Topic, Problem } from "@shared/types";
 import CreateProblemModal from "../components/CreateProblemModal";
 
@@ -19,10 +19,14 @@ const difficultyLabels: Record<string, string> = {
 
 export default function TopicDetail() {
   const { courseId, topicId } = useParams<{ courseId: string; topicId: string }>();
+  const navigate = useNavigate();
   const [topic, setTopic] = useState<Topic | null>(null);
   const [problems, setProblems] = useState<Problem[]>([]);
   const [loading, setLoading] = useState(true);
   const [showProblemModal, setShowProblemModal] = useState(false);
+  const [editingTopic, setEditingTopic] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDesc, setEditDesc] = useState("");
 
   useEffect(() => {
     if (courseId && topicId) loadData(courseId, topicId);
@@ -36,11 +40,40 @@ export default function TopicDetail() {
       ]);
       setTopic(t);
       setProblems(p);
+      if (t) { setEditTitle(t.title); setEditDesc(t.description); }
     } catch (err) {
       console.error("Xatolik:", err);
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleSaveTopic() {
+    if (!courseId || !topicId) return;
+    await updateTopic(courseId, topicId, { title: editTitle, description: editDesc });
+    setTopic((prev) => prev ? { ...prev, title: editTitle, description: editDesc } : prev);
+    setEditingTopic(false);
+  }
+
+  async function handleDeleteTopic() {
+    if (!courseId || !topicId) return;
+    if (!confirm(`"${topic?.title}" mavzusini o'chirishga ishonchingiz komilmi? Ichidagi barcha misollar ham o'chiriladi.`)) return;
+    await deleteTopic(courseId, topicId);
+    navigate(`/courses/${courseId}`);
+  }
+
+  async function handleTogglePremium() {
+    if (!courseId || !topicId || !topic) return;
+    const newVal = !topic.isPremium;
+    await updateTopic(courseId, topicId, { isPremium: newVal });
+    setTopic((prev) => prev ? { ...prev, isPremium: newVal } : prev);
+  }
+
+  async function handleDeleteProblem(problemId: string) {
+    if (!courseId || !topicId) return;
+    if (!confirm("Bu misolni o'chirishga ishonchingiz komilmi?")) return;
+    await deleteProblem(courseId, topicId, problemId);
+    setProblems((prev) => prev.filter((p) => p.id !== problemId));
   }
 
   if (loading) {
@@ -68,29 +101,63 @@ export default function TopicDetail() {
 
       {/* Topic header */}
       <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">{topic.title}</h1>
-            <p className="text-gray-500 mt-1">{topic.description}</p>
-            <div className="flex items-center gap-3 mt-3 text-sm text-gray-500">
-              <span>📝 {problems.length} ta misol</span>
-              <span>🎬 {problems.filter((p) => p.videoUrl).length} ta video</span>
-              <span className={topic.isPremium ? "text-yellow-600" : "text-green-600"}>
-                {topic.isPremium ? "Premium" : "Bepul"}
-              </span>
+        {editingTopic ? (
+          /* Edit mode */
+          <div className="space-y-3">
+            <input
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-lg font-bold focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+            <textarea
+              value={editDesc}
+              onChange={(e) => setEditDesc(e.target.value)}
+              rows={2}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+            />
+            <div className="flex gap-2">
+              <button onClick={handleSaveTopic} className="btn-primary text-sm">Saqlash</button>
+              <button onClick={() => setEditingTopic(false)} className="btn-outline text-sm">Bekor</button>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <button className="btn-outline text-sm flex items-center gap-2">
-              <Edit className="w-4 h-4" />
-              Tahrirlash
-            </button>
-            <button className="btn-outline text-sm text-danger border-red-200 hover:bg-red-50 flex items-center gap-2">
-              <Trash2 className="w-4 h-4" />
-              O'chirish
-            </button>
+        ) : (
+          /* View mode */
+          <div className="flex items-start justify-between">
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">{topic.title}</h1>
+              <p className="text-gray-500 mt-1">{topic.description}</p>
+              <div className="flex items-center gap-3 mt-3 text-sm text-gray-500">
+                <span>📝 {problems.length} ta misol</span>
+                <span>🎬 {problems.filter((p) => p.videoUrl).length} ta video</span>
+                <span className={topic.isPremium ? "text-yellow-600 font-medium" : "text-green-600 font-medium"}>
+                  {topic.isPremium ? "Premium" : "Bepul"}
+                </span>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {/* Premium/Free toggle */}
+              <button
+                onClick={handleTogglePremium}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border ${
+                  topic.isPremium
+                    ? "border-green-200 text-green-700 hover:bg-green-50"
+                    : "border-yellow-200 text-yellow-700 hover:bg-yellow-50"
+                }`}
+              >
+                {topic.isPremium ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+                {topic.isPremium ? "Free qilish" : "Premium qilish"}
+              </button>
+              <button onClick={() => setEditingTopic(true)} className="btn-outline text-sm flex items-center gap-2">
+                <Edit className="w-4 h-4" />
+                Tahrirlash
+              </button>
+              <button onClick={handleDeleteTopic} className="btn-outline text-sm text-danger border-red-200 hover:bg-red-50 flex items-center gap-2">
+                <Trash2 className="w-4 h-4" />
+                O'chirish
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Add problem */}
@@ -102,17 +169,14 @@ export default function TopicDetail() {
       {/* Problems list */}
       <div className="space-y-4">
         {problems.map((problem, index) => (
-          <div
-            key={problem.id}
-            className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm"
-          >
+          <div key={problem.id} className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
             <div className="flex items-start justify-between">
               <div className="flex items-start gap-4">
                 <div className="w-8 h-8 bg-primary-50 rounded-full flex items-center justify-center text-primary-600 font-bold text-sm shrink-0">
                   {index + 1}
                 </div>
                 <div>
-                  <div className="flex items-center gap-2 mb-2">
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
                     <span className={`text-xs px-2 py-0.5 rounded-full ${difficultyColors[problem.difficulty] || ""}`}>
                       {difficultyLabels[problem.difficulty] || problem.difficulty}
                     </span>
@@ -123,10 +187,9 @@ export default function TopicDetail() {
                       <span className="text-xs text-gray-400">⏱ {problem.estimatedMinutes} daq</span>
                     )}
                   </div>
-                  {/* Content — LaTeX formullari $$...$$ ichida */}
                   <p className="text-gray-900 font-medium">{problem.content}</p>
 
-                  {/* Solution steps */}
+                  {/* Solution */}
                   {problem.solution && problem.solution.length > 0 && (
                     <div className="mt-3 p-3 bg-blue-50 rounded-lg">
                       <p className="text-xs font-semibold text-blue-700 mb-1">Yechim:</p>
@@ -149,11 +212,15 @@ export default function TopicDetail() {
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <button className="p-2 text-gray-400 hover:text-gray-600">
+              <div className="flex items-center gap-1">
+                <button className="p-2 text-gray-400 hover:text-primary-600 rounded-lg hover:bg-gray-50" title="Tahrirlash">
                   <Edit className="w-4 h-4" />
                 </button>
-                <button className="p-2 text-gray-400 hover:text-danger">
+                <button
+                  onClick={() => handleDeleteProblem(problem.id)}
+                  className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50"
+                  title="O'chirish"
+                >
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>

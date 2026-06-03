@@ -1,7 +1,16 @@
 import { Search, Bell, ChevronRight, Play } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { getAllCourses } from "@shared/repositories";
+import type { Course } from "@shared/types";
 
 export default function Home() {
+  const [courses, setCourses] = useState<Course[]>([]);
+
+  useEffect(() => {
+    getAllCourses().then(setCourses).catch(console.error);
+  }, []);
+
   return (
     <div className="page-content">
       {/* Header */}
@@ -57,24 +66,22 @@ export default function Home() {
           <Link to="/courses" className="text-sm text-primary-500 font-medium">Barchasi</Link>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          {[
-            { name: "Attestatsiya", students: "12.4k", progress: 65 },
-            { name: "Milliy sertifikat", students: "8.2k", progress: 42 },
-            { name: "Prezident maktabi", students: "15.6k", progress: 20 },
-            { name: "Digital SAT", students: "3.1k", progress: 85 },
-          ].map((c, i) => (
-            <Link to={`/course/demo-boshlangich-matematika`} key={i} className="border border-gray-100 rounded-xl p-3.5 hover:shadow-sm transition-shadow">
+          {(courses.length > 0 ? courses : [
+            { id: "demo-boshlangich-matematika", title: "Attestatsiya", totalStudents: 12400, category: "Matematika" },
+            { id: "demo-boshlangich-matematika", title: "Milliy sertifikat", totalStudents: 8200, category: "Matematika" },
+          ] as any[]).slice(0, 4).map((c: any, i: number) => (
+            <Link to={`/course/${c.id}`} key={i} className="border border-gray-100 rounded-xl p-3.5 hover:shadow-sm transition-shadow">
               <div className="w-9 h-9 bg-primary-50 rounded-lg flex items-center justify-center mb-2">
                 <span className="text-primary-500 font-bold">⚡</span>
               </div>
-              <p className="text-sm font-semibold text-gray-900">{c.name}</p>
-              <p className="text-[11px] text-gray-500 mt-0.5">👥 {c.students} o'quvchi</p>
+              <p className="text-sm font-semibold text-gray-900">{c.title}</p>
+              <p className="text-[11px] text-gray-500 mt-0.5">👥 {(c.totalStudents || 0).toLocaleString()} o'quvchi</p>
               <div className="flex items-center justify-between mt-2 text-[10px]">
                 <span className="text-gray-400">Progress:</span>
-                <span className="text-primary-500 font-semibold">{c.progress}%</span>
+                <span className="text-primary-500 font-semibold">{c.progress || 0}%</span>
               </div>
               <div className="h-1 bg-gray-100 rounded-full mt-1">
-                <div className="h-full bg-primary-500 rounded-full" style={{ width: `${c.progress}%` }} />
+                <div className="h-full bg-primary-500 rounded-full" style={{ width: `${c.progress || 0}%` }} />
               </div>
               <button className="w-full mt-3 border border-gray-200 rounded-lg py-1.5 text-xs font-medium text-gray-700">Davom ettirish</button>
             </Link>
