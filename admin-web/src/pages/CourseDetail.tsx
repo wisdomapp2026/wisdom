@@ -163,10 +163,10 @@ export default function CourseDetail() {
                     await updateTopic(courseId!, topic.id, { isPremium: v });
                     setTopics((prev) => prev.map((t) => t.id === topic.id ? { ...t, isPremium: v } : t));
                   }}
-                  className={`text-[10px] font-medium px-2 py-1 rounded border ${topic.isPremium ? "border-green-200 text-green-600 hover:bg-green-50" : "border-yellow-200 text-yellow-600 hover:bg-yellow-50"}`}
-                  title={topic.isPremium ? "Free qilish" : "Premium qilish"}
+                  className={`text-[10px] font-medium px-2 py-1 rounded border ${topic.isPremium ? "border-yellow-200 text-yellow-600 bg-yellow-50 hover:bg-yellow-100" : "border-green-200 text-green-600 bg-green-50 hover:bg-green-100"}`}
+                  title={topic.isPremium ? "Bosib Free qilish" : "Bosib Premium qilish"}
                 >
-                  {topic.isPremium ? "Free" : "Premium"}
+                  {topic.isPremium ? "Premium" : "Free"}
                 </button>
                 <ChevronRight className="w-4 h-4 text-gray-400" />
               </div>
