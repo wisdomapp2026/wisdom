@@ -1,61 +1,93 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ChevronDown, ChevronRight as ChevRight, Plus, Edit, Trash2, Filter, Search, Eye, Send, FolderPlus, X } from "lucide-react";
+import { ChevronDown, ChevronRight as ChevRight, Plus, Edit, Trash2, Filter, Search, Eye, Send, FolderPlus, X, GripVertical } from "lucide-react";
 
-// Content Library papkalar (Firebase ga keyinchalik o'tkazamiz)
 interface Folder {
   id: string;
   name: string;
-  children: Folder[];
+  questionIds: string[];
 }
 
-// Demo questions
-const demoQuestions = [
-  { id: "q1", content: "Solve for x: 3x + 12 = 36. Show all intermediate steps.", difficulty: "easy", time: "3 mins", tags: ["Algebra", "Linear Equations"] },
-  { id: "q2", content: "Determine the area of a right-angled triangle where the base is 5cm and the hypotenuse is 13cm.", difficulty: "medium", time: "5 mins", tags: ["Geometry", "Triangles"] },
-  { id: "q3", content: "Compare and contrast the distributive property and the associative property using numerical examples.", difficulty: "medium", time: "6 mins", tags: ["Algebra", "Properties"] },
-  { id: "q4", content: "An airplane flies 400 miles against a wind of 20 mph. Find the speed of the plane in still air.", difficulty: "hard", time: "10 mins", tags: ["Word Problems", "Logic"] },
-  { id: "q5", content: "Simplify the following polynomial: (4x²- 3x + 5) - (2x²+ x - 8).", difficulty: "easy", time: "4 mins", tags: ["Algebra", "Polynomials"] },
+interface Question {
+  id: string;
+  content: string;
+  difficulty: "easy" | "medium" | "hard";
+  time: string;
+  tags: string[];
+  order: number;
+  folderId?: string;
+}
+
+const initialQuestions: Question[] = [
+  { id: "q1", content: "Solve for x: 3x + 12 = 36. Show all intermediate steps.", difficulty: "easy", time: "3 mins", tags: ["Algebra", "Linear Equations"], order: 1 },
+  { id: "q2", content: "Determine the area of a right-angled triangle where the base is 5cm and the hypotenuse is 13cm.", difficulty: "medium", time: "5 mins", tags: ["Geometry", "Triangles"], order: 2 },
+  { id: "q3", content: "Compare and contrast the distributive property and the associative property using numerical examples.", difficulty: "medium", time: "6 mins", tags: ["Algebra", "Properties"], order: 3 },
+  { id: "q4", content: "An airplane flies 400 miles against a wind of 20 mph. Find the speed of the plane in still air.", difficulty: "hard", time: "10 mins", tags: ["Word Problems", "Logic"], order: 4 },
+  { id: "q5", content: "Simplify the following polynomial: (4x²- 3x + 5) - (2x²+ x - 8).", difficulty: "easy", time: "4 mins", tags: ["Algebra", "Polynomials"], order: 5 },
 ];
 
-const difficultyColors: Record<string, string> = {
-  easy: "bg-green-100 text-green-700",
-  medium: "bg-yellow-100 text-yellow-700",
-  hard: "bg-red-100 text-red-700",
-};
+const diffColors: Record<string, string> = { easy: "bg-green-100 text-green-700", medium: "bg-yellow-100 text-yellow-700", hard: "bg-red-100 text-red-700" };
+const diffLabels: Record<string, string> = { easy: "Oson", medium: "O'rta", hard: "Qiyin" };
 
 export default function TestBuilder() {
   const [folders, setFolders] = useState<Folder[]>([
-    { id: "f1", name: "Arifmetika", children: [] },
-    { id: "f2", name: "Geometriya", children: [] },
+    { id: "f1", name: "Arifmetika", questionIds: [] },
+    { id: "f2", name: "Geometriya", questionIds: [] },
   ]);
-  const [selectedQuestions, setSelectedQuestions] = useState<string[]>([]);
+  const [questions, setQuestions] = useState<Question[]>(initialQuestions);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
   const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
   const [editFolderName, setEditFolderName] = useState("");
+  const [draggedIds, setDraggedIds] = useState<string[]>([]);
 
+  // Eng oxirgi yaratilgan test yuqorida (order bo'yicha teskari)
+  const sortedQuestions = [...questions].sort((a, b) => b.order - a.order);
+
+  // Folder CRUD
   function addFolder() {
     if (!newFolderName.trim()) return;
-    setFolders([...folders, { id: `f-${Date.now()}`, name: newFolderName, children: [] }]);
+    setFolders([...folders, { id: `f-${Date.now()}`, name: newFolderName, questionIds: [] }]);
     setNewFolderName("");
     setShowNewFolder(false);
   }
-
   function deleteFolder(id: string) {
-    if (!confirm("Bu papkani o'chirishga ishonchingiz komilmi?")) return;
+    if (!confirm("Papkani o'chirishga ishonchingiz komilmi?")) return;
     setFolders(folders.filter((f) => f.id !== id));
   }
-
   function saveEditFolder(id: string) {
     setFolders(folders.map((f) => f.id === id ? { ...f, name: editFolderName } : f));
     setEditingFolderId(null);
   }
 
-  function toggleQuestion(id: string) {
-    setSelectedQuestions((prev) =>
-      prev.includes(id) ? prev.filter((q) => q !== id) : [...prev, id]
-    );
+  // Selection
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  }
+  function selectAll() {
+    if (selectedIds.length === questions.length) setSelectedIds([]);
+    else setSelectedIds(questions.map((q) => q.id));
+  }
+
+  // Delete question
+  function deleteQuestion(id: string) {
+    if (!confirm("Bu testni o'chirishga ishonchingiz komilmi?")) return;
+    setQuestions(questions.filter((q) => q.id !== id));
+    setSelectedIds(selectedIds.filter((x) => x !== id));
+  }
+
+  // Drag & Drop — papkaga tashlash
+  function handleDragStart(ids: string[]) {
+    setDraggedIds(ids.length > 0 ? ids : selectedIds);
+  }
+  function handleDropOnFolder(folderId: string) {
+    const idsToMove = draggedIds.length > 0 ? draggedIds : selectedIds;
+    if (idsToMove.length === 0) return;
+    setFolders(folders.map((f) => f.id === folderId ? { ...f, questionIds: [...new Set([...f.questionIds, ...idsToMove])] } : f));
+    setQuestions(questions.map((q) => idsToMove.includes(q.id) ? { ...q, folderId } : q));
+    setDraggedIds([]);
+    setSelectedIds([]);
   }
 
   return (
@@ -69,71 +101,67 @@ export default function TestBuilder() {
 
       <div className="flex gap-6">
         {/* Left sidebar - Content Library */}
-        <div className="w-64 shrink-0">
+        <div className="w-56 shrink-0">
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-semibold text-gray-600 uppercase">Content Library</h3>
+              <h3 className="text-xs font-semibold text-gray-500 uppercase">Content Library</h3>
               <button onClick={() => setShowNewFolder(true)} className="text-primary-500 hover:bg-primary-50 p-1 rounded" title="Papka qo'shish">
                 <FolderPlus className="w-4 h-4" />
               </button>
             </div>
 
-            {/* New folder form */}
+            {/* New folder */}
             {showNewFolder && (
               <div className="mb-3 flex items-center gap-1">
-                <input
-                  value={newFolderName}
-                  onChange={(e) => setNewFolderName(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && addFolder()}
-                  placeholder="Papka nomi..."
-                  className="flex-1 text-sm border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                  autoFocus
-                />
-                <button onClick={addFolder} className="text-primary-500 p-1"><Plus className="w-4 h-4" /></button>
-                <button onClick={() => setShowNewFolder(false)} className="text-gray-400 p-1"><X className="w-4 h-4" /></button>
+                <input value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addFolder()} placeholder="Papka nomi..." className="flex-1 text-sm border border-gray-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary-500" autoFocus />
+                <button onClick={addFolder} className="text-primary-500 p-1"><Plus className="w-3.5 h-3.5" /></button>
+                <button onClick={() => setShowNewFolder(false)} className="text-gray-400 p-1"><X className="w-3.5 h-3.5" /></button>
               </div>
             )}
 
-            {/* Folders list */}
+            {/* Folders */}
             <div className="space-y-1">
               {folders.map((folder) => (
-                <div key={folder.id} className="group">
+                <div
+                  key={folder.id}
+                  className="group"
+                  onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("bg-primary-50"); }}
+                  onDragLeave={(e) => { e.currentTarget.classList.remove("bg-primary-50"); }}
+                  onDrop={(e) => { e.preventDefault(); e.currentTarget.classList.remove("bg-primary-50"); handleDropOnFolder(folder.id); }}
+                >
                   {editingFolderId === folder.id ? (
                     <div className="flex items-center gap-1 px-2 py-1">
-                      <input
-                        value={editFolderName}
-                        onChange={(e) => setEditFolderName(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && saveEditFolder(folder.id)}
-                        className="flex-1 text-sm border border-gray-200 rounded px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                        autoFocus
-                      />
-                      <button onClick={() => saveEditFolder(folder.id)} className="text-green-500 p-0.5"><Plus className="w-3.5 h-3.5" /></button>
+                      <input value={editFolderName} onChange={(e) => setEditFolderName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && saveEditFolder(folder.id)} className="flex-1 text-sm border border-gray-200 rounded px-2 py-0.5 focus:outline-none" autoFocus />
+                      <button onClick={() => saveEditFolder(folder.id)} className="text-green-500 p-0.5">✓</button>
                       <button onClick={() => setEditingFolderId(null)} className="text-gray-400 p-0.5"><X className="w-3.5 h-3.5" /></button>
                     </div>
                   ) : (
-                    <div className="flex items-center justify-between px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer">
+                    <div className="flex items-center justify-between px-2 py-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
                       <div className="flex items-center gap-2">
                         <ChevronDown className="w-3 h-3 text-gray-400" />
-                        <span className="text-sm">📁</span>
+                        <span>📁</span>
                         <span className="text-sm font-medium text-gray-700">{folder.name}</span>
+                        {folder.questionIds.length > 0 && (
+                          <span className="text-[10px] bg-primary-100 text-primary-600 px-1.5 rounded-full">{folder.questionIds.length}</span>
+                        )}
                       </div>
-                      <div className="hidden group-hover:flex items-center gap-0.5">
-                        <button onClick={() => { setEditingFolderId(folder.id); setEditFolderName(folder.name); }} className="text-gray-400 hover:text-primary-500 p-0.5">
-                          <Edit className="w-3 h-3" />
-                        </button>
-                        <button onClick={() => deleteFolder(folder.id)} className="text-gray-400 hover:text-red-500 p-0.5">
-                          <Trash2 className="w-3 h-3" />
-                        </button>
+                      <div className="hidden group-hover:flex items-center">
+                        <button onClick={() => { setEditingFolderId(folder.id); setEditFolderName(folder.name); }} className="text-gray-400 hover:text-primary-500 p-0.5"><Edit className="w-3 h-3" /></button>
+                        <button onClick={() => deleteFolder(folder.id)} className="text-gray-400 hover:text-red-500 p-0.5"><Trash2 className="w-3 h-3" /></button>
                       </div>
                     </div>
                   )}
                 </div>
               ))}
-
-              {folders.length === 0 && (
-                <p className="text-xs text-gray-400 text-center py-4">Papka yo'q. Yangi yarating.</p>
-              )}
+              {folders.length === 0 && <p className="text-xs text-gray-400 text-center py-4">Papka yo'q</p>}
             </div>
+
+            {/* Drag hint */}
+            {selectedIds.length > 0 && (
+              <div className="mt-4 p-2 bg-blue-50 rounded-lg border border-blue-200">
+                <p className="text-[10px] text-blue-700 text-center">{selectedIds.length} ta tanlangan — papkaga sudrab tashlang</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -143,123 +171,79 @@ export default function TestBuilder() {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-gray-900">Question Explorer</h2>
               <div className="flex items-center gap-2">
-                <button className="btn-outline text-sm flex items-center gap-2">
-                  <Filter className="w-4 h-4" />
-                  Filters
-                </button>
+                <button className="btn-outline text-sm flex items-center gap-2"><Filter className="w-4 h-4" />Filters</button>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input placeholder="Qidirish..." className="pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm w-56" />
+                  <input placeholder="Qidirish..." className="pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm w-48" />
                 </div>
               </div>
             </div>
 
-            {/* Add new question button */}
-            <button className="mb-4 btn-primary text-sm flex items-center gap-2">
-              <Plus className="w-4 h-4" />
-              Yangi test savol qo'shish
-            </button>
+            {/* Actions bar */}
+            <div className="flex items-center gap-3 mb-4">
+              <button className="btn-primary text-sm flex items-center gap-2">
+                <Plus className="w-4 h-4" />
+                Yangi test savol qo'shish
+              </button>
+              <button onClick={selectAll} className="btn-outline text-sm">
+                {selectedIds.length === questions.length ? "Barchasini bekor" : "Barchasini belgilash"}
+              </button>
+              {selectedIds.length > 0 && (
+                <span className="text-xs text-gray-500">{selectedIds.length} ta tanlangan</span>
+              )}
+            </div>
 
-            {/* Questions list */}
+            {/* Questions list — eng oxirgi yaratilgan yuqorida */}
             <div className="space-y-3">
-              {demoQuestions.map((q) => (
+              {sortedQuestions.map((q) => (
                 <div
                   key={q.id}
-                  className={`p-4 border rounded-lg cursor-pointer transition-colors ${
-                    selectedQuestions.includes(q.id) ? "border-primary-300 bg-primary-50" : "border-gray-200 hover:border-gray-300"
+                  draggable
+                  onDragStart={() => handleDragStart(selectedIds.includes(q.id) ? selectedIds : [q.id])}
+                  className={`p-4 border rounded-lg cursor-grab active:cursor-grabbing transition-all ${
+                    selectedIds.includes(q.id) ? "border-primary-300 bg-primary-50" : "border-gray-200 hover:border-gray-300"
                   }`}
-                  onClick={() => toggleQuestion(q.id)}
                 >
                   <div className="flex items-start gap-3">
+                    {/* Drag handle */}
+                    <GripVertical className="w-4 h-4 text-gray-300 mt-1 shrink-0" />
+                    {/* Checkbox */}
                     <input
                       type="checkbox"
-                      checked={selectedQuestions.includes(q.id)}
-                      onChange={() => toggleQuestion(q.id)}
-                      className="mt-1 w-4 h-4 text-primary-500 rounded"
+                      checked={selectedIds.includes(q.id)}
+                      onChange={() => toggleSelect(q.id)}
+                      className="mt-1 w-4 h-4 text-primary-500 rounded shrink-0"
                     />
-                    <div className="flex-1">
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
                       <p className="text-sm text-gray-900">{q.content}</p>
                       <div className="flex items-center gap-3 mt-2">
                         <span className="text-xs text-gray-500">⏱ {q.time}</span>
                         {q.tags.map((tag) => (
                           <span key={tag} className="text-xs text-gray-500">#{tag}</span>
                         ))}
+                        {q.folderId && (
+                          <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">📁 {folders.find((f) => f.id === q.folderId)?.name}</span>
+                        )}
                       </div>
                     </div>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${difficultyColors[q.difficulty]}`}>
-                      {q.difficulty === "easy" ? "Oson" : q.difficulty === "medium" ? "O'rta" : "Qiyin"}
-                    </span>
+                    {/* Difficulty */}
+                    <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${diffColors[q.difficulty]}`}>{diffLabels[q.difficulty]}</span>
+                    {/* Edit/Delete */}
+                    <div className="flex items-center gap-1 shrink-0 ml-2">
+                      <button className="p-1.5 text-gray-400 hover:text-primary-500 rounded hover:bg-gray-50" title="Tahrirlash">
+                        <Edit className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => deleteQuestion(q.id)} className="p-1.5 text-gray-400 hover:text-red-500 rounded hover:bg-red-50" title="O'chirish">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
 
-            <p className="text-center text-sm text-gray-400 mt-4">
-              {demoQuestions.length} ta savol mavjud
-            </p>
-          </div>
-        </div>
-
-        {/* Right sidebar - Assembled Test */}
-        <div className="w-72 shrink-0">
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 sticky top-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-900">Assembled Test</h3>
-              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">Draft v1</span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div>
-                <p className="text-xs text-gray-500 uppercase">Items</p>
-                <p className="text-2xl font-bold text-gray-900">{selectedQuestions.length}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 uppercase">Duration</p>
-                <p className="text-2xl font-bold text-gray-900">12 min</p>
-              </div>
-            </div>
-
-            <div className="flex gap-2 mb-4">
-              <button className="flex-1 btn-primary text-sm flex items-center justify-center gap-2">
-                <Eye className="w-4 h-4" />
-                Preview
-              </button>
-              <button className="flex-1 btn-outline text-sm flex items-center justify-center gap-2">
-                <Send className="w-4 h-4" />
-                Publish
-              </button>
-            </div>
-
-            {/* Selected questions */}
-            <div className="space-y-2">
-              {selectedQuestions.map((qId, i) => {
-                const q = demoQuestions.find((x) => x.id === qId);
-                return q ? (
-                  <div key={qId} className="flex items-start gap-2 p-2 bg-gray-50 rounded-lg">
-                    <span className="text-xs font-bold text-primary-500">Q{i + 1}</span>
-                    <p className="text-xs text-gray-600 line-clamp-2">{q.content.slice(0, 60)}...</p>
-                  </div>
-                ) : null;
-              })}
-            </div>
-
-            {selectedQuestions.length === 0 && (
-              <p className="text-xs text-gray-400 text-center py-4">Savollarni chapdan tanlang</p>
-            )}
-
-            {/* Difficulty mix */}
-            {selectedQuestions.length > 0 && (
-              <div className="mt-4">
-                <p className="text-xs text-gray-500 mb-2">Difficulty Mix:</p>
-                <div className="flex gap-1 h-2 rounded-full overflow-hidden">
-                  <div className="bg-green-500 flex-1" />
-                  <div className="bg-yellow-500 flex-1" />
-                  <div className="bg-red-500" style={{ width: "20%" }} />
-                </div>
-              </div>
-            )}
-
-            <p className="text-xs text-gray-400 mt-3">* Test auto-saved at {new Date().toLocaleTimeString("uz", { hour: "2-digit", minute: "2-digit" })}</p>
+            <p className="text-center text-sm text-gray-400 mt-4">{questions.length} ta savol mavjud</p>
           </div>
         </div>
       </div>
