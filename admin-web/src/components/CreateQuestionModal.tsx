@@ -227,20 +227,58 @@ export default function CreateQuestionModal({ open, onClose, onSave }: Props) {
             </div>
             <div className="space-y-2">
               {options.map((opt, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <button
-                    onClick={() => setCorrectAnswer(opt.label)}
-                    className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 shrink-0 transition-colors ${correctAnswer === opt.label ? "border-green-500 bg-green-500 text-white" : "border-gray-300 text-gray-500 hover:border-primary-300"}`}
-                    title="To'g'ri javob sifatida belgilash"
-                  >{opt.label}</button>
-                  <input
-                    value={opt.text}
-                    onChange={(e) => updateOption(i, e.target.value)}
-                    placeholder={`${opt.label} varianti (LaTeX: $$formula$$)`}
-                    className="flex-1 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono"
-                  />
-                  {options.length > 2 && (
-                    <button onClick={() => removeOption(i)} className="p-1.5 text-gray-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
+                <div key={i} className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCorrectAnswer(opt.label)}
+                      className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold border-2 shrink-0 transition-colors ${correctAnswer === opt.label ? "border-green-500 bg-green-500 text-white" : "border-gray-300 text-gray-500 hover:border-primary-300"}`}
+                      title="To'g'ri javob sifatida belgilash"
+                    >{opt.label}</button>
+                    <input
+                      value={opt.text}
+                      onChange={(e) => updateOption(i, e.target.value)}
+                      onPaste={(e) => {
+                        const items = e.clipboardData.items;
+                        for (let j = 0; j < items.length; j++) {
+                          if (items[j].type.startsWith("image/")) {
+                            e.preventDefault();
+                            const file = items[j].getAsFile();
+                            if (!file) continue;
+                            const reader = new FileReader();
+                            reader.onload = () => {
+                              setOptions(options.map((o, idx) => idx === i ? { ...o, image: reader.result as string } : o));
+                            };
+                            reader.readAsDataURL(file);
+                            break;
+                          }
+                        }
+                      }}
+                      placeholder={`${opt.label} varianti (LaTeX: $$formula$$, rasm: Ctrl+V)`}
+                      className="flex-1 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono"
+                    />
+                    {/* Rasm yuklash button */}
+                    <label className="p-1.5 text-gray-400 hover:text-primary-500 cursor-pointer" title="Rasm yuklash">
+                      <Image className="w-4 h-4" />
+                      <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                          setOptions(options.map((o, idx) => idx === i ? { ...o, image: reader.result as string } : o));
+                        };
+                        reader.readAsDataURL(file);
+                      }} />
+                    </label>
+                    {options.length > 2 && (
+                      <button onClick={() => removeOption(i)} className="p-1.5 text-gray-400 hover:text-red-500"><Trash2 className="w-4 h-4" /></button>
+                    )}
+                  </div>
+                  {/* Variant rasmi preview */}
+                  {opt.image && (
+                    <div className="ml-10 relative inline-block">
+                      <img src={opt.image} alt="" className="h-16 rounded-lg border border-gray-200" />
+                      <button onClick={() => setOptions(options.map((o, idx) => idx === i ? { ...o, image: undefined } : o))} className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full flex items-center justify-center text-[8px]">×</button>
+                    </div>
                   )}
                 </div>
               ))}
