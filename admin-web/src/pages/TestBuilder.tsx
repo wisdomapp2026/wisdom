@@ -235,7 +235,23 @@ export default function TestBuilder() {
             <div className="flex items-center gap-3 mb-4">
               <button className="btn-primary text-sm flex items-center gap-2"><Plus className="w-4 h-4" />Yangi test savol qo'shish</button>
               <button onClick={selectAll} className="btn-outline text-sm">{selectedIds.length === questions.length ? "Bekor" : "Barchasini belgilash"}</button>
-              {selectedIds.length > 0 && <span className="text-xs text-gray-500">{selectedIds.length} ta tanlangan</span>}
+              {selectedIds.length > 0 && (
+                <>
+                  <span className="text-xs text-gray-500">{selectedIds.length} ta tanlangan</span>
+                  <button
+                    onClick={() => {
+                      if (!confirm(`${selectedIds.length} ta testni o'chirishga ishonchingiz komilmi?`)) return;
+                      setQuestions(questions.filter((q) => !selectedIds.includes(q.id)));
+                      setFolders(folders.map((f) => ({ ...f, questionIds: f.questionIds.filter((id) => !selectedIds.includes(id)) })));
+                      setSelectedIds([]);
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500 text-white text-sm font-medium rounded-lg hover:bg-red-600 transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    O'chirish ({selectedIds.length})
+                  </button>
+                </>
+              )}
             </div>
 
             <div className="space-y-3">
