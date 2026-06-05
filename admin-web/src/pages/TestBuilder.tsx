@@ -51,6 +51,8 @@ export default function TestBuilder() {
   const [draggedIds, setDraggedIds] = useState<string[]>([]);
   const [expandedFolders, setExpandedFolders] = useState<string[]>([]);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
+  const [editingQId, setEditingQId] = useState<string | null>(null);
+  const [editQContent, setEditQContent] = useState("");
 
   // Persist on change
   useEffect(() => { saveState("tb_folders", folders); }, [folders]);
@@ -277,16 +279,38 @@ export default function TestBuilder() {
                     <GripVertical className="w-4 h-4 text-gray-300 mt-1 shrink-0" />
                     <input type="checkbox" checked={selectedIds.includes(q.id)} onChange={() => toggleSelect(q.id)} className="mt-1 w-4 h-4 text-primary-500 rounded shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-900">{q.content}</p>
-                      <div className="flex items-center gap-3 mt-2">
-                        <span className="text-xs text-gray-500">⏱ {q.time}</span>
-                        {q.tags.map((tag) => <span key={tag} className="text-xs text-gray-500">#{tag}</span>)}
-                        {q.folderId && <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">📁 {folders.find((f) => f.id === q.folderId)?.name}</span>}
-                      </div>
+                      {editingQId === q.id ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            value={editQContent}
+                            onChange={(e) => setEditQContent(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                setQuestions(questions.map((x) => x.id === q.id ? { ...x, content: editQContent } : x));
+                                setEditingQId(null);
+                              }
+                              if (e.key === "Escape") setEditingQId(null);
+                            }}
+                            className="flex-1 text-sm border border-primary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                            autoFocus
+                          />
+                          <button onClick={() => { setQuestions(questions.map((x) => x.id === q.id ? { ...x, content: editQContent } : x)); setEditingQId(null); }} className="text-green-500 font-bold text-sm">✓</button>
+                          <button onClick={() => setEditingQId(null)} className="text-gray-400 text-sm">✕</button>
+                        </div>
+                      ) : (
+                        <>
+                          <p className="text-sm text-gray-900">{q.content}</p>
+                          <div className="flex items-center gap-3 mt-2">
+                            <span className="text-xs text-gray-500">⏱ {q.time}</span>
+                            {q.tags.map((tag) => <span key={tag} className="text-xs text-gray-500">#{tag}</span>)}
+                            {q.folderId && <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">📁 {folders.find((f) => f.id === q.folderId)?.name}</span>}
+                          </div>
+                        </>
+                      )}
                     </div>
                     <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${diffColors[q.difficulty]}`}>{diffLabels[q.difficulty]}</span>
                     <div className="flex items-center gap-1 shrink-0 ml-1">
-                      <button className="p-1.5 text-gray-400 hover:text-primary-500 rounded hover:bg-gray-50"><Edit className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => { setEditingQId(q.id); setEditQContent(q.content); }} className="p-1.5 text-gray-400 hover:text-primary-500 rounded hover:bg-gray-50"><Edit className="w-3.5 h-3.5" /></button>
                       <button onClick={() => deleteQuestion(q.id)} className="p-1.5 text-gray-400 hover:text-red-500 rounded hover:bg-red-50"><Trash2 className="w-3.5 h-3.5" /></button>
                     </div>
                   </div>
