@@ -119,7 +119,7 @@ export default function CreateQuestionModal({ open, onClose, onSave }: Props) {
     if (options.every((o) => !o.text.trim() && !o.image)) return alert("Kamida 2 ta variant kiriting (matn yoki rasm)!");
 
     onSave({
-      content: content + (pastedImages.length > 0 ? "\n[IMAGES:" + pastedImages.join(",") + "]" : ""),
+      content: content || (pastedImages.length > 0 ? "[Rasmli savol]" : ""),
       difficulty,
       time: `${timeMinutes} mins`,
       tags: tags.split(",").map((t) => t.trim()).filter(Boolean),

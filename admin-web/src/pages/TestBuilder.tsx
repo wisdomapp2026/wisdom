@@ -200,7 +200,7 @@ export default function TestBuilder() {
                               folderQuestions.map((q) => (
                                 <div key={q.id} onClick={() => scrollToQuestion(q.id)} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-primary-50 text-xs cursor-pointer transition-colors">
                                   <span className="w-1.5 h-1.5 bg-primary-400 rounded-full shrink-0" />
-                                  <span className="text-gray-600 truncate hover:text-primary-600">{q.content.slice(0, 40)}...</span>
+                                  <span className="text-gray-600 truncate hover:text-primary-600">{q.content.startsWith("[") || q.content.startsWith("data:") ? "📷 Rasmli savol" : q.content.slice(0, 40) + "..."}</span>
                                 </div>
                               ))
                             )}
@@ -297,7 +297,7 @@ export default function TestBuilder() {
                         </div>
                       ) : (
                         <>
-                          <p className="text-sm text-gray-900">{q.content}</p>
+                          <p className="text-sm text-gray-900 break-words">{q.content.startsWith("[IMAGES:") || q.content.startsWith("data:") ? "📷 Rasmli savol" : q.content}</p>
                           <div className="flex items-center gap-3 mt-2">
                             <span className="text-xs text-gray-500">⏱ {q.time}</span>
                             {q.tags.map((tag) => <span key={tag} className="text-xs text-gray-500">#{tag}</span>)}
