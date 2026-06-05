@@ -55,6 +55,7 @@ export default function App() {
         <Route path="courses/:courseId/tests/:testId/preview" element={<TestPreview />} />
         <Route path="students" element={<Students />} />
         <Route path="tests" element={<Tests />} />
+        <Route path="tests/builder" element={<TestBuilder />} />
         <Route path="news" element={<News />} />
         <Route path="payments" element={<Payments />} />
         <Route path="promos" element={<Promos />} />

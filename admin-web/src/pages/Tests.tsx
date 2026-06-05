@@ -50,7 +50,7 @@ export default function Tests() {
           <h1 className="text-2xl font-bold text-gray-900">Testlar</h1>
           <p className="text-sm text-gray-500 mt-1">Barcha testlarni boshqaring ({tests.length} ta)</p>
         </div>
-        <Link to={`/courses/${courses[0]?.id || "demo-boshlangich-matematika"}/tests/builder`} className="btn-primary flex items-center gap-2">
+        <Link to="/tests/builder" className="btn-primary flex items-center gap-2">
           <Plus className="w-4 h-4" />
           Yangi test
         </Link>
