@@ -6,6 +6,7 @@ import { ChevronLeft, Star, Play, Lock, CheckCircle } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import AuthModal from "../components/AuthModal";
 import VideoModal from "../components/VideoModal";
+import LatexText from "../components/LatexText";
 
 const diffColors: Record<string, string> = { easy: "bg-green-100 text-green-700", medium: "bg-yellow-100 text-yellow-700", hard: "bg-red-100 text-red-700" };
 const diffLabels: Record<string, string> = { easy: "Easy", medium: "Medium", hard: "Hard" };
@@ -108,7 +109,7 @@ export default function TopicDetail() {
               </div>
 
               {/* Content — DOIM ko'rinadi (premium bo'lsa ham) */}
-              <p className="text-sm leading-relaxed text-gray-900">{p.content}</p>
+              <p className="text-sm leading-relaxed text-gray-900"><LatexText text={p.content} /></p>
 
               {/* YECHIM va VIDEO — faqat free misollar uchun ko'rsatiladi */}
               {!isPremium && (

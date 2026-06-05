@@ -4,6 +4,7 @@ import { ChevronRight, Plus, Edit, Trash2, Play, Loader2, Lock, Unlock } from "l
 import { getTopicById, getProblemsByTopic, updateTopic, deleteTopic, deleteProblem, updateProblem } from "@shared/repositories";
 import type { Topic, Problem } from "@shared/types";
 import CreateProblemModal from "../components/CreateProblemModal";
+import LatexText from "../components/LatexText";
 
 const difficultyColors: Record<string, string> = {
   easy: "bg-green-100 text-green-700",
@@ -245,7 +246,7 @@ export default function TopicDetail() {
                       <span className="text-xs text-gray-400">⏱ {problem.estimatedMinutes} daq</span>
                     )}
                   </div>
-                  <p className="text-gray-900 font-medium">{problem.content}</p>
+                  <p className="text-gray-900 font-medium"><LatexText text={problem.content} /></p>
 
                   {/* Solution */}
                   {problem.solution && problem.solution.length > 0 && (
