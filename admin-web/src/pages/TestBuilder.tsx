@@ -233,7 +233,11 @@ export default function TestBuilder() {
             </div>
 
             <div className="flex items-center gap-3 mb-4">
-              <button className="btn-primary text-sm flex items-center gap-2"><Plus className="w-4 h-4" />Yangi test savol qo'shish</button>
+              <button onClick={() => {
+                const newId = `q-${Date.now()}`;
+                const newOrder = questions.length > 0 ? Math.max(...questions.map(q => q.order)) + 1 : 1;
+                setQuestions([...questions, { id: newId, content: "Yangi savol — tahrirlash uchun ✏️ bosing", difficulty: "easy", time: "3 mins", tags: [], order: newOrder }]);
+              }} className="btn-primary text-sm flex items-center gap-2"><Plus className="w-4 h-4" />Yangi test savol qo'shish</button>
               <button onClick={selectAll} className="btn-outline text-sm">{selectedIds.length === questions.length ? "Bekor" : "Barchasini belgilash"}</button>
               {selectedIds.length > 0 && (
                 <>
