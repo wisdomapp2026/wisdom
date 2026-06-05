@@ -50,12 +50,26 @@ export default function TestBuilder() {
   const [editFolderName, setEditFolderName] = useState("");
   const [draggedIds, setDraggedIds] = useState<string[]>([]);
   const [expandedFolders, setExpandedFolders] = useState<string[]>([]);
+  const [highlightedId, setHighlightedId] = useState<string | null>(null);
 
   // Persist on change
   useEffect(() => { saveState("tb_folders", folders); }, [folders]);
   useEffect(() => { saveState("tb_questions", questions); }, [questions]);
 
   const sortedQuestions = [...questions].sort((a, b) => b.order - a.order);
+
+  // Papka ichidagi testga bosganda — explorerda topib highlight qilish
+  function scrollToQuestion(id: string) {
+    setHighlightedId(id);
+    setTimeout(() => {
+      const el = document.getElementById(`question-${id}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 100);
+    // 3 soniyadan keyin highlight o'chirish
+    setTimeout(() => setHighlightedId(null), 3000);
+  }
 
   // Folder toggle
   function toggleFolder(id: string) {
@@ -180,9 +194,9 @@ export default function TestBuilder() {
                               <p className="text-[10px] text-gray-400 italic px-2">Bo'sh — testlarni shu yerga tashlang</p>
                             ) : (
                               folderQuestions.map((q) => (
-                                <div key={q.id} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-gray-50 text-xs">
+                                <div key={q.id} onClick={() => scrollToQuestion(q.id)} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-primary-50 text-xs cursor-pointer transition-colors">
                                   <span className="w-1.5 h-1.5 bg-primary-400 rounded-full shrink-0" />
-                                  <span className="text-gray-600 truncate">{q.content.slice(0, 40)}...</span>
+                                  <span className="text-gray-600 truncate hover:text-primary-600">{q.content.slice(0, 40)}...</span>
                                 </div>
                               ))
                             )}
@@ -228,9 +242,16 @@ export default function TestBuilder() {
               {sortedQuestions.map((q) => (
                 <div
                   key={q.id}
+                  id={`question-${q.id}`}
                   draggable
                   onDragStart={() => handleDragStart(selectedIds.includes(q.id) ? selectedIds : [q.id])}
-                  className={`p-4 border rounded-lg cursor-grab active:cursor-grabbing transition-all ${selectedIds.includes(q.id) ? "border-primary-300 bg-primary-50" : "border-gray-200 hover:border-gray-300"}`}
+                  className={`p-4 border rounded-lg cursor-grab active:cursor-grabbing transition-all ${
+                    highlightedId === q.id
+                      ? "border-primary-500 bg-primary-100 ring-2 ring-primary-300 animate-pulse"
+                      : selectedIds.includes(q.id)
+                        ? "border-primary-300 bg-primary-50"
+                        : "border-gray-200 hover:border-gray-300"
+                  }`}
                 >
                   <div className="flex items-start gap-3">
                     <GripVertical className="w-4 h-4 text-gray-300 mt-1 shrink-0" />
