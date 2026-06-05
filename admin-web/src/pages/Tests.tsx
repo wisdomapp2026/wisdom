@@ -10,6 +10,7 @@ interface TestWithCourse extends Test {
 
 export default function Tests() {
   const [tests, setTests] = useState<TestWithCourse[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -19,9 +20,10 @@ export default function Tests() {
 
   async function loadTests() {
     try {
-      const courses = await getAllCourses();
+      const coursesData = await getAllCourses();
+      setCourses(coursesData);
       const allTests: TestWithCourse[] = [];
-      for (const course of courses) {
+      for (const course of coursesData) {
         const courseTests = await getTestsByCourse(course.id);
         for (const t of courseTests) {
           allTests.push({ ...t, courseName: course.title });
@@ -48,10 +50,10 @@ export default function Tests() {
           <h1 className="text-2xl font-bold text-gray-900">Testlar</h1>
           <p className="text-sm text-gray-500 mt-1">Barcha testlarni boshqaring ({tests.length} ta)</p>
         </div>
-        <button className="btn-primary flex items-center gap-2">
+        <Link to={`/courses/${courses[0]?.id || "demo-boshlangich-matematika"}/tests/builder`} className="btn-primary flex items-center gap-2">
           <Plus className="w-4 h-4" />
           Yangi test
-        </button>
+        </Link>
       </div>
 
       {/* Search */}
