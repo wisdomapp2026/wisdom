@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { ChevronDown, ChevronRight as ChevRight, Plus, Edit, Trash2, Filter, Search, FolderPlus, X, GripVertical } from "lucide-react";
+import CreateQuestionModal from "../components/CreateQuestionModal";
 
 interface Folder {
   id: string;
@@ -53,6 +54,7 @@ export default function TestBuilder() {
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [editingQId, setEditingQId] = useState<string | null>(null);
   const [editQContent, setEditQContent] = useState("");
+  const [showCreateModal, setShowCreateModal] = useState(false);
 
   // Persist on change
   useEffect(() => { saveState("tb_folders", folders); }, [folders]);
@@ -235,11 +237,7 @@ export default function TestBuilder() {
             </div>
 
             <div className="flex items-center gap-3 mb-4">
-              <button onClick={() => {
-                const newId = `q-${Date.now()}`;
-                const newOrder = questions.length > 0 ? Math.max(...questions.map(q => q.order)) + 1 : 1;
-                setQuestions([...questions, { id: newId, content: "Yangi savol — tahrirlash uchun ✏️ bosing", difficulty: "easy", time: "3 mins", tags: [], order: newOrder }]);
-              }} className="btn-primary text-sm flex items-center gap-2"><Plus className="w-4 h-4" />Yangi test savol qo'shish</button>
+              <button onClick={() => setShowCreateModal(true)} className="btn-primary text-sm flex items-center gap-2"><Plus className="w-4 h-4" />Yangi test savol qo'shish</button>
               <button onClick={selectAll} className="btn-outline text-sm">{selectedIds.length === questions.length ? "Bekor" : "Barchasini belgilash"}</button>
               {selectedIds.length > 0 && (
                 <>
@@ -321,6 +319,17 @@ export default function TestBuilder() {
           </div>
         </div>
       </div>
+
+      {/* Create Question Modal */}
+      <CreateQuestionModal
+        open={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onSave={(q) => {
+          const newId = `q-${Date.now()}`;
+          const newOrder = questions.length > 0 ? Math.max(...questions.map((x) => x.order)) + 1 : 1;
+          setQuestions([...questions, { id: newId, content: q.content, difficulty: q.difficulty, time: q.time, tags: q.tags, order: newOrder, folderId: undefined }]);
+        }}
+      />
     </div>
   );
 }
