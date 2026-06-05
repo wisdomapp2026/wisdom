@@ -116,14 +116,14 @@ export default function CreateQuestionModal({ open, onClose, onSave }: Props) {
 
   function handleSave() {
     if (!content.trim() && pastedImages.length === 0) return alert("Savol matnini kiriting!");
-    if (options.every((o) => !o.text.trim())) return alert("Kamida 2 ta variant kiriting!");
+    if (options.every((o) => !o.text.trim() && !o.image)) return alert("Kamida 2 ta variant kiriting (matn yoki rasm)!");
 
     onSave({
       content: content + (pastedImages.length > 0 ? "\n[IMAGES:" + pastedImages.join(",") + "]" : ""),
       difficulty,
       time: `${timeMinutes} mins`,
       tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
-      options: options.filter((o) => o.text.trim()),
+      options: options.filter((o) => o.text.trim() || o.image),
       correctAnswer,
       image: questionImage || pastedImages[0] || undefined,
     });
