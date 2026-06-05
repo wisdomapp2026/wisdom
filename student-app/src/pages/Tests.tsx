@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 export default function Tests() {
   return (
     <div className="page-content">
@@ -27,7 +29,7 @@ export default function Tests() {
               <div className="flex items-center gap-1.5 mb-2"><span className="text-primary-500">📝</span>{t.isNew&&<span className="bg-red-500 text-white text-[8px] font-bold px-1.5 rounded">Yangi</span>}</div>
               <p className="font-semibold text-sm text-gray-900 truncate">{t.title}</p>
               <p className="text-[10px] text-gray-500 mt-1">📋 {t.q} savol · ⏱ {t.t}</p>
-              <div className="flex gap-1.5 mt-3"><button className="flex-1 bg-primary-500 text-white text-[11px] font-semibold py-1.5 rounded-lg">Boshlash</button><button className="flex-1 border border-gray-200 text-[11px] font-semibold text-gray-600 py-1.5 rounded-lg">Davom</button></div>
+              <div className="flex gap-1.5 mt-3"><Link to="/test/test-demo-01" className="flex-1 bg-primary-500 text-white text-[11px] font-semibold py-1.5 rounded-lg text-center">Boshlash</Link><button className="flex-1 border border-gray-200 text-[11px] font-semibold text-gray-600 py-1.5 rounded-lg">Davom</button></div>
             </div>
           ))}
         </div>
