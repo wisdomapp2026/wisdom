@@ -8,6 +8,9 @@ import {
   ArrowUp,
   ArrowDown,
 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { getAllCourses } from "@shared/repositories";
+import { getAllStudents } from "@shared/repositories";
 import {
   AreaChart,
   Area,
@@ -21,14 +24,14 @@ import {
   Cell,
 } from "recharts";
 
-// Demo stats (Firestore dan olinadi keyinchalik)
+// Demo stats (bir qismi Firebase dan olinadi)
 const stats = [
-  { label: "FAOL FOYDALANUVCHILAR", value: "12,480", change: "+12%", icon: Users, positive: true },
-  { label: "BUGUNGI KIRISHLAR", value: "1,240", change: "+5%", icon: TrendingUp, positive: true },
-  { label: "YANGI OBUNALAR", value: "45", change: "-2%", icon: UserPlus, positive: false },
-  { label: "KUNLIK DAROMAD", value: "4.2 mln", change: "+18%", icon: DollarSign, positive: true },
-  { label: "OYLIK TUSHUM", value: "128 mln", change: "+24%", icon: Wallet, positive: true },
-  { label: "JAMI TUSHUM", value: "1.2 mlrd", change: "+42%", icon: Wallet, positive: true },
+  { label: "FAOL FOYDALANUVCHILAR", value: "0", change: "—", icon: Users, positive: true },
+  { label: "BUGUNGI KIRISHLAR", value: "0", change: "—", icon: TrendingUp, positive: true },
+  { label: "YANGI OBUNALAR", value: "0", change: "—", icon: UserPlus, positive: false },
+  { label: "KUNLIK DAROMAD", value: "0", change: "—", icon: DollarSign, positive: true },
+  { label: "OYLIK TUSHUM", value: "0", change: "—", icon: Wallet, positive: true },
+  { label: "JAMI TUSHUM", value: "0", change: "—", icon: Wallet, positive: true },
   { label: "ENG MASHXUR KURS", value: "Matematika", change: "Top 1", icon: Trophy, positive: true },
 ];
 
@@ -75,6 +78,14 @@ const recentCourses = [
 ];
 
 export default function Dashboard() {
+  const [realStats, setRealStats] = useState({ courses: 0, students: 0 });
+
+  useEffect(() => {
+    Promise.all([getAllCourses(), getAllStudents()]).then(([courses, students]) => {
+      setRealStats({ courses: courses.length, students: students.length });
+    }).catch(console.error);
+  }, []);
+
   return (
     <div className="space-y-6">
       {/* Header */}
