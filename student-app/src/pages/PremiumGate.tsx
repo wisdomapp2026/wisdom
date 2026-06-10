@@ -1,24 +1,46 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { X } from "lucide-react";
+import { useSubscription } from "../hooks/useSubscription";
+import { useEffect } from "react";
 
 export default function PremiumGate() {
+  const { isPremium, loading } = useSubscription();
+  const navigate = useNavigate();
+
+  // Agar obuna bor bo'lsa — orqaga qaytarish
+  useEffect(() => {
+    if (!loading && isPremium) {
+      navigate(-1);
+    }
+  }, [isPremium, loading]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-8 h-8 border-3 border-primary-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  // Obuna bor — bu sahifa ko'rinmasligi kerak
+  if (isPremium) return null;
+
   return (
-    <div className="min-h-screen bg-gray-500/50 flex flex-col">
+    <div className="min-h-screen bg-gray-500/50 flex flex-col max-w-mobile mx-auto">
       {/* Header */}
       <header className="px-5 pt-4 flex justify-between items-center">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 bg-primary-500 rounded-lg flex items-center justify-center">
             <span className="text-white text-sm">⚡</span>
           </div>
-          <span className="font-bold text-primary-500">EduPlatform</span>
+          <span className="font-bold text-primary-500">EduKids</span>
         </div>
-        <Link to="/" className="text-gray-400"><X size={22} /></Link>
+        <button onClick={() => navigate(-1)} className="text-gray-400"><X size={22} /></button>
       </header>
 
       {/* Modal */}
       <div className="flex-1 flex items-center justify-center px-6">
         <div className="bg-white rounded-3xl w-full max-w-sm p-8 text-center shadow-xl">
-          {/* Lock */}
           <div className="mx-auto w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center relative">
             <span className="text-3xl">🔒</span>
             <span className="absolute -top-1.5 left-1/2 -translate-x-1/2 bg-red-500 text-white text-[8px] font-bold px-2 py-0.5 rounded">Yopiq</span>
@@ -26,55 +48,23 @@ export default function PremiumGate() {
 
           <h2 className="text-xl font-bold mt-5">Bu dars pullik</h2>
           <p className="text-sm text-gray-500 mt-2 leading-relaxed">
-            To'liq kirish uchun obuna bo'ling va barcha<br/>materiallardan foydalaning.
+            To'liq kirish uchun obuna bo'ling va barcha materiallardan foydalaning.
           </p>
 
-          {/* Plan card */}
-          <div className="bg-gray-50 rounded-xl p-4 mt-6 border border-gray-200 text-left">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center shrink-0">
-                <span className="text-primary-500">📚</span>
-              </div>
-              <div>
-                <p className="font-bold text-gray-900 text-sm">Milliy sertifikat kursi</p>
-                <p className="text-[11px] text-gray-500">Ona tili va adabiyot fanidan milliy sertifikat imtihoniga tayyorlovchi</p>
-              </div>
-            </div>
-            <div className="flex items-baseline mt-3 gap-2">
-              <span className="text-[10px] text-gray-500 uppercase">Narxi</span>
-              <span className="text-xl font-bold text-primary-500">50 000 so'm</span>
-              <span className="text-sm text-gray-400">/ oy</span>
-            </div>
-          </div>
-
-          {/* Buttons */}
           <Link
             to="/subscription"
-            className="block w-full bg-primary-500 text-white font-bold py-3.5 rounded-xl mt-6 flex items-center justify-center gap-2"
+            className="block w-full bg-primary-500 text-white font-bold py-3.5 rounded-xl mt-6"
           >
             💳 Obuna bo'lish
           </Link>
-          <Link
-            to="/"
+          <button
+            onClick={() => navigate(-1)}
             className="block w-full border border-gray-200 text-gray-700 font-medium py-3.5 rounded-xl mt-3"
           >
-            Bekor qilish
-          </Link>
-          <Link to="/" className="text-sm text-gray-500 mt-4 inline-block">
-            Davom ettirish ›
-          </Link>
-
-          {/* Trust */}
-          <div className="flex justify-center gap-4 mt-6 text-[11px] text-gray-400">
-            <span>🛡️ Xavfsiz to'lov</span>
-            <span>📞 24/7 Yordam</span>
-          </div>
+            Orqaga qaytish
+          </button>
         </div>
       </div>
-
-      <p className="text-[10px] text-gray-300 text-center px-6 pb-6">
-        Obuna bo'lish orqali siz foydalanish shartlari va maxfiylik siyosatiga rozilik bildirasiz.
-      </p>
     </div>
   );
 }

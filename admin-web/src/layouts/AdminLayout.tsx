@@ -1,4 +1,5 @@
-import { Outlet, NavLink, useLocation, useNavigate } from "react-router-dom";
+import { Outlet, NavLink, useLocation, useNavigate, Link } from "react-router-dom";
+import { useState, useEffect } from "react";
 import {
   LayoutDashboard,
   BookOpen,
@@ -13,9 +14,11 @@ import {
   Search,
   Plus,
   LogOut,
+  Share2,
 } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth } from "@shared/firebase";
+import { getUnreadNotificationCount } from "@shared/repositories";
 import clsx from "clsx";
 
 const sidebarItems = [
@@ -23,10 +26,12 @@ const sidebarItems = [
   { path: "/courses", label: "Kurslar", icon: BookOpen },
   { path: "/tests", label: "Testlar", icon: FileText },
   { path: "/students", label: "O'quvchilar", icon: Users },
-  { path: "/news", label: "Yangiliklar", icon: Newspaper },
+  { path: "/motivations", label: "Motivatsion frazalar", icon: Bell },
+  { path: "/social-links", label: "Ijtimoiy tarmoqlar", icon: Share2 },
+  { path: "/notifications", label: "Bildirishnomalar", icon: Bell },
+  { path: "/news", label: "Habarlar", icon: Newspaper },
   { path: "/payments", label: "To'lovlar", icon: FileEdit },
   { path: "/promos", label: "Promo kodlar", icon: Tag },
-  { path: "/drafts", label: "Draftlar", icon: FileText },
   { path: "/analytics", label: "Statistikalar", icon: BarChart3 },
   { path: "/settings", label: "Sozlamalar", icon: Settings },
 ];
@@ -34,6 +39,21 @@ const sidebarItems = [
 export default function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    loadNotifCount();
+    // Har 30 sekundda yangilash
+    const interval = setInterval(loadNotifCount, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  async function loadNotifCount() {
+    try {
+      const count = await getUnreadNotificationCount();
+      setUnreadCount(count);
+    } catch {}
+  }
 
   async function handleLogout() {
     await signOut(auth);
@@ -43,7 +63,7 @@ export default function AdminLayout() {
   return (
     <div className="flex h-screen overflow-hidden">
       {/* Sidebar */}
-      <aside className="w-64 bg-white border-r border-gray-200 flex flex-col">
+      <aside className="hidden lg:flex w-64 bg-white border-r border-gray-200 flex-col shrink-0">
         {/* Logo */}
         <div className="h-16 flex items-center px-6 border-b border-gray-100">
           <div className="flex items-center gap-2">
@@ -92,38 +112,60 @@ export default function AdminLayout() {
       </aside>
 
       {/* Main content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/* Top bar */}
         <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6">
-          {/* Search */}
-          <div className="relative w-96">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Qidiruv: kurslar, o'quvchilar, tranzaksiyalar..."
-              className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-            />
-          </div>
+          {location.pathname === "/courses" ? (
+            <>
+              {/* Search */}
+              <div className="relative w-96">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Qidiruv: kurslar, o'quvchilar, tranzaksiyalar..."
+                  className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                />
+              </div>
 
-          <div className="flex items-center gap-4">
-            {/* Notification */}
-            <button className="relative p-2 text-gray-500 hover:text-gray-700">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-danger rounded-full"></span>
-            </button>
+              <div className="flex items-center gap-4">
+                {/* Notification */}
+                <Link to="/notifications" className="relative p-2 text-gray-500 hover:text-gray-700">
+                  <Bell className="w-5 h-5" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-danger rounded-full flex items-center justify-center text-[9px] text-white font-bold px-1">
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                  )}
+                </Link>
 
-            {/* New course button */}
-            <NavLink to="/courses" className="btn-primary flex items-center gap-2">
-              <Plus className="w-4 h-4" />
-              Yangi yaratish
-            </NavLink>
+                {/* New course button */}
+                <NavLink to="/courses" className="btn-primary flex items-center gap-2">
+                  <Plus className="w-4 h-4" />
+                  Yangi yaratish
+                </NavLink>
 
-            {/* Status */}
-            <div className="flex items-center gap-2 text-xs text-gray-500">
-              <span>Tizim:</span>
-              <span className="text-success font-medium">Barqaror</span>
-            </div>
-          </div>
+                {/* Status */}
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <span>Tizim:</span>
+                  <span className="text-success font-medium">Barqaror</span>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div></div>
+              <div className="flex items-center gap-4">
+                <Link to="/notifications" className="relative p-2 text-gray-500 hover:text-gray-700">
+                  <Bell className="w-5 h-5" />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-danger rounded-full flex items-center justify-center text-[9px] text-white font-bold px-1">
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                  )}
+                </Link>
+              </div>
+            </>
+          )}
         </header>
 
         {/* Page content */}

@@ -15,9 +15,11 @@ import Students from "./pages/Students";
 import News from "./pages/News";
 import Payments from "./pages/Payments";
 import Promos from "./pages/Promos";
-import Drafts from "./pages/Drafts";
 import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
+import Motivations from "./pages/Motivations";
+import SocialLinks from "./pages/SocialLinks";
+import Notifications from "./pages/Notifications";
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -56,10 +58,12 @@ export default function App() {
         <Route path="students" element={<Students />} />
         <Route path="tests" element={<Tests />} />
         <Route path="tests/builder" element={<TestBuilder />} />
+        <Route path="motivations" element={<Motivations />} />
+        <Route path="social-links" element={<SocialLinks />} />
+        <Route path="notifications" element={<Notifications />} />
         <Route path="news" element={<News />} />
         <Route path="payments" element={<Payments />} />
         <Route path="promos" element={<Promos />} />
-        <Route path="drafts" element={<Drafts />} />
         <Route path="analytics" element={<Analytics />} />
         <Route path="settings" element={<Settings />} />
       </Route>

@@ -18,6 +18,16 @@ export type QuestionType = "multiple_choice" | "true_false" | "short_answer";
 export type PaymentMethod = "click" | "payme" | "uzum_bank" | "card";
 
 // ============================================================
+// CATEGORIES (Kategoriyalar)
+// ============================================================
+export interface Category {
+  id: string;
+  name: string; // "Matematika", "Fizika" va h.k.
+  order: number;
+  createdAt: number;
+}
+
+// ============================================================
 // USERS (Foydalanuvchilar)
 // ============================================================
 export interface User {
@@ -27,6 +37,8 @@ export interface User {
   avatar?: string;
   role: UserRole;
   grade?: string; // "Grade 11 Student" kabi
+  isBanned?: boolean; // Admin tomonidan ban qilingan
+  bannedAt?: number; // Ban qilingan vaqt
   createdAt: number; // timestamp
   updatedAt: number;
 }
@@ -50,6 +62,15 @@ export interface Subscription {
 // ============================================================
 // COURSES (Kurslar / Fanlar)
 // ============================================================
+
+/** Kursni tanishtirish bo'limi (video + matn) */
+export interface CourseIntroduction {
+  videoUrl?: string; // YouTube yoki upload qilingan video
+  videoType?: "youtube" | "upload";
+  text: string; // Kurs haqida qisqacha tushuntirish
+  thumbnailUrl?: string; // Video uchun thumbnail rasm
+}
+
 export interface Course {
   id: string;
   title: string; // "Boshlang'ich Matematika"
@@ -64,6 +85,8 @@ export interface Course {
   testAfterEvery: number; // har nechta darsdan keyin test (admin belgilaydi), 0 = faqat oxirida
   tags: string[]; // ["National", "Certification", "Elite Prep"]
   order: number;
+  /** Kursni tanishtirish bo'limi — avtomatik yaratiladi */
+  introduction?: CourseIntroduction;
   createdAt: number;
   updatedAt: number;
   createdBy: string; // admin userId
@@ -80,6 +103,20 @@ export interface Topic {
   icon?: string; // emoji yoki icon nomi
   order: number;
   isPremium: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+// ============================================================
+// ADVICE (Maslahat bloklari — kurs ichida, mavzular orasida)
+// ============================================================
+export interface Advice {
+  id: string;
+  courseId: string;
+  title: string; // "Maslahat"
+  text: string; // "IDC-1 Geometriya bo'limini tugatishdan oldin..."
+  icon?: string; // emoji yoki icon nomi
+  afterTopicOrder: number; // qaysi mavzudan keyin joylashadi
   createdAt: number;
   updatedAt: number;
 }
@@ -104,6 +141,8 @@ export interface Problem {
   videoType?: "youtube" | "upload";
   /** Bosqichma-bosqich yechim (Step-by-Step Solution) */
   solution?: SolutionStep[];
+  /** Yechim rasmi */
+  solutionImage?: string;
   /** Admin belgilagan teglar (#Algebra, #Geometry...) */
   tags: string[];
   /** Vaqt chegarasi (daqiqalarda) */
@@ -127,6 +166,7 @@ export interface Test {
   description?: string;
   version: string; // "Draft v1", "Published"
   status: "draft" | "published";
+  isPremium?: boolean; // Premium test (obuna talab etiladi)
   gradeLevel?: string; // "Primary 5"
   subject?: string; // "Mathematics"
   passingScore: number; // 28/45 kabi
@@ -157,6 +197,23 @@ export interface Question {
 export interface QuestionOption {
   label: string; // "A", "B", "C", "D"
   text: string;
+}
+
+// ============================================================
+// TEST LISTS (Test ro'yxatlari — admin yaratadi, studentga ko'rinadi)
+// ============================================================
+export interface TestList {
+  id: string;
+  title: string; // "Arifmetika testlari"
+  description?: string;
+  testIds: string[]; // kurs ichidagi test ID lari (courses/{courseId}/tests/)
+  /** Published bo'lsa student mobile app da ko'rinadi */
+  status: "draft" | "published";
+  /** Qaysi kursdan testlar olingan (ixtiyoriy) */
+  courseId?: string;
+  createdAt: number;
+  updatedAt: number;
+  createdBy: string;
 }
 
 // ============================================================
@@ -218,6 +275,20 @@ export interface Payment {
 }
 
 // ============================================================
+// MESSAGES (O'quvchi-Admin habarlar)
+// ============================================================
+export interface Message {
+  id: string;
+  fromUserId: string;
+  fromName: string;
+  fromRole: "student" | "admin";
+  toUserId?: string; // admin ga yuborganda bo'sh
+  text: string;
+  isRead: boolean;
+  createdAt: number;
+}
+
+// ============================================================
 // ADMIN DASHBOARD STATS
 // ============================================================
 export interface DashboardStats {
@@ -228,4 +299,94 @@ export interface DashboardStats {
   monthlyRevenue: number;
   totalRevenue: number;
   topCourse: string;
+}
+
+// ============================================================
+// MOTIVATIONAL PHRASES (Motivatsion frazalar)
+// ============================================================
+
+/** Motivatsion fraza turi: bosh sahifada, kurslar ro'yxatida, kurs ichida yoki dars (mavzu) ichida */
+export type MotivationPlacement = "home" | "courses_list" | "course" | "topic";
+
+/** Ko'rsatish tartibi */
+export type MotivationDisplayOrder = "sequential" | "random";
+
+/** Motivatsion frazalar sozlamalari */
+export interface MotivationSettings {
+  id: string; // "course" yoki "topic"
+  placement: MotivationPlacement;
+  /** Har necha soatda almashtirish (masalan: 2 = har 2 soatda) */
+  rotateHours: number;
+  /** Ko'rsatish tartibi: ketma-ket yoki tasodifiy */
+  displayOrder: MotivationDisplayOrder;
+  updatedAt: number;
+}
+
+/** Bitta motivatsion fraza */
+export interface MotivationalPhrase {
+  id: string;
+  placement: MotivationPlacement;
+  text: string;
+  order: number;
+  isActive: boolean;
+  createdAt: number;
+}
+
+// ============================================================
+// SOCIAL LINKS (Ijtimoiy tarmoqlar)
+// ============================================================
+
+/** Mavjud ijtimoiy tarmoq turlari */
+export type SocialPlatform =
+  | "telegram"
+  | "instagram"
+  | "youtube"
+  | "facebook"
+  | "tiktok"
+  | "twitter"
+  | "linkedin"
+  | "website";
+
+/** Bitta ijtimoiy tarmoq havolasi */
+export interface SocialLink {
+  id: string;
+  platform: SocialPlatform;
+  label: string; // "Telegram kanal", "Instagram"
+  url: string;
+  /** Admin upload qilgan maxsus ikonka (agar bo'lsa — default SVG o'rniga shu ko'rinadi) */
+  iconUrl?: string;
+  isActive: boolean;
+  order: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+// ============================================================
+// PROMO CODES (Promo kodlar)
+// ============================================================
+export interface PromoCode {
+  id: string;
+  code: string; // "EDUKIDS50", "SALE20"
+  discountPercent: number; // 10, 20, 50 (foizda)
+  maxUses: number; // Necha marta ishlatilishi mumkin (0 = cheksiz)
+  usedCount: number; // Necha marta ishlatilgan
+  isActive: boolean;
+  expiresAt?: number; // Amal qilish muddati
+  createdAt: number;
+  createdBy: string;
+}
+
+// ============================================================
+// NOTIFICATIONS (Bildirishnomalar — admin uchun)
+// ============================================================
+export type NotificationType = "new_message" | "new_payment" | "new_student" | "new_test_result";
+
+export interface AdminNotification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  isRead: boolean;
+  data?: Record<string, string>; // qo'shimcha ma'lumot (userId, paymentId va h.k.)
+  createdAt: number;
 }

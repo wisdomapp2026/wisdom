@@ -1,14 +1,17 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { getTestById } from "@shared/repositories";
-import type { Test, Question } from "@shared/types";
+import { getTestById, saveTestResult, getAllCourses, getTestsByCourse } from "@shared/repositories";
+import type { Test, Question, TestResult } from "@shared/types";
 import LatexText from "../components/LatexText";
+import { useAuth } from "../hooks/useAuth";
 
 export default function TestScreen() {
   const { testId } = useParams<{ testId: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [test, setTest] = useState<Test | null>(null);
+  const [courseId, setCourseId] = useState("");
   const [current, setCurrent] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -17,13 +20,28 @@ export default function TestScreen() {
 
   useEffect(() => {
     if (!testId) return;
-    // courseId ni URL dan yoki default olish
-    const courseId = "demo-boshlangich-matematika";
-    getTestById(courseId, testId).then((t) => {
-      setTest(t);
-      if (t) setTimeLeft(t.totalTime * 60); // daqiqani soniyaga
-    }).catch(console.error).finally(() => setLoading(false));
+    // Testni barcha kurslardan qidirish
+    findAndLoadTest(testId);
   }, [testId]);
+
+  async function findAndLoadTest(tId: string) {
+    try {
+      const courses = await getAllCourses();
+      for (const course of courses) {
+        const t = await getTestById(course.id, tId);
+        if (t) {
+          setTest(t);
+          setCourseId(course.id);
+          setTimeLeft(t.totalTime * 60);
+          break;
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   // Timer
   useEffect(() => {
@@ -56,11 +74,44 @@ export default function TestScreen() {
       setCurrent(current + 1);
       setSelected(answers[questions[current + 1]?.id] || null);
     } else {
-      // Test tugadi — natijaga o'tish
-      const correct = questions.filter((qq) => answers[qq.id] === qq.correctAnswer).length;
-      const score = Math.round((correct / questions.length) * 100);
-      navigate(`/test-result?score=${score}&correct=${correct}&total=${questions.length}&time=${test.totalTime * 60 - timeLeft}`);
+      // Test tugadi — natijani saqlash va natija sahifasiga o'tish
+      finishTest();
     }
+  }
+
+  async function finishTest() {
+    const correct = questions.filter((qq) => answers[qq.id] === qq.correctAnswer).length;
+    const score = Math.round((correct / questions.length) * 100);
+    const timeTaken = (test!.totalTime * 60) - timeLeft;
+
+    // Natijani Firestore ga saqlash
+    if (user && test) {
+      const grade = score >= 90 ? "A" : score >= 75 ? "B" : score >= 60 ? "C" : "D";
+      const result: TestResult = {
+        id: `result-${user.uid}-${test.id}-${Date.now()}`,
+        testId: test.id,
+        userId: user.uid,
+        courseId: courseId,
+        score,
+        correctCount: correct,
+        totalQuestions: questions.length,
+        timeTaken,
+        grade,
+        answers: questions.map((qq) => ({
+          questionId: qq.id,
+          selectedAnswer: answers[qq.id] || "",
+          isCorrect: answers[qq.id] === qq.correctAnswer,
+        })),
+        completedAt: Date.now(),
+      };
+      try {
+        await saveTestResult(result);
+      } catch (err) {
+        console.error("Natijani saqlashda xatolik:", err);
+      }
+    }
+
+    navigate(`/test-result?score=${score}&correct=${correct}&total=${questions.length}&time=${timeTaken}`);
   }
 
   function goPrev() {
@@ -75,10 +126,22 @@ export default function TestScreen() {
       {/* Header */}
       <header className="px-5 pt-4 pb-3">
         <div className="flex items-center justify-between">
-          <h1 className="text-lg font-bold text-gray-900">{test.title}</h1>
-          <div className="bg-primary-50 px-3 py-1.5 rounded-full flex items-center gap-1">
-            <span className="text-primary-500 text-xs">⏱</span>
-            <span className="text-primary-500 font-bold text-sm">{String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}</span>
+          <h1 className="text-lg font-bold text-gray-900 truncate flex-1">{test.title}</h1>
+          <div className="flex items-center gap-2">
+            <div className="bg-primary-50 px-3 py-1.5 rounded-full flex items-center gap-1">
+              <span className="text-primary-500 text-xs">⏱</span>
+              <span className="text-primary-500 font-bold text-sm">{String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}</span>
+            </div>
+            <button
+              onClick={() => {
+                if (confirm("Testni yakunlashga ishonchingiz komilmi? Javoblar saqlanadi.")) {
+                  finishTest();
+                }
+              }}
+              className="bg-red-500 text-white text-xs font-semibold px-3 py-1.5 rounded-full active:bg-red-600"
+            >
+              Yakunlash
+            </button>
           </div>
         </div>
       </header>

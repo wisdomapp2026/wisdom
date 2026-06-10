@@ -10,6 +10,37 @@
     @apply text-gray-900 antialiased bg-gray-50;
     font-family: "Inter", system-ui, sans-serif;
   }
+  /* Dark mode */
+  .dark body,
+  .dark #root {
+    @apply bg-gray-900 text-gray-100;
+  }
+  .dark .bg-white {
+    background-color: #1f2937 !important;
+  }
+  .dark .bg-gray-50 {
+    background-color: #111827 !important;
+  }
+  .dark .border-gray-100,
+  .dark .border-gray-200 {
+    border-color: #374151 !important;
+  }
+  .dark .text-gray-900 {
+    color: #f3f4f6 !important;
+  }
+  .dark .text-gray-700 {
+    color: #d1d5db !important;
+  }
+  .dark .text-gray-600 {
+    color: #9ca3af !important;
+  }
+  .dark .text-gray-500 {
+    color: #9ca3af !important;
+  }
+  .dark .bottom-nav {
+    background-color: #1f2937 !important;
+    border-color: #374151 !important;
+  }
   /* Mobile frame — web da telefon shaklida ko'rsatish */
   #root {
     @apply max-w-mobile mx-auto min-h-screen bg-white relative shadow-xl;
@@ -30,3 +61,4 @@
     @apply pb-20 min-h-screen;
   }
 }
+

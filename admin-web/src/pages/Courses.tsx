@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Plus, Search, Users, BookOpen, Loader2 } from "lucide-react";
-import { getAllCourses, getTopicsByCourse } from "@shared/repositories";
+import { getAllCourses, getTopicsByCourse, getAllCategories } from "@shared/repositories";
 import { getStudentCountByCourse } from "@shared/repositories";
-import type { Course } from "@shared/types";
+import type { Course, Category } from "@shared/types";
 import CreateCourseModal from "../components/CreateCourseModal";
 
 interface CourseWithMeta extends Course {
@@ -16,10 +16,22 @@ export default function Courses() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState("");
 
   useEffect(() => {
     loadCourses();
+    loadCategories();
   }, []);
+
+  async function loadCategories() {
+    try {
+      const cats = await getAllCategories();
+      setCategories(cats);
+    } catch (err) {
+      console.error("Kategoriyalarni yuklashda xatolik:", err);
+    }
+  }
 
   async function loadCourses() {
     try {
@@ -43,8 +55,9 @@ export default function Courses() {
 
   const filteredCourses = courses.filter(
     (c) =>
-      c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.category.toLowerCase().includes(searchQuery.toLowerCase())
+      (c.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.category.toLowerCase().includes(searchQuery.toLowerCase())) &&
+      (selectedCategory === "" || c.category === selectedCategory)
   );
 
   return (
@@ -73,11 +86,17 @@ export default function Courses() {
             className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
         </div>
-        <select className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm">
-          <option>Barcha kategoriyalar</option>
-          <option>Matematika</option>
-          <option>Dasturlash</option>
-          <option>Tillar</option>
+        <select
+          value={selectedCategory}
+          onChange={(e) => setSelectedCategory(e.target.value)}
+          className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm"
+        >
+          <option value="">Barcha kategoriyalar</option>
+          {categories.map((cat) => (
+            <option key={cat.id} value={cat.name}>
+              {cat.name}
+            </option>
+          ))}
         </select>
       </div>
 
@@ -144,7 +163,7 @@ export default function Courses() {
       <CreateCourseModal
         open={showCreateModal}
         onClose={() => setShowCreateModal(false)}
-        onCreated={loadCourses}
+        onCreated={() => { loadCourses(); loadCategories(); }}
       />
     </div>
   );

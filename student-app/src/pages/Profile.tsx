@@ -1,24 +1,108 @@
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { Settings, Bell, ChevronRight, Shield, HelpCircle, LogOut, CreditCard, BookOpen, Play, Moon } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
+import { useDarkMode } from "../hooks/useDarkMode";
+import { getUserById, getAllProgressByUser, getTestResultsByUser, getUserSubscription, getAllCourses, getTopicsByCourse, getTopicById, getCourseById, getPaymentsByUser } from "@shared/repositories";
+import type { User, UserProgress, TestResult, Subscription, Course, Topic, Payment } from "@shared/types";
+
+interface ContinueItem {
+  course: Course;
+  topic: Topic | null;
+  progress: number;
+}
+
+interface PaymentItem {
+  title: string;
+  date: string;
+  amount: string;
+}
 
 export default function Profile() {
   const { user, isLoggedIn, logout } = useAuth();
+  const { isDark, toggle: toggleDark } = useDarkMode();
   const navigate = useNavigate();
+
+  const [userData, setUserData] = useState<User | null>(null);
+  const [totalCourses, setTotalCourses] = useState(0);
+  const [totalTests, setTotalTests] = useState(0);
+  const [avgScore, setAvgScore] = useState(0);
+  const [continueItems, setContinueItems] = useState<ContinueItem[]>([]);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [testResults, setTestResults] = useState<TestResult[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (user) loadProfile();
+    else setLoading(false);
+  }, [user]);
+
+  async function loadProfile() {
+    if (!user) return;
+    try {
+      // User ma'lumotlari
+      const uData = await getUserById(user.uid);
+      setUserData(uData);
+
+      // Progress va statistikalar
+      const [allProgress, results] = await Promise.all([
+        getAllProgressByUser(user.uid),
+        getTestResultsByUser(user.uid),
+      ]);
+
+      setTotalCourses(allProgress.length);
+      setTotalTests(results.length);
+      setTestResults(results.slice(0, 3));
+
+      // To'lovlar
+      const userPayments = await getPaymentsByUser(user.uid);
+      setPayments(userPayments);
+
+      if (results.length > 0) {
+        const avg = Math.round(results.reduce((s, r) => s + r.score, 0) / results.length);
+        setAvgScore(avg);
+      }
+
+      // Davom etayotgan darslar (top 2)
+      const sorted = [...allProgress].sort((a, b) => (b.lastAccessedAt || 0) - (a.lastAccessedAt || 0));
+      const items: ContinueItem[] = [];
+      for (const prog of sorted.slice(0, 2)) {
+        const course = await getCourseById(prog.courseId);
+        if (!course) continue;
+        let topic: Topic | null = null;
+        if (prog.currentTopicId) {
+          topic = await getTopicById(prog.courseId, prog.currentTopicId);
+        }
+        const topics = await getTopicsByCourse(prog.courseId);
+        const progress = topics.length > 0
+          ? Math.round((prog.completedTopics.length / topics.length) * 100)
+          : prog.progressPercent || 0;
+        items.push({ course, topic, progress });
+      }
+      setContinueItems(items);
+
+      // Obuna
+      try {
+        const sub = await getUserSubscription(user.uid);
+        if (sub) setSubscriptions([sub]);
+      } catch {}
+    } catch (err) {
+      console.error("Profil yuklashda xatolik:", err);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function handleLogout() {
     await logout();
     navigate("/");
   }
 
-  return (
-    <div className="page-content">
-      <header className="px-5 pt-4 flex justify-between">
-        <h1 className="text-2xl font-bold">Profil</h1>
-        <button className="text-gray-400">⚙️</button>
-      </header>
-
-      {/* Agar login qilmagan bo'lsa */}
-      {!isLoggedIn ? (
+  if (!isLoggedIn) {
+    return (
+      <div className="page-content">
+        <header className="px-5 pt-4"><h1 className="text-2xl font-bold">Profil</h1></header>
         <div className="px-5 mt-12 text-center">
           <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto">
             <span className="text-3xl">👤</span>
@@ -28,63 +112,252 @@ export default function Profile() {
           <Link to="/login" className="block mt-6 bg-primary-500 text-white font-bold py-3.5 rounded-xl text-center">Kirish</Link>
           <Link to="/register" className="block mt-3 border border-gray-200 text-gray-700 font-medium py-3.5 rounded-xl text-center">Ro'yxatdan o'tish</Link>
         </div>
-      ) : (
-        <>
-          {/* Avatar & Info */}
-          <div className="flex flex-col items-center mt-6">
-            <div className="w-20 h-20 bg-primary-100 rounded-full flex items-center justify-center">
-              <span className="text-3xl">👤</span>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="page-content flex items-center justify-center">
+        <div className="w-8 h-8 border-3 border-primary-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  const displayName = userData?.name || user?.displayName || user?.email?.split("@")[0] || "Foydalanuvchi";
+  const avatarUrl = userData?.avatar;
+
+  return (
+    <div className="page-content pb-24">
+      {/* Header */}
+      <header className="px-5 pt-4 flex items-center justify-between">
+        <h1 className="text-2xl font-bold text-gray-900">Profil</h1>
+        <div className="flex gap-2">
+          <button className="w-9 h-9 bg-gray-50 rounded-full flex items-center justify-center border border-gray-100">
+            <Bell size={18} className="text-gray-500" />
+          </button>
+          <button className="w-9 h-9 bg-gray-50 rounded-full flex items-center justify-center border border-gray-100">
+            <Settings size={18} className="text-gray-500" />
+          </button>
+        </div>
+      </header>
+
+      {/* Avatar & Info */}
+      <div className="flex flex-col items-center mt-5">
+        <div className="w-20 h-20 rounded-full overflow-hidden bg-gray-200 border-2 border-white shadow-lg">
+          {avatarUrl ? (
+            <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <div className="w-full h-full bg-primary-500 flex items-center justify-center text-white text-2xl font-bold">
+              {displayName.charAt(0).toUpperCase()}
             </div>
-            <h2 className="text-xl font-bold mt-3">{user?.email?.replace("@edukids.uz", "") || "O'quvchi"}</h2>
-            <span className="bg-primary-500 text-white text-xs font-medium px-3 py-1 rounded-full mt-1.5">Talaba</span>
-            <div className="flex gap-8 mt-4">
-              <div className="text-center"><p className="text-[10px] text-gray-500">KURSLAR</p><p className="text-lg font-bold">1</p></div>
-              <div className="text-center"><p className="text-[10px] text-gray-500">TESTLAR</p><p className="text-lg font-bold">0</p></div>
-              <div className="text-center"><p className="text-[10px] text-gray-500">NATIJA</p><p className="text-lg font-bold">—</p></div>
-            </div>
-            <button className="mt-4 border-2 border-primary-500 text-primary-500 font-semibold px-6 py-2 rounded-xl text-sm">Profilni tahrirlash</button>
+          )}
+        </div>
+        <h2 className="text-lg font-bold mt-3 text-gray-900">{displayName}</h2>
+        <span className="bg-primary-500 text-white text-[10px] font-semibold px-3 py-1 rounded-full mt-1">Premium Talaba</span>
+
+        {/* Statistika */}
+        <div className="flex gap-8 mt-4">
+          <div className="text-center">
+            <p className="text-[10px] text-gray-400 font-semibold uppercase">Kurslar</p>
+            <p className="text-xl font-bold text-gray-900">{totalCourses}</p>
+          </div>
+          <div className="text-center">
+            <p className="text-[10px] text-gray-400 font-semibold uppercase">Testlar</p>
+            <p className="text-xl font-bold text-gray-900">{totalTests}</p>
+          </div>
+          <div className="text-center">
+            <p className="text-[10px] text-gray-400 font-semibold uppercase">Natija</p>
+            <p className="text-xl font-bold text-gray-900">{avgScore > 0 ? `${avgScore}%` : "—"}</p>
+          </div>
+        </div>
+
+        {/* Profilni tahrirlash */}
+        <button className="mt-4 w-52 border-2 border-primary-500 text-primary-500 font-semibold py-2.5 rounded-xl text-sm active:bg-primary-50">
+          Profilni tahrirlash
+        </button>
+      </div>
+
+      {/* Davom etayotgan darslar */}
+      {continueItems.length > 0 && (
+        <section className="px-5 mt-7">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-bold text-gray-900">Davom etayotgan darslar</h3>
+            <Link to="/continue" className="text-sm text-primary-500 font-medium">Hammasi</Link>
           </div>
 
-          {/* Faol obunalar */}
-          <section className="px-5 mt-8">
-            <h3 className="font-bold text-gray-900 mb-3">Faol obunalar</h3>
-            <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 text-center">
-              <p className="text-sm text-gray-500">Hali obuna yo'q</p>
-              <Link to="/subscription" className="text-sm text-primary-500 font-medium mt-2 inline-block">Obuna bo'lish →</Link>
+          <div className="overflow-x-auto -mx-5 px-5">
+            <div className="flex gap-3 min-w-max">
+              {continueItems.map((item) => (
+                <button
+                  key={item.course.id}
+                  onClick={() => {
+                    if (item.topic) navigate(`/course/${item.course.id}/topic/${item.topic.id}`);
+                    else navigate(`/course/${item.course.id}`);
+                  }}
+                  className="w-56 bg-white border border-gray-100 rounded-xl p-4 text-left shrink-0 active:bg-gray-50"
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[10px] text-primary-500 font-semibold">Davom etmoqda</p>
+                    <span className="text-[10px] text-gray-400">Ora t...</span>
+                  </div>
+                  <p className="text-sm font-semibold text-gray-900 truncate">
+                    {item.course.title}: {item.topic?.title || ""}
+                  </p>
+                  <p className="text-[10px] text-gray-500 mt-0.5 truncate">
+                    Mavzu: davom etishda
+                  </p>
+                  <div className="flex items-center justify-between mt-3">
+                    <span className="text-[10px] text-gray-400">Progress</span>
+                    <span className="text-[10px] font-bold text-primary-500">{item.progress}%</span>
+                  </div>
+                  <div className="h-1.5 bg-gray-100 rounded-full mt-1">
+                    <div className="h-full bg-primary-500 rounded-full" style={{ width: `${item.progress}%` }} />
+                  </div>
+                  <div className="mt-3 flex items-center gap-1.5 text-primary-500">
+                    <Play size={12} fill="currentColor" />
+                    <span className="text-[11px] font-medium">Savom ettirish</span>
+                  </div>
+                </button>
+              ))}
             </div>
-          </section>
-
-          {/* So'nggi natijalar */}
-          <section className="px-5 mt-6">
-            <h3 className="font-bold text-gray-900 mb-3">So'nggi natijalar</h3>
-            <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 text-center">
-              <p className="text-sm text-gray-500">Hali test ishlanmagan</p>
-              <Link to="/tests" className="text-sm text-primary-500 font-medium mt-2 inline-block">Testlarni ishlash →</Link>
-            </div>
-          </section>
-
-          {/* Sozlamalar */}
-          <section className="px-5 mt-6">
-            <h3 className="font-bold text-gray-900 mb-3">Sozlamalar</h3>
-            {[
-              { i: "👤", l: "Shaxsiy ma'lumotlar" },
-              { i: "🔒", l: "Xavfsizlik" },
-              { i: "🔔", l: "Bildirishnomalar" },
-              { i: "❓", l: "Yordam" },
-            ].map((m, i) => (
-              <button key={i} className="flex items-center w-full py-3.5 border-b border-gray-50">
-                <span className="mr-3">{m.i}</span>
-                <span className="flex-1 text-left text-gray-900">{m.l}</span>
-                <span className="text-gray-300">›</span>
-              </button>
-            ))}
-            <button onClick={handleLogout} className="flex items-center w-full py-3.5 text-red-500">
-              <span className="mr-3">🚪</span>
-              <span className="flex-1 text-left font-medium">Chiqish</span>
-            </button>
-          </section>
-        </>
+          </div>
+        </section>
       )}
+
+      {/* Faol obunalar */}
+      <section className="px-5 mt-7">
+        <h3 className="font-bold text-gray-900 mb-3">Faol obunalar</h3>
+        {subscriptions.length > 0 ? (
+          <div className="space-y-2.5">
+            {subscriptions.map((sub) => (
+              <div key={sub.id} className="flex items-center gap-3 bg-white border border-gray-100 rounded-xl p-4">
+                <div className="w-9 h-9 bg-primary-50 rounded-lg flex items-center justify-center shrink-0">
+                  <CreditCard size={18} className="text-primary-500" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-gray-900">{sub.plan}</p>
+                  <p className="text-[10px] text-gray-500">⏱ Muddati: {new Date(sub.endDate).toLocaleDateString("uz")}</p>
+                </div>
+                <span className="text-[10px] font-semibold text-green-600 bg-green-50 px-2 py-1 rounded">Faol</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 text-center">
+            <p className="text-sm text-gray-500">Hali obuna yo'q</p>
+            <Link to="/subscription" className="text-sm text-primary-500 font-medium mt-1 inline-block">Obuna bo'lish →</Link>
+          </div>
+        )}
+      </section>
+
+      {/* So'nggi natijalar */}
+      <section className="px-5 mt-7">
+        <h3 className="font-bold text-gray-900 mb-3">So'nggi natijalar</h3>
+        {testResults.length > 0 ? (
+          <div className="space-y-2.5">
+            {testResults.map((r, idx) => (
+              <div key={r.id} className="flex items-center gap-3 bg-white border border-gray-100 rounded-xl p-4">
+                <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                  r.score >= 80 ? "bg-green-50" : r.score >= 60 ? "bg-yellow-50" : "bg-red-50"
+                }`}>
+                  <span className="text-lg">{r.score >= 80 ? "🏆" : r.score >= 60 ? "📝" : "📕"}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">Kurslar testi</p>
+                  <p className="text-[10px] text-gray-500">{r.correctCount}/{r.totalQuestions} to'g'ri</p>
+                </div>
+                <span className={`text-sm font-bold ${r.score >= 80 ? "text-green-600" : r.score >= 60 ? "text-yellow-600" : "text-red-500"}`}>
+                  {r.score}%
+                </span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 text-center">
+            <p className="text-sm text-gray-500">Hali test ishlanmagan</p>
+            <Link to="/tests" className="text-sm text-primary-500 font-medium mt-1 inline-block">Testlarni ishlash →</Link>
+          </div>
+        )}
+      </section>
+
+      {/* To'lovlar */}
+      <section className="px-5 mt-7">
+        <h3 className="font-bold text-gray-900 mb-3">To'lovlarim</h3>
+        {payments.length > 0 ? (
+          <div className="space-y-2.5">
+            {payments.map((p) => (
+              <div key={p.id} className="bg-white border border-gray-100 rounded-xl p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{p.courseTitle}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{new Date(p.createdAt).toLocaleDateString("uz")}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-gray-900">{p.amount.toLocaleString()} so'm</p>
+                    <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium mt-0.5 ${
+                      p.status === "success" ? "bg-green-100 text-green-700" :
+                      p.status === "pending" ? "bg-yellow-100 text-yellow-700" :
+                      "bg-red-100 text-red-700"
+                    }`}>
+                      {p.status === "success" ? "✅ Tasdiqlangan" : p.status === "pending" ? "⏳ Kutilmoqda" : "❌ Rad etilgan"}
+                    </span>
+                  </div>
+                </div>
+                {p.status === "pending" && (
+                  <p className="text-[10px] text-yellow-600 mt-2 bg-yellow-50 px-2 py-1 rounded">
+                    Admin tekshirmoqda. Odatda 5-30 daqiqa kutiladi.
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 text-center">
+            <p className="text-sm text-gray-500">Hali to'lov amalga oshirilmagan</p>
+            <Link to="/subscription" className="text-sm text-primary-500 font-medium mt-1 inline-block">Obuna bo'lish →</Link>
+          </div>
+        )}
+      </section>
+
+      {/* Sozlamalar */}
+      <section className="px-5 mt-7">
+        <h3 className="font-bold text-gray-900 mb-3">Sozlamalar</h3>
+        <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
+          {/* Tungi rejim toggle */}
+          <button onClick={toggleDark} className="flex items-center w-full px-4 py-3.5 border-b border-gray-50 active:bg-gray-50">
+            <div className="w-8 h-8 bg-gray-50 rounded-lg flex items-center justify-center mr-3">
+              <Moon size={18} className="text-gray-500" />
+            </div>
+            <span className="flex-1 text-left text-sm text-gray-900">Tungi rejim</span>
+            <div className={`w-11 h-6 rounded-full relative transition-colors ${isDark ? "bg-primary-500" : "bg-gray-300"}`}>
+              <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${isDark ? "translate-x-5.5 left-[22px]" : "left-0.5"}`} />
+            </div>
+          </button>
+
+          {[
+            { icon: <Settings size={18} className="text-gray-500" />, label: "Shaxsiy ma'lumotlar", to: "/profile/edit" },
+            { icon: <Shield size={18} className="text-gray-500" />, label: "Promokodlarim", to: "/profile/promo" },
+            { icon: <Bell size={18} className="text-gray-500" />, label: "Bildirishnomalar", to: "" },
+            { icon: <HelpCircle size={18} className="text-gray-500" />, label: "Yordam", to: "/profile/help" },
+            { icon: <ChevronRight size={18} className="text-gray-500" />, label: "Bog'lanish", to: "/messages" },
+          ].map((item, i) => (
+            <Link key={i} to={item.to || "#"} className="flex items-center w-full px-4 py-3.5 border-b border-gray-50 last:border-b-0 active:bg-gray-50">
+              <div className="w-8 h-8 bg-gray-50 rounded-lg flex items-center justify-center mr-3">
+                {item.icon}
+              </div>
+              <span className="flex-1 text-left text-sm text-gray-900">{item.label}</span>
+              <ChevronRight size={16} className="text-gray-300" />
+            </Link>
+          ))}
+          <button onClick={handleLogout} className="flex items-center w-full px-4 py-3.5 active:bg-red-50">
+            <div className="w-8 h-8 bg-red-50 rounded-lg flex items-center justify-center mr-3">
+              <LogOut size={18} className="text-red-500" />
+            </div>
+            <span className="flex-1 text-left text-sm text-red-500 font-medium">Chiqish</span>
+          </button>
+        </div>
+      </section>
     </div>
   );
 }

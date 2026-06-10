@@ -1,9 +1,10 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { Home, BookOpen, ClipboardList, User } from "lucide-react";
+import { Home, BookOpen, ClipboardList, User, PlayCircle } from "lucide-react";
 import clsx from "clsx";
 
 const navItems = [
   { path: "/", label: "Bosh sahifa", icon: Home },
+  { path: "/continue", label: "Davom etish", icon: PlayCircle },
   { path: "/courses", label: "Kurslar", icon: BookOpen },
   { path: "/tests", label: "Testlar", icon: ClipboardList },
   { path: "/profile", label: "Profil", icon: User },

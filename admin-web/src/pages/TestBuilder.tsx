@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { ChevronDown, ChevronRight as ChevRight, Plus, Edit, Trash2, Filter, Search, FolderPlus, X, GripVertical } from "lucide-react";
+import { ChevronDown, ChevronRight as ChevRight, Plus, Edit, Trash2, Filter, Search, FolderPlus, X, GripVertical, Save } from "lucide-react";
+import { saveTestToLibrary } from "@shared/repositories";
+import type { Test, Question as TQuestion } from "@shared/types";
 import CreateQuestionModal from "../components/CreateQuestionModal";
 
 interface Folder {
@@ -17,6 +19,9 @@ interface Question {
   tags: string[];
   order: number;
   folderId?: string;
+  options?: { label: string; text: string; image?: string }[];
+  correctAnswer?: string;
+  image?: string;
 }
 
 const defaultQuestions: Question[] = [
@@ -52,9 +57,9 @@ export default function TestBuilder() {
   const [draggedIds, setDraggedIds] = useState<string[]>([]);
   const [expandedFolders, setExpandedFolders] = useState<string[]>([]);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
-  const [editingQId, setEditingQId] = useState<string | null>(null);
-  const [editQContent, setEditQContent] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
+  const [saving, setSaving] = useState(false);
 
   // Persist on change
   useEffect(() => { saveState("tb_folders", folders); }, [folders]);
@@ -277,25 +282,6 @@ export default function TestBuilder() {
                     <GripVertical className="w-4 h-4 text-gray-300 mt-1 shrink-0" />
                     <input type="checkbox" checked={selectedIds.includes(q.id)} onChange={() => toggleSelect(q.id)} className="mt-1 w-4 h-4 text-primary-500 rounded shrink-0" />
                     <div className="flex-1 min-w-0">
-                      {editingQId === q.id ? (
-                        <div className="flex items-center gap-2">
-                          <input
-                            value={editQContent}
-                            onChange={(e) => setEditQContent(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") {
-                                setQuestions(questions.map((x) => x.id === q.id ? { ...x, content: editQContent } : x));
-                                setEditingQId(null);
-                              }
-                              if (e.key === "Escape") setEditingQId(null);
-                            }}
-                            className="flex-1 text-sm border border-primary-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                            autoFocus
-                          />
-                          <button onClick={() => { setQuestions(questions.map((x) => x.id === q.id ? { ...x, content: editQContent } : x)); setEditingQId(null); }} className="text-green-500 font-bold text-sm">✓</button>
-                          <button onClick={() => setEditingQId(null)} className="text-gray-400 text-sm">✕</button>
-                        </div>
-                      ) : (
                         <>
                           <p className="text-sm text-gray-900 break-words">{q.content.startsWith("[IMAGES:") || q.content.startsWith("data:") ? "📷 Rasmli savol" : q.content}</p>
                           <div className="flex items-center gap-3 mt-2">
@@ -304,11 +290,10 @@ export default function TestBuilder() {
                             {q.folderId && <span className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">📁 {folders.find((f) => f.id === q.folderId)?.name}</span>}
                           </div>
                         </>
-                      )}
                     </div>
                     <span className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${diffColors[q.difficulty]}`}>{diffLabels[q.difficulty]}</span>
                     <div className="flex items-center gap-1 shrink-0 ml-1">
-                      <button onClick={() => { setEditingQId(q.id); setEditQContent(q.content); }} className="p-1.5 text-gray-400 hover:text-primary-500 rounded hover:bg-gray-50"><Edit className="w-3.5 h-3.5" /></button>
+                      <button onClick={() => setEditingQuestion(q)} className="p-1.5 text-gray-400 hover:text-primary-500 rounded hover:bg-gray-50"><Edit className="w-3.5 h-3.5" /></button>
                       <button onClick={() => deleteQuestion(q.id)} className="p-1.5 text-gray-400 hover:text-red-500 rounded hover:bg-red-50"><Trash2 className="w-3.5 h-3.5" /></button>
                     </div>
                   </div>
@@ -316,6 +301,68 @@ export default function TestBuilder() {
               ))}
             </div>
             <p className="text-center text-sm text-gray-400 mt-4">{questions.length} ta savol mavjud</p>
+
+            {/* Saqlash tugmasi */}
+            {questions.length > 0 && (
+              <div className="mt-6 pt-4 border-t border-gray-100 flex justify-center">
+                <button
+                  onClick={async () => {
+                    setSaving(true);
+                    try {
+                      const testId = `test-${Date.now()}`;
+                      const testQuestions: TQuestion[] = questions.map((q, idx) => ({
+                        id: `${testId}-q${idx + 1}`,
+                        type: "multiple_choice" as const,
+                        content: q.content,
+                        options: q.options || [
+                          { label: "A", text: "" },
+                          { label: "B", text: "" },
+                          { label: "C", text: "" },
+                          { label: "D", text: "" },
+                        ],
+                        correctAnswer: q.correctAnswer || "A",
+                        points: 1,
+                        estimatedMinutes: parseInt(q.time) || 3,
+                        difficulty: q.difficulty,
+                        tags: q.tags,
+                      }));
+
+                      const totalTime = testQuestions.reduce((sum, q) => sum + q.estimatedMinutes, 0);
+
+                      const test: Test = {
+                        id: testId,
+                        courseId: "",
+                        title: `Test — ${questions.length} savol`,
+                        description: `${questions.length} ta savol · ${totalTime} daqiqa`,
+                        version: "Published",
+                        status: "published",
+                        passingScore: Math.ceil(questions.length * 0.6),
+                        shuffleQuestions: false,
+                        totalPoints: questions.length,
+                        totalTime,
+                        questions: testQuestions,
+                        createdAt: Date.now(),
+                        updatedAt: Date.now(),
+                        createdBy: "admin",
+                      };
+
+                      await saveTestToLibrary(test);
+                      alert("Saqlandi ✓");
+                    } catch (err) {
+                      console.error("Saqlashda xatolik:", err);
+                      alert("Xatolik yuz berdi!");
+                    } finally {
+                      setSaving(false);
+                    }
+                  }}
+                  disabled={saving}
+                  className="btn-primary flex items-center gap-2 disabled:opacity-50"
+                >
+                  <Save className="w-4 h-4" />
+                  {saving ? "Saqlanmoqda..." : "Saqlash"}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -327,7 +374,36 @@ export default function TestBuilder() {
         onSave={(q) => {
           const newId = `q-${Date.now()}`;
           const newOrder = questions.length > 0 ? Math.max(...questions.map((x) => x.order)) + 1 : 1;
-          setQuestions([...questions, { id: newId, content: q.content, difficulty: q.difficulty, time: q.time, tags: q.tags, order: newOrder, folderId: undefined }]);
+          setQuestions([...questions, { id: newId, content: q.content, difficulty: q.difficulty, time: q.time, tags: q.tags, order: newOrder, folderId: undefined, options: q.options, correctAnswer: q.correctAnswer, image: q.image }]);
+        }}
+      />
+
+      {/* Edit Question Modal */}
+      <CreateQuestionModal
+        open={!!editingQuestion}
+        onClose={() => setEditingQuestion(null)}
+        initialData={editingQuestion ? {
+          content: editingQuestion.content,
+          difficulty: editingQuestion.difficulty,
+          time: editingQuestion.time,
+          tags: editingQuestion.tags,
+          options: editingQuestion.options || [],
+          correctAnswer: editingQuestion.correctAnswer || "A",
+          image: editingQuestion.image,
+        } : null}
+        onSave={(q) => {
+          if (!editingQuestion) return;
+          setQuestions(questions.map((x) => x.id === editingQuestion.id ? {
+            ...x,
+            content: q.content,
+            difficulty: q.difficulty,
+            time: q.time,
+            tags: q.tags,
+            options: q.options,
+            correctAnswer: q.correctAnswer,
+            image: q.image,
+          } : x));
+          setEditingQuestion(null);
         }}
       />
     </div>

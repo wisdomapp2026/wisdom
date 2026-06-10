@@ -3,6 +3,7 @@ import {
   getDoc,
   setDoc,
   updateDoc,
+  deleteDoc,
   collection,
   getDocs,
   query,
@@ -62,6 +63,13 @@ export async function getStudentCountByCourse(courseId: string): Promise<number>
   return snap.size;
 }
 
+/** Kurs ichidagi barcha o'quvchilar progressini olish (reyting hisoblash uchun) */
+export async function getAllProgressByCourse(courseId: string): Promise<UserProgress[]> {
+  const q = query(collection(db, "progress"), where("courseId", "==", courseId));
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => d.data() as UserProgress);
+}
+
 // ============ TEST RESULTS ============
 
 export async function saveTestResult(result: TestResult): Promise<void> {
@@ -71,6 +79,12 @@ export async function saveTestResult(result: TestResult): Promise<void> {
 export async function getTestResultsByUser(userId: string): Promise<TestResult[]> {
   const q = query(collection(db, "testResults"), where("userId", "==", userId), orderBy("completedAt", "desc"));
   const snap = await getDocs(q);
+  return snap.docs.map((d) => d.data() as TestResult);
+}
+
+/** Barcha test natijalarini olish (reyting uchun) */
+export async function getAllTestResults(): Promise<TestResult[]> {
+  const snap = await getDocs(collection(db, "testResults"));
   return snap.docs.map((d) => d.data() as TestResult);
 }
 
@@ -107,4 +121,55 @@ export async function getRecentPayments(limitCount = 10): Promise<Payment[]> {
   const q = query(collection(db, "payments"), orderBy("createdAt", "desc"), limit(limitCount));
   const snap = await getDocs(q);
   return snap.docs.map((d) => d.data() as Payment);
+}
+
+export async function getPaymentsByUser(userId: string): Promise<Payment[]> {
+  const q = query(collection(db, "payments"), where("userId", "==", userId));
+  const snap = await getDocs(q);
+  const results = snap.docs.map((d) => d.data() as Payment);
+  return results.sort((a, b) => b.createdAt - a.createdAt);
+}
+
+
+// ============ BAN & DELETE ============
+
+export async function banUser(userId: string): Promise<void> {
+  await updateDoc(doc(db, "users", userId), { isBanned: true, bannedAt: Date.now(), updatedAt: Date.now() });
+}
+
+export async function unbanUser(userId: string): Promise<void> {
+  await updateDoc(doc(db, "users", userId), { isBanned: false, bannedAt: null, updatedAt: Date.now() });
+}
+
+export async function deleteUserCompletely(userId: string): Promise<void> {
+  // 1. Progress o'chirish
+  const progressQ = query(collection(db, "progress"), where("userId", "==", userId));
+  const progressSnap = await getDocs(progressQ);
+  for (const d of progressSnap.docs) {
+    await deleteDoc(doc(db, "progress", d.id));
+  }
+
+  // 2. Test natijalarini o'chirish
+  const resultsQ = query(collection(db, "testResults"), where("userId", "==", userId));
+  const resultsSnap = await getDocs(resultsQ);
+  for (const d of resultsSnap.docs) {
+    await deleteDoc(doc(db, "testResults", d.id));
+  }
+
+  // 3. Obunalarni o'chirish
+  const subsQ = query(collection(db, "subscriptions"), where("userId", "==", userId));
+  const subsSnap = await getDocs(subsQ);
+  for (const d of subsSnap.docs) {
+    await deleteDoc(doc(db, "subscriptions", d.id));
+  }
+
+  // 4. To'lovlarni o'chirish
+  const paymentsQ = query(collection(db, "payments"), where("userId", "==", userId));
+  const paymentsSnap = await getDocs(paymentsQ);
+  for (const d of paymentsSnap.docs) {
+    await deleteDoc(doc(db, "payments", d.id));
+  }
+
+  // 5. User hujjatini o'chirish
+  await deleteDoc(doc(db, "users", userId));
 }

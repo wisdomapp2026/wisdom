@@ -1,6 +1,6 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { ChevronRight, Plus, Edit, Trash2, Play, Loader2, Lock, Unlock } from "lucide-react";
+import { ChevronRight, Plus, Edit, Trash2, Play, Loader2, Lock, Unlock, Eye, Video } from "lucide-react";
 import { getTopicById, getProblemsByTopic, updateTopic, deleteTopic, deleteProblem, updateProblem } from "@shared/repositories";
 import type { Topic, Problem } from "@shared/types";
 import CreateProblemModal from "../components/CreateProblemModal";
@@ -28,10 +28,7 @@ export default function TopicDetail() {
   const [editingTopic, setEditingTopic] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editDesc, setEditDesc] = useState("");
-  const [editingProblemId, setEditingProblemId] = useState<string | null>(null);
-  const [editProblemContent, setEditProblemContent] = useState("");
-  const [editProblemVideo, setEditProblemVideo] = useState("");
-  const [editProblemDifficulty, setEditProblemDifficulty] = useState<string>("easy");
+  const [editingProblem, setEditingProblem] = useState<Problem | null>(null);
 
   useEffect(() => {
     if (courseId && topicId) loadData(courseId, topicId);
@@ -58,26 +55,6 @@ export default function TopicDetail() {
     await updateTopic(courseId, topicId, { title: editTitle, description: editDesc });
     setTopic((prev) => prev ? { ...prev, title: editTitle, description: editDesc } : prev);
     setEditingTopic(false);
-  }
-
-  function startEditProblem(problem: Problem) {
-    setEditingProblemId(problem.id);
-    setEditProblemContent(problem.content);
-    setEditProblemVideo(problem.videoUrl || "");
-    setEditProblemDifficulty(problem.difficulty);
-  }
-
-  async function handleSaveProblem(problemId: string) {
-    if (!courseId || !topicId) return;
-    await updateProblem(courseId, topicId, problemId, {
-      content: editProblemContent,
-      videoUrl: editProblemVideo || undefined,
-      difficulty: editProblemDifficulty as any,
-    });
-    setProblems((prev) => prev.map((p) =>
-      p.id === problemId ? { ...p, content: editProblemContent, videoUrl: editProblemVideo, difficulty: editProblemDifficulty as any } : p
-    ));
-    setEditingProblemId(null);
   }
 
   async function handleDeleteTopic() {
@@ -194,114 +171,16 @@ export default function TopicDetail() {
       {/* Problems list */}
       <div className="space-y-4">
         {problems.map((problem, index) => (
-          <div key={problem.id} className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
-            {editingProblemId === problem.id ? (
-              /* EDIT MODE */
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-primary-600">#{index + 1} tahrirlash</span>
-                  <select value={editProblemDifficulty} onChange={(e) => setEditProblemDifficulty(e.target.value)} className="text-xs border border-gray-200 rounded-lg px-2 py-1">
-                    <option value="easy">Oson</option>
-                    <option value="medium">O'rta</option>
-                    <option value="hard">Qiyin</option>
-                  </select>
-                </div>
-                <textarea
-                  value={editProblemContent}
-                  onChange={(e) => setEditProblemContent(e.target.value)}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
-                  placeholder="Misol matni (LaTeX: $$formula$$)"
-                />
-                <input
-                  value={editProblemVideo}
-                  onChange={(e) => setEditProblemVideo(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  placeholder="Video URL (YouTube)"
-                />
-                <div className="flex gap-2">
-                  <button onClick={() => handleSaveProblem(problem.id)} className="btn-primary text-sm">Saqlash</button>
-                  <button onClick={() => setEditingProblemId(null)} className="btn-outline text-sm">Bekor</button>
-                </div>
-              </div>
-            ) : (
-              /* VIEW MODE */
-            <div className="flex items-start justify-between">
-              <div className="flex items-start gap-4">
-                <div className="w-8 h-8 bg-primary-50 rounded-full flex items-center justify-center text-primary-600 font-bold text-sm shrink-0">
-                  {index + 1}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 mb-2 flex-wrap">
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${difficultyColors[problem.difficulty] || ""}`}>
-                      {difficultyLabels[problem.difficulty] || problem.difficulty}
-                    </span>
-                    {problem.isPremium && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700">Premium</span>
-                    )}
-                    {problem.tags?.map((tag) => (
-                      <span key={tag} className="text-xs text-gray-500">#{tag}</span>
-                    ))}
-                    {problem.estimatedMinutes && (
-                      <span className="text-xs text-gray-400">⏱ {problem.estimatedMinutes} daq</span>
-                    )}
-                  </div>
-                  <p className="text-gray-900 font-medium"><LatexText text={problem.content} /></p>
-
-                  {/* Solution */}
-                  {problem.solution && problem.solution.length > 0 && (
-                    <div className="mt-3 p-3 bg-blue-50 rounded-lg">
-                      <p className="text-xs font-semibold text-blue-700 mb-1">Yechim:</p>
-                      {problem.solution.map((step) => (
-                        <p key={step.stepNumber} className="text-sm text-blue-800">
-                          {step.stepNumber}. {step.text}
-                        </p>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Video */}
-                  {problem.videoUrl && (
-                    <div className="mt-3 flex items-center gap-2 text-sm text-primary-500">
-                      <Play className="w-4 h-4" />
-                      <a href={problem.videoUrl} target="_blank" rel="noreferrer" className="hover:underline">
-                        Video yechimni ko'rish ({problem.videoType === "youtube" ? "YouTube" : "Upload"})
-                      </a>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center gap-1">
-                {/* Premium toggle */}
-                <button
-                  onClick={async () => {
-                    const v = !problem.isPremium;
-                    await updateProblem(courseId!, topicId!, problem.id, { isPremium: v });
-                    setProblems((prev) => prev.map((p) => p.id === problem.id ? { ...p, isPremium: v } : p));
-                  }}
-                  className={`px-2 py-1 rounded text-[10px] font-medium border ${
-                    problem.isPremium
-                      ? "border-yellow-200 text-yellow-600 bg-yellow-50 hover:bg-yellow-100"
-                      : "border-green-200 text-green-600 bg-green-50 hover:bg-green-100"
-                  }`}
-                  title={problem.isPremium ? "Bosib Free qilish" : "Bosib Premium qilish"}
-                >
-                  {problem.isPremium ? "🔒 Premium" : "🔓 Free"}
-                </button>
-                <button onClick={() => startEditProblem(problem)} className="p-2 text-gray-400 hover:text-primary-600 rounded-lg hover:bg-gray-50" title="Tahrirlash">
-                  <Edit className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => handleDeleteProblem(problem.id)}
-                  className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50"
-                  title="O'chirish"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-            )}
-          </div>
+          <ProblemCard
+            key={problem.id}
+            problem={problem}
+            index={index}
+            courseId={courseId!}
+            topicId={topicId!}
+            onStartEdit={(p) => setEditingProblem(p)}
+            onDelete={handleDeleteProblem}
+            onUpdate={() => loadData(courseId!, topicId!)}
+          />
         ))}
 
         {problems.length === 0 && (
@@ -325,6 +204,127 @@ export default function TopicDetail() {
         onClose={() => setShowProblemModal(false)}
         onCreated={() => loadData(courseId!, topicId!)}
       />
+
+      {/* Edit problem modal */}
+      <CreateProblemModal
+        open={!!editingProblem}
+        courseId={courseId!}
+        topicId={topicId!}
+        existingCount={problems.length}
+        editData={editingProblem}
+        onClose={() => setEditingProblem(null)}
+        onCreated={() => { setEditingProblem(null); loadData(courseId!, topicId!); }}
+      />
     </div>
+  );
+}
+
+
+// ===== ProblemCard — flip effekti bilan =====
+function ProblemCard({ problem, index, courseId, topicId, onStartEdit, onDelete, onUpdate }: {
+  problem: Problem; index: number; courseId: string; topicId: string;
+  onStartEdit: (p: Problem) => void; onDelete: (id: string) => void; onUpdate: () => void;
+}) {
+  const [flipped, setFlipped] = useState(false);
+  const [showVideo, setShowVideo] = useState(false);
+
+  const difficultyColors: Record<string, string> = { easy: "bg-green-100 text-green-700", medium: "bg-yellow-100 text-yellow-700", hard: "bg-red-100 text-red-700" };
+  const difficultyLabels: Record<string, string> = { easy: "Oson", medium: "O'rta", hard: "Qiyin" };
+
+  // YouTube embed URL yaratish
+  function getEmbedUrl(url: string): string {
+    const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&?]+)/);
+    const videoId = match ? match[1] : "";
+    const params = new URLSearchParams(url.split("?")[1] || "");
+    const start = params.get("start") || "0";
+    const end = params.get("end");
+    let embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&start=${start}`;
+    if (end) embedUrl += `&end=${end}`;
+    return embedUrl;
+  }
+
+  return (
+    <>
+      <div className={`bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden transition-all duration-300 ${flipped ? "ring-2 ring-blue-300" : ""}`}>
+        {!flipped ? (
+          /* FRONT — Misol */
+          <div className="p-6">
+            <div className="flex items-start justify-between">
+              <div className="flex items-start gap-4">
+                <div className="w-8 h-8 bg-primary-50 rounded-full flex items-center justify-center text-primary-600 font-bold text-sm shrink-0">{index + 1}</div>
+                <div>
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${difficultyColors[problem.difficulty] || ""}`}>{difficultyLabels[problem.difficulty] || problem.difficulty}</span>
+                    {problem.isPremium && <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700">Premium</span>}
+                    {problem.tags?.map((tag) => <span key={tag} className="text-xs text-gray-500">#{tag}</span>)}
+                    {problem.estimatedMinutes && <span className="text-xs text-gray-400">⏱ {problem.estimatedMinutes} daq</span>}
+                  </div>
+                  <p className="text-gray-900 font-medium"><LatexText text={problem.content} /></p>
+                  {problem.image && <img src={problem.image} alt="" className="mt-2 max-h-40 rounded-lg border border-gray-200" />}
+                </div>
+              </div>
+              <div className="flex items-center gap-1">
+                <button onClick={async () => { const v = !problem.isPremium; await updateProblem(courseId, topicId, problem.id, { isPremium: v }); onUpdate(); }} className={`px-2 py-1 rounded text-[10px] font-medium border ${problem.isPremium ? "border-yellow-200 text-yellow-600 bg-yellow-50" : "border-green-200 text-green-600 bg-green-50"}`}>{problem.isPremium ? "🔒" : "🔓"}</button>
+                <button onClick={() => onStartEdit(problem)} className="p-2 text-gray-400 hover:text-primary-600 rounded-lg hover:bg-gray-50"><Edit className="w-4 h-4" /></button>
+                <button onClick={() => onDelete(problem.id)} className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50"><Trash2 className="w-4 h-4" /></button>
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex items-center gap-3 mt-4 pt-3 border-t border-gray-100">
+              {problem.solution && problem.solution.length > 0 && (
+                <button onClick={() => setFlipped(true)} className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-600 text-sm font-medium rounded-lg hover:bg-blue-100 transition-colors">
+                  <Eye className="w-4 h-4" /> Yechimni ko'rish
+                </button>
+              )}
+              {problem.videoUrl && (
+                <button onClick={() => setShowVideo(true)} className="flex items-center gap-2 px-3 py-2 bg-purple-50 text-purple-600 text-sm font-medium rounded-lg hover:bg-purple-100 transition-colors">
+                  <Video className="w-4 h-4" /> Video yechim
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          /* BACK — Yechim */
+          <div className="p-6 bg-blue-50/50">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-sm font-bold text-blue-700">📖 Yechim — #{index + 1}</h4>
+              <button onClick={() => setFlipped(false)} className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 bg-white rounded border border-gray-200">← Misolga qaytish</button>
+            </div>
+            <div className="bg-white rounded-lg p-4 border border-blue-200">
+              {problem.solution?.map((step) => (
+                <p key={step.stepNumber} className="text-sm text-gray-800 mb-1">
+                  <span className="font-bold text-blue-600">{step.stepNumber}.</span> <LatexText text={step.text} />
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Video Modal */}
+      {showVideo && problem.videoUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => setShowVideo(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-3xl shadow-xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-4 border-b border-gray-100">
+              <h3 className="font-bold text-gray-900">🎬 Video yechim — #{index + 1}</h3>
+              <button onClick={() => setShowVideo(false)} className="p-2 text-gray-400 hover:text-gray-600 text-lg">✕</button>
+            </div>
+            <div className="aspect-video bg-black">
+              {problem.videoType === "youtube" || problem.videoUrl.includes("youtube") || problem.videoUrl.includes("youtu.be") ? (
+                <iframe
+                  src={getEmbedUrl(problem.videoUrl)}
+                  className="w-full h-full"
+                  allowFullScreen
+                  allow="autoplay; encrypted-media"
+                />
+              ) : (
+                <video src={problem.videoUrl} controls autoPlay className="w-full h-full" />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

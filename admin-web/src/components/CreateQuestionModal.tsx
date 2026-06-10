@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { X, Plus, Trash2, Upload, Clock, Image } from "lucide-react";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { storage } from "@shared/firebase";
@@ -23,6 +23,8 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onSave: (q: NewQuestion) => void;
+  /** Agar berilsa — tahrirlash rejimi */
+  initialData?: NewQuestion | null;
 }
 
 // Rasmni Firebase Storage ga yuklash
@@ -33,7 +35,7 @@ async function uploadImage(file: File): Promise<string> {
   return getDownloadURL(storageRef);
 }
 
-export default function CreateQuestionModal({ open, onClose, onSave }: Props) {
+export default function CreateQuestionModal({ open, onClose, onSave, initialData }: Props) {
   const [content, setContent] = useState("");
   const [difficulty, setDifficulty] = useState<"easy" | "medium" | "hard">("medium");
   const [timeMinutes, setTimeMinutes] = useState(3);
@@ -49,6 +51,27 @@ export default function CreateQuestionModal({ open, onClose, onSave }: Props) {
   const [uploading, setUploading] = useState(false);
   const [pastedImages, setPastedImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // initialData o'zgarganda formani to'ldirish (edit mode)
+  useEffect(() => {
+    if (open && initialData) {
+      setContent(initialData.content || "");
+      setDifficulty(initialData.difficulty || "medium");
+      setTimeMinutes(parseInt(initialData.time) || 3);
+      setTags(initialData.tags?.join(", ") || "");
+      setOptions(initialData.options?.length ? initialData.options : [
+        { label: "A", text: "" }, { label: "B", text: "" }, { label: "C", text: "" }, { label: "D", text: "" },
+      ]);
+      setCorrectAnswer(initialData.correctAnswer || "A");
+      setQuestionImage(initialData.image || "");
+      setPastedImages([]);
+    } else if (open && !initialData) {
+      // Yangi savol — formani tozalash
+      setContent(""); setDifficulty("medium"); setTimeMinutes(3); setTags("");
+      setOptions([{ label: "A", text: "" }, { label: "B", text: "" }, { label: "C", text: "" }, { label: "D", text: "" }]);
+      setCorrectAnswer("A"); setQuestionImage(""); setPastedImages([]);
+    }
+  }, [open, initialData]);
 
   if (!open) return null;
 
@@ -115,7 +138,7 @@ export default function CreateQuestionModal({ open, onClose, onSave }: Props) {
   }
 
   function handleSave() {
-    if (!content.trim() && pastedImages.length === 0) return alert("Savol matnini kiriting!");
+    if (!content.trim() && pastedImages.length === 0 && !questionImage) return alert("Savol matnini kiriting yoki rasm yuklang!");
     if (options.every((o) => !o.text.trim() && !o.image)) return alert("Kamida 2 ta variant kiriting (matn yoki rasm)!");
 
     onSave({
@@ -139,7 +162,7 @@ export default function CreateQuestionModal({ open, onClose, onSave }: Props) {
       <div className="bg-white rounded-2xl w-full max-w-2xl p-6 shadow-xl my-8">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-gray-900">Yangi test savol yaratish</h2>
+          <h2 className="text-xl font-bold text-gray-900">{initialData ? "Savolni tahrirlash" : "Yangi test savol yaratish"}</h2>
           <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
         </div>
 
@@ -295,7 +318,7 @@ export default function CreateQuestionModal({ open, onClose, onSave }: Props) {
           {/* Actions */}
           <div className="flex items-center gap-3 pt-4 border-t border-gray-100">
             <button onClick={onClose} className="flex-1 btn-outline">Bekor qilish</button>
-            <button onClick={handleSave} className="flex-1 btn-primary">Savolni saqlash</button>
+            <button onClick={handleSave} className="flex-1 btn-primary">{initialData ? "O'zgarishlarni saqlash" : "Savolni saqlash"}</button>
           </div>
         </div>
       </div>

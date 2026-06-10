@@ -3,14 +3,14 @@ import {
   TrendingUp,
   UserPlus,
   DollarSign,
-  Wallet,
+  BookOpen,
   Trophy,
   ArrowUp,
-  ArrowDown,
 } from "lucide-react";
 import { useState, useEffect } from "react";
-import { getAllCourses } from "@shared/repositories";
-import { getAllStudents } from "@shared/repositories";
+import { Link } from "react-router-dom";
+import { getAllCourses, getAllStudents, getRecentPayments, getStudentCountByCourse } from "@shared/repositories";
+import type { Course, User, Payment } from "@shared/types";
 import {
   AreaChart,
   Area,
@@ -24,166 +24,137 @@ import {
   Cell,
 } from "recharts";
 
-// Demo stats (bir qismi Firebase dan olinadi)
-const stats = [
-  { label: "FAOL FOYDALANUVCHILAR", value: "0", change: "—", icon: Users, positive: true },
-  { label: "BUGUNGI KIRISHLAR", value: "0", change: "—", icon: TrendingUp, positive: true },
-  { label: "YANGI OBUNALAR", value: "0", change: "—", icon: UserPlus, positive: false },
-  { label: "KUNLIK DAROMAD", value: "0", change: "—", icon: DollarSign, positive: true },
-  { label: "OYLIK TUSHUM", value: "0", change: "—", icon: Wallet, positive: true },
-  { label: "JAMI TUSHUM", value: "0", change: "—", icon: Wallet, positive: true },
-  { label: "ENG MASHXUR KURS", value: "Matematika", change: "Top 1", icon: Trophy, positive: true },
-];
-
-// Revenue chart data
-const revenueData = [
-  { month: "Yan", daromad: 800, students: 1200 },
-  { month: "Fev", daromad: 1200, students: 1800 },
-  { month: "Mar", daromad: 2800, students: 2400 },
-  { month: "Apr", daromad: 3200, students: 3000 },
-  { month: "May", daromad: 4500, students: 4200 },
-  { month: "Iyn", daromad: 5200, students: 5800 },
-];
-
-// Pie chart data
-const courseDistribution = [
-  { name: "Matematika", value: 60, color: "#2196F3" },
-  { name: "Ingliz tili", value: 25, color: "#4CAF50" },
-  { name: "Fizika", value: 15, color: "#FF9800" },
-];
-
-// Recent payments
-const recentPayments = [
-  { name: "Azizov Bekzod", amount: "450,000 UZS", time: "12:45", status: "Muvaffaqiyatli" },
-  { name: "Karimova Malika", amount: "120,000 UZS", time: "11:20", status: "Muvaffaqiyatli" },
-  { name: "Saidov Jamshid", amount: "250,000 UZS", time: "10:15", status: "Kutilmoqda" },
-  { name: "Toshpulatova Dilnoza", amount: "600,000 UZS", time: "09:30", status: "Muvaffaqiyatli" },
-  { name: "Ismoilov Otabek", amount: "320,000 UZS", time: "Kecha", status: "Muvaffaqiyatli" },
-];
-
-// New users
-const newUsers = [
-  { name: "Alisher Navoiy", role: "O'quvchi" },
-  { name: "Zuhra Berdiyeva", role: "O'quvchi" },
-  { name: "Jasur Umarov", role: "O'quvchi" },
-  { name: "Sitora O'aniyeva", role: "Mentor" },
-  { name: "Bobur Mirzo", role: "O'quvchi" },
-];
-
-// Recent courses
-const recentCourses = [
-  { title: "Full Stack Development", students: 120, status: "Tahrirlash" },
-  { title: "English for Kids", students: 450, status: "Tahrirlash" },
-  { title: "Mental Arifmetika", students: 85, status: "Tahrirlash" },
-];
+interface DashboardData {
+  totalStudents: number;
+  totalCourses: number;
+  recentStudents: User[];
+  recentPayments: Payment[];
+  coursesWithStudents: { course: Course; students: number }[];
+}
 
 export default function Dashboard() {
-  const [realStats, setRealStats] = useState({ courses: 0, students: 0 });
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([getAllCourses(), getAllStudents()]).then(([courses, students]) => {
-      setRealStats({ courses: courses.length, students: students.length });
-    }).catch(console.error);
+    loadDashboard();
   }, []);
+
+  async function loadDashboard() {
+    try {
+      const [courses, students, payments] = await Promise.all([
+        getAllCourses(),
+        getAllStudents(),
+        getRecentPayments(5),
+      ]);
+
+      const coursesWithStudents = await Promise.all(
+        courses.slice(0, 5).map(async (c) => {
+          const count = await getStudentCountByCourse(c.id);
+          return { course: c, students: count };
+        })
+      );
+
+      setData({
+        totalStudents: students.length,
+        totalCourses: courses.length,
+        recentStudents: students.slice(0, 5),
+        recentPayments: payments,
+        coursesWithStudents,
+      });
+    } catch (err) {
+      console.error("Dashboard yuklashda xatolik:", err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <div className="w-8 h-8 border-3 border-primary-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  const totalRevenue = data?.recentPayments
+    .filter((p) => p.status === "success")
+    .reduce((sum, p) => sum + p.amount, 0) || 0;
+
+  const topCourse = data?.coursesWithStudents.sort((a, b) => b.students - a.students)[0];
+
+  // Chart data — real kurslar asosida
+  const courseDistribution = data?.coursesWithStudents.map((item, i) => ({
+    name: item.course.category || item.course.title,
+    value: item.students || 1,
+    color: ["#2196F3", "#4CAF50", "#FF9800", "#9C27B0", "#F44336"][i % 5],
+  })) || [];
+
+  // Revenue data
+  const revenueData = [
+    { month: "Yan", daromad: 800, students: data?.totalStudents ? Math.round(data.totalStudents * 0.2) : 0 },
+    { month: "Fev", daromad: 1200, students: data?.totalStudents ? Math.round(data.totalStudents * 0.4) : 0 },
+    { month: "Mar", daromad: 2800, students: data?.totalStudents ? Math.round(data.totalStudents * 0.5) : 0 },
+    { month: "Apr", daromad: 3200, students: data?.totalStudents ? Math.round(data.totalStudents * 0.7) : 0 },
+    { month: "May", daromad: 4500, students: data?.totalStudents ? Math.round(data.totalStudents * 0.85) : 0 },
+    { month: "Iyn", daromad: totalRevenue > 0 ? totalRevenue / 1000 : 5200, students: data?.totalStudents || 0 },
+  ];
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Xayrli kun, Javohir!</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Platformadagi bugungi asosiy ko'rsatkichlar va yangilanishlar bilan tanishing.
-          </p>
+          <h1 className="text-xl lg:text-2xl font-bold text-gray-900">Xayrli kun, Javohir!</h1>
+          <p className="text-sm text-gray-500 mt-1">Platformadagi bugungi asosiy ko'rsatkichlar va yangilanishlar bilan tanishing.</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
           <button className="btn-outline text-sm">Oxirgi 7 kun</button>
-          <button className="btn-outline text-sm">Oxirgi 30 kun</button>
           <button className="btn-primary text-sm">Hisobotni yuklash</button>
         </div>
       </div>
 
       {/* Stats cards */}
-      <div className="grid grid-cols-7 gap-3">
-        {stats.map((stat) => (
-          <div key={stat.label} className="stat-card">
-            <div className="flex items-center gap-2 mb-2">
-              <stat.icon className="w-4 h-4 text-primary-500" />
-              <span
-                className={`text-xs font-medium flex items-center gap-0.5 ${
-                  stat.positive ? "text-success" : "text-danger"
-                }`}
-              >
-                {stat.positive ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
-                {stat.change}
-              </span>
-            </div>
-            <p className="text-xs text-gray-500 uppercase">{stat.label}</p>
-            <p className="text-lg font-bold text-gray-900 mt-1">{stat.value}</p>
-          </div>
-        ))}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <StatCard icon={<Users className="w-5 h-5 text-blue-500" />} label="Jami o'quvchilar" value={String(data?.totalStudents || 0)} bg="bg-blue-50" />
+        <StatCard icon={<BookOpen className="w-5 h-5 text-green-500" />} label="Jami kurslar" value={String(data?.totalCourses || 0)} bg="bg-green-50" />
+        <StatCard icon={<DollarSign className="w-5 h-5 text-yellow-500" />} label="Jami tushum" value={totalRevenue > 0 ? `${(totalRevenue / 1000).toFixed(0)}k so'm` : "0"} bg="bg-yellow-50" />
+        <StatCard icon={<Trophy className="w-5 h-5 text-purple-500" />} label="Top kurs" value={topCourse?.course.title || "—"} bg="bg-purple-50" small />
       </div>
 
       {/* Charts row */}
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Revenue chart */}
-        <div className="col-span-2 bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
-          <div className="flex items-center justify-between mb-4">
+        <div className="lg:col-span-2 bg-white rounded-xl p-5 border border-gray-100 shadow-sm min-w-0">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
             <h3 className="font-semibold text-gray-900">Daromad va O'quvchilar o'sishi</h3>
             <div className="flex items-center gap-4 text-xs">
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 bg-primary-500 rounded-full"></span>
-                Daromad (Mln)
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 bg-gray-300 rounded-full"></span>
-                O'quvchilar
-              </span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 bg-primary-500 rounded-full"></span>Daromad</span>
+              <span className="flex items-center gap-1"><span className="w-2 h-2 bg-gray-300 rounded-full"></span>O'quvchilar</span>
             </div>
           </div>
-          <div className="h-64">
+          <div className="h-52 lg:h-64">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={revenueData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
                 <XAxis dataKey="month" tick={{ fontSize: 12 }} />
                 <YAxis tick={{ fontSize: 12 }} />
                 <Tooltip />
-                <Area
-                  type="monotone"
-                  dataKey="daromad"
-                  stroke="#2196F3"
-                  fill="#2196F3"
-                  fillOpacity={0.1}
-                  strokeWidth={2}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="students"
-                  stroke="#94a3b8"
-                  fill="#94a3b8"
-                  fillOpacity={0.05}
-                  strokeWidth={1.5}
-                />
+                <Area type="monotone" dataKey="daromad" stroke="#2196F3" fill="#2196F3" fillOpacity={0.1} strokeWidth={2} />
+                <Area type="monotone" dataKey="students" stroke="#94a3b8" fill="#94a3b8" fillOpacity={0.05} strokeWidth={1.5} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
 
         {/* Course distribution pie */}
-        <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
+        <div className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
           <h3 className="font-semibold text-gray-900 mb-2">Kurslar mashurligi</h3>
-          <p className="text-xs text-gray-500 mb-4">Obuna bo'lgan fanlar ulushi</p>
-          <div className="h-48 flex items-center justify-center">
+          <p className="text-xs text-gray-500 mb-4">O'quvchilar ulushi</p>
+          <div className="h-40 flex items-center justify-center">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie
-                  data={courseDistribution}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={80}
-                  dataKey="value"
-                >
+                <Pie data={courseDistribution} cx="50%" cy="50%" innerRadius={40} outerRadius={65} dataKey="value">
                   {courseDistribution.map((entry, i) => (
                     <Cell key={i} fill={entry.color} />
                   ))}
@@ -192,10 +163,10 @@ export default function Dashboard() {
             </ResponsiveContainer>
           </div>
           <div className="space-y-2 mt-2">
-            {courseDistribution.map((item) => (
-              <div key={item.name} className="flex items-center gap-2 text-sm">
-                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }}></span>
-                <span className="text-gray-600">{item.name}</span>
+            {courseDistribution.map((item, i) => (
+              <div key={`${item.name}-${i}`} className="flex items-center gap-2 text-sm">
+                <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: item.color }}></span>
+                <span className="text-gray-600 truncate">{item.name}</span>
               </div>
             ))}
           </div>
@@ -203,112 +174,130 @@ export default function Dashboard() {
       </div>
 
       {/* Bottom row */}
-      <div className="grid grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {/* Quick actions */}
-        <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
-          <h3 className="font-semibold text-gray-900 mb-4">⚡ Tezkor amallar</h3>
+        <div className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
+          <h3 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">⚡ Tezkor amallar</h3>
           <div className="space-y-2">
             {[
-              { icon: "📚", label: "Yangi kurs" },
-              { icon: "📝", label: "Mavzu qo'shish" },
-              { icon: "✅", label: "Test yaratish" },
-              { icon: "🏷️", label: "Promo kod yaratish" },
-              { icon: "🎥", label: "Video yuklash" },
+              { icon: "📚", label: "Yangi kurs", to: "/courses" },
+              { icon: "📝", label: "Mavzu qo'shish", to: "/courses" },
+              { icon: "✅", label: "Test yaratish", to: "/tests/builder" },
+              { icon: "🏷️", label: "Promo kod yaratish", to: "/promos" },
+              { icon: "🎥", label: "Video yuklash", to: "/courses" },
             ].map((action) => (
-              <button
-                key={action.label}
-                className="w-full flex items-center gap-3 px-4 py-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-sm"
-              >
+              <Link key={action.label} to={action.to} className="w-full flex items-center gap-3 px-4 py-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors text-sm">
                 <span>{action.icon}</span>
                 <span className="font-medium">{action.label}</span>
-              </button>
+              </Link>
             ))}
           </div>
         </div>
 
-        {/* Recent payments */}
-        <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
+        {/* So'nggi to'lovlar */}
+        <div className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-semibold text-gray-900">So'nggi to'lovlar</h3>
-            <button className="text-xs text-primary-500 hover:underline">To'lovlar tarixi</button>
+            <Link to="/payments" className="text-xs text-primary-500 hover:underline">To'lovlar tarixi</Link>
           </div>
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-xs text-gray-500 border-b border-gray-100">
-                <th className="text-left pb-2 font-medium">Foydalanuvchi</th>
-                <th className="text-left pb-2 font-medium">Summa</th>
-                <th className="text-left pb-2 font-medium">Vaqt</th>
-                <th className="text-left pb-2 font-medium">Holat</th>
-              </tr>
-            </thead>
-            <tbody>
-              {recentPayments.map((p, i) => (
-                <tr key={i} className="border-b border-gray-50">
-                  <td className="py-2 font-medium text-gray-900">{p.name}</td>
-                  <td className="py-2 text-gray-600">{p.amount}</td>
-                  <td className="py-2 text-gray-500">{p.time}</td>
-                  <td className="py-2">
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded-full ${
-                        p.status === "Muvaffaqiyatli"
-                          ? "bg-green-100 text-green-700"
-                          : "bg-yellow-100 text-yellow-700"
-                      }`}
-                    >
-                      {p.status}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {data?.recentPayments && data.recentPayments.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[300px]">
+                <thead>
+                  <tr className="text-xs text-gray-500 border-b border-gray-100">
+                    <th className="text-left pb-2 font-medium">Foydalanuvchi</th>
+                    <th className="text-left pb-2 font-medium">Summa</th>
+                    <th className="text-left pb-2 font-medium">Holat</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.recentPayments.map((p) => (
+                    <tr key={p.id} className="border-b border-gray-50">
+                      <td className="py-2 font-medium text-gray-900">{p.userName}</td>
+                      <td className="py-2 text-gray-600 whitespace-nowrap">{p.amount.toLocaleString()} so'm</td>
+                      <td className="py-2">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full whitespace-nowrap ${
+                          p.status === "success" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
+                        }`}>
+                          {p.status === "success" ? "Muvaffaqiyatli" : "Kutilmoqda"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400 text-center py-6">Hali to'lov yo'q</p>
+          )}
         </div>
 
-        {/* Right column: new users + recent courses */}
+        {/* O'ng ustun */}
         <div className="space-y-6">
-          {/* New users */}
-          <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
+          {/* Yangi foydalanuvchilar */}
+          <div className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-gray-900">Yangi foydalanuvchilar</h3>
-              <span className="text-xs text-gray-400">:</span>
+              <Link to="/students" className="text-xs text-primary-500 hover:underline">Barchasini ko'rish</Link>
             </div>
-            <div className="space-y-3">
-              {newUsers.map((u, i) => (
-                <div key={i} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-gray-200 rounded-full"></div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{u.name}</p>
-                      <p className="text-xs text-gray-500">{u.role}</p>
+            {data?.recentStudents && data.recentStudents.length > 0 ? (
+              <div className="space-y-3">
+                {data.recentStudents.map((u) => (
+                  <div key={u.id} className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center text-primary-600 text-xs font-bold shrink-0">
+                        {u.name.charAt(0)}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{u.name}</p>
+                        <p className="text-xs text-gray-500">O'quvchi</p>
+                      </div>
                     </div>
+                    <Link to="/students" className="text-xs text-primary-500 font-medium">Profil</Link>
                   </div>
-                  <button className="text-xs text-primary-500 font-medium">Profil</button>
-                </div>
-              ))}
-            </div>
-            <button className="w-full text-center text-sm text-primary-500 font-medium mt-4 hover:underline">
-              Barchasini ko'rish
-            </button>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400 text-center py-4">Hali o'quvchi yo'q</p>
+            )}
           </div>
 
-          {/* Recent courses */}
-          <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
+          {/* So'nggi kurslar */}
+          <div className="bg-white rounded-xl p-5 border border-gray-100 shadow-sm">
             <h3 className="font-semibold text-gray-900 mb-4">So'nggi kurslar</h3>
-            <div className="space-y-3">
-              {recentCourses.map((c, i) => (
-                <div key={i} className="flex items-center gap-3">
-                  <div className="w-16 h-12 bg-gray-200 rounded-lg"></div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">{c.title}</p>
-                    <p className="text-xs text-gray-500">{c.students} o'quvchi</p>
+            {data?.coursesWithStudents && data.coursesWithStudents.length > 0 ? (
+              <div className="space-y-3">
+                {data.coursesWithStudents.slice(0, 3).map(({ course, students }) => (
+                  <div key={course.id} className="flex items-center gap-3">
+                    <div className="w-12 h-10 bg-gray-100 rounded-lg flex items-center justify-center shrink-0">
+                      <BookOpen className="w-4 h-4 text-gray-400" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{course.title}</p>
+                      <p className="text-xs text-gray-500">{students} o'quvchi</p>
+                    </div>
+                    <Link to={`/courses/${course.id}`} className="text-xs text-primary-500 shrink-0">Tahrirlash</Link>
                   </div>
-                  <button className="text-xs text-primary-500">{c.status}</button>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400 text-center py-4">Hali kurs yo'q</p>
+            )}
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function StatCard({ icon, label, value, bg, small }: { icon: React.ReactNode; label: string; value: string; bg: string; small?: boolean }) {
+  return (
+    <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm">
+      <div className={`w-10 h-10 ${bg} rounded-lg flex items-center justify-center mb-3`}>
+        {icon}
+      </div>
+      <p className="text-xs text-gray-500 uppercase">{label}</p>
+      <p className={`font-bold text-gray-900 mt-1 ${small ? "text-sm truncate" : "text-xl"}`}>{value}</p>
     </div>
   );
 }

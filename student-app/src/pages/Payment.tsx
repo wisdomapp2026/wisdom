@@ -1,27 +1,161 @@
-import { Link, useNavigate } from "react-router-dom";
-import { ChevronLeft, Check } from "lucide-react";
-import { useState } from "react";
-
-const methods = [
-  { id: "click", name: "Click", icon: "📱" },
-  { id: "payme", name: "Payme", icon: "💳" },
-  { id: "uzum", name: "Uzum Bank", icon: "📱" },
-  { id: "card", name: "Karta orqali", icon: "💳" },
-];
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { ChevronLeft, Copy, Check, Shield, Upload, Image } from "lucide-react";
+import { useState, useEffect } from "react";
+import { useAuth } from "../hooks/useAuth";
+import { getPromoByCode, updatePromoCode, createPayment, getUserById, createAdminNotification } from "@shared/repositories";
+import { doc, getDoc } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { db, storage } from "@shared/firebase";
+import type { Payment as PaymentType, AdminNotification } from "@shared/types";
 
 export default function Payment() {
+  const { user } = useAuth();
   const navigate = useNavigate();
-  const [selected, setSelected] = useState("card");
-  const [promo, setPromo] = useState("");
+  const [params] = useSearchParams();
+  const planId = params.get("plan") || "monthly";
+  const baseAmount = Number(params.get("amount")) || 50000;
 
-  function handlePayment() {
-    // TODO: real to'lov integratsiya
-    alert("To'lov muvaffaqiyatli amalga oshirildi! ✅");
-    navigate("/");
+  const [cardNumber, setCardNumber] = useState("8600 1234 5678 9012");
+  const [cardHolder, setCardHolder] = useState("EDUKIDS ADMIN");
+  const [copied, setCopied] = useState(false);
+  const [promo, setPromo] = useState("");
+  const [discount, setDiscount] = useState(0);
+  const [promoApplied, setPromoApplied] = useState(false);
+  const [promoError, setPromoError] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [userName, setUserName] = useState("");
+  const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
+  const [screenshotPreview, setScreenshotPreview] = useState("");
+
+  const finalAmount = Math.max(0, baseAmount - Math.round(baseAmount * discount / 100));
+
+  useEffect(() => {
+    loadSettings();
+    if (user) getUserById(user.uid).then((u) => { if (u) setUserName(u.name); });
+  }, [user]);
+
+  async function loadSettings() {
+    try {
+      const snap = await getDoc(doc(db, "settings", "platform"));
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data.cardNumber) setCardNumber(data.cardNumber);
+        if (data.cardHolder) setCardHolder(data.cardHolder);
+      }
+    } catch {}
+  }
+
+  function handleCopy() {
+    navigator.clipboard.writeText(cardNumber.replace(/\s/g, ""));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  async function handleApplyPromo() {
+    if (!promo.trim()) return;
+    setPromoError("");
+    try {
+      const promoData = await getPromoByCode(promo.trim());
+      if (!promoData) { setPromoError("Promokod topilmadi"); return; }
+      if (!promoData.isActive) { setPromoError("Promokod faol emas"); return; }
+      if (promoData.maxUses > 0 && promoData.usedCount >= promoData.maxUses) { setPromoError("Limiti tugagan"); return; }
+      setDiscount(promoData.discountPercent);
+      setPromoApplied(true);
+      await updatePromoCode(promoData.id, { usedCount: promoData.usedCount + 1 });
+    } catch { setPromoError("Xatolik"); }
+  }
+
+  async function handleSubmitPayment() {
+    if (!user) return;
+    if (!screenshotFile) {
+      alert("Iltimos, to'lov screenshotini yuklang!");
+      return;
+    }
+    setSubmitting(true);
+
+    const now = Date.now();
+    const planLabel = planId === "yearly" ? "Yillik" : planId === "quarterly" ? "3 oylik" : "Oylik";
+
+    // Screenshot upload
+    let screenshotUrl = "";
+    try {
+      const storageRef = ref(storage, `payment-screenshots/${user.uid}-${now}.jpg`);
+      await uploadBytes(storageRef, screenshotFile);
+      screenshotUrl = await getDownloadURL(storageRef);
+    } catch (err) {
+      console.error("Screenshot yuklashda xatolik:", err);
+    }
+
+    // To'lovni "pending" holatda saqlash
+    const payment: PaymentType = {
+      id: `pay-${now}`,
+      userId: user.uid,
+      userName: userName || "Foydalanuvchi",
+      courseId: "",
+      courseTitle: `Premium obuna (${planLabel})`,
+      amount: finalAmount,
+      method: "card",
+      status: "pending",
+      promoCode: promoApplied ? promo : undefined,
+      discount,
+      createdAt: now,
+    };
+
+    try {
+      // Payment ga screenshot URL qo'shish (extra field)
+      await createPayment({ ...payment, screenshotUrl } as any);
+
+      // Admin bildirishnoma
+      const notif: AdminNotification = {
+        id: `notif-pay-${now}`,
+        type: "new_payment",
+        title: "Yangi to'lov — tasdiqlash kerak",
+        body: `${userName} ${finalAmount.toLocaleString()} so'm o'tkazdi (${planLabel}). Screenshot yuklangan.`,
+        isRead: false,
+        data: { userId: user.uid, paymentId: payment.id, plan: planId, amount: String(finalAmount), screenshotUrl },
+        createdAt: now,
+      };
+      await createAdminNotification(notif);
+
+      setSubmitted(true);
+    } catch (err) {
+      console.error(err);
+      alert("Xatolik yuz berdi");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // Muvaffaqiyatli yuborilgan holat
+  if (submitted) {
+    return (
+      <div className="min-h-screen bg-white max-w-mobile mx-auto flex flex-col items-center justify-center px-6">
+        <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mb-4">
+          <Check size={36} className="text-green-600" />
+        </div>
+        <h2 className="text-xl font-bold text-gray-900 text-center">To'lov so'rovi yuborildi!</h2>
+        <p className="text-sm text-gray-500 text-center mt-2 leading-relaxed">
+          Admin to'lovingizni tekshirib, obunangizni faollashtiradi. Odatda 5-30 daqiqa ichida amalga oshiriladi.
+        </p>
+        <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mt-6 w-full">
+          <p className="text-xs text-blue-700 font-medium">📋 To'lov ma'lumotlari:</p>
+          <p className="text-xs text-blue-600 mt-1">Summa: {finalAmount.toLocaleString()} so'm</p>
+          <p className="text-xs text-blue-600">Tarif: {planId === "yearly" ? "Yillik" : planId === "quarterly" ? "3 oylik" : "Oylik"}</p>
+          <p className="text-xs text-blue-600">Holat: Kutilmoqda ⏳</p>
+        </div>
+        <button
+          onClick={() => navigate("/")}
+          className="w-full bg-primary-500 text-white font-bold py-4 rounded-xl mt-6"
+        >
+          Bosh sahifaga qaytish
+        </button>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white max-w-mobile mx-auto">
       {/* Header */}
       <header className="px-5 pt-4 pb-3 flex items-center gap-3 border-b border-gray-100">
         <Link to="/subscription" className="text-gray-500"><ChevronLeft size={22} /></Link>
@@ -29,100 +163,113 @@ export default function Payment() {
       </header>
 
       <div className="px-5 mt-5">
-        {/* Selected course */}
-        <p className="text-xs text-gray-500 uppercase font-medium mb-3">Tanlangan kurs</p>
-        <div className="flex items-center border border-gray-200 rounded-xl p-4 gap-3">
-          <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center shrink-0">
-            <span>🎓</span>
-          </div>
-          <div className="flex-1">
-            <p className="font-semibold text-gray-900">Milliy sertifikat kursi</p>
-            <div className="flex items-center gap-2 mt-0.5">
-              <span className="text-xs text-gray-500">Ona tili va adabiyot</span>
-              <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded">Ommaviy</span>
-              <span className="text-xs text-gray-400">⏱ 12 dars</span>
-            </div>
-          </div>
+        {/* Yo'riqnoma */}
+        <div className="bg-primary-50 border border-primary-100 rounded-xl p-4 mb-5">
+          <p className="text-sm font-semibold text-primary-800">📋 To'lov qanday amalga oshiriladi:</p>
+          <ol className="text-xs text-primary-700 mt-2 space-y-1.5 list-decimal list-inside">
+            <li>Quyidagi karta raqamiga pul o'tkazing</li>
+            <li>"To'lov qildim" tugmasini bosing</li>
+            <li>Admin tekshirib, obunangizni faollashtiradi (5-30 daq)</li>
+          </ol>
         </div>
 
-        {/* Price */}
-        <div className="flex justify-between items-center mt-4">
-          <span className="text-sm text-gray-500">Oylik to'lov</span>
-          <span className="text-lg font-bold text-primary-500">50 000 so'm / oy</span>
-        </div>
-
-        {/* Payment methods */}
-        <p className="text-xs text-gray-500 uppercase font-medium mt-6 mb-1">To'lov usuli</p>
-        <div className="flex justify-end mb-2">
-          <button className="text-xs text-primary-500 font-medium">Barchasini ko'rish</button>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          {methods.map((m) => (
-            <button
-              key={m.id}
-              onClick={() => setSelected(m.id)}
-              className={`border rounded-xl p-4 flex flex-col items-center gap-1 relative transition-all ${selected === m.id ? "border-primary-500 bg-primary-50" : "border-gray-200"}`}
-            >
-              <span className="text-2xl">{m.icon}</span>
-              <span className={`text-sm font-medium ${selected === m.id ? "text-primary-600" : "text-gray-700"}`}>{m.name}</span>
-              {selected === m.id && (
-                <div className="absolute top-2 right-2 w-4 h-4 bg-primary-500 rounded-full flex items-center justify-center">
-                  <Check size={10} className="text-white" />
-                </div>
-              )}
+        {/* Karta ma'lumotlari */}
+        <div className="bg-gradient-to-br from-gray-900 to-gray-700 rounded-2xl p-5 text-white relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-10 -mt-10" />
+          <p className="text-xs text-white/60 uppercase">O'tkazish uchun karta</p>
+          <div className="flex items-center gap-3 mt-3">
+            <p className="text-xl font-mono font-bold tracking-wider">{cardNumber}</p>
+            <button onClick={handleCopy} className="p-2 bg-white/10 rounded-lg hover:bg-white/20 transition-colors">
+              {copied ? <Check size={16} /> : <Copy size={16} />}
             </button>
-          ))}
+          </div>
+          <p className="text-sm text-white/80 mt-3">{cardHolder}</p>
+          {copied && <p className="text-xs text-green-400 mt-1">✓ Nusxalandi!</p>}
+        </div>
+
+        {/* Summa */}
+        <div className="bg-gray-50 rounded-xl p-4 mt-4 border border-gray-100">
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-gray-600">O'tkazish summasi:</span>
+            <span className="text-xl font-bold text-primary-500">{finalAmount.toLocaleString()} so'm</span>
+          </div>
+          <p className="text-xs text-gray-400 mt-1">
+            Tarif: {planId === "yearly" ? "Yillik (12 oy)" : planId === "quarterly" ? "3 oylik" : "Oylik (1 oy)"}
+          </p>
         </div>
 
         {/* Promo */}
-        <p className="text-xs text-gray-500 uppercase font-medium mt-6 mb-3">Promo-kod</p>
-        <div className="flex gap-2">
-          <div className="flex-1 flex items-center bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
-            <span className="text-gray-400 mr-2">🏷️</span>
+        <div className="mt-5">
+          <p className="text-xs text-gray-500 uppercase font-semibold mb-2">Promokod</p>
+          <div className="flex gap-2">
             <input
               value={promo}
-              onChange={(e) => setPromo(e.target.value)}
-              placeholder="Kod kiriting"
-              className="flex-1 bg-transparent text-sm outline-none"
+              onChange={(e) => { setPromo(e.target.value.toUpperCase()); setPromoError(""); }}
+              placeholder="EDUKIDS50"
+              disabled={promoApplied}
+              className="flex-1 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
             />
+            <button
+              onClick={handleApplyPromo}
+              disabled={promoApplied || !promo.trim()}
+              className={`px-4 py-3 rounded-xl text-sm font-semibold shrink-0 ${promoApplied ? "bg-green-500 text-white" : "bg-primary-500 text-white disabled:opacity-50"}`}
+            >
+              {promoApplied ? "✓" : "Qo'llash"}
+            </button>
           </div>
-          <button className="bg-red-500 text-white font-medium text-sm px-4 rounded-xl">Qo'llash</button>
+          {promoError && <p className="text-xs text-red-500 mt-1">{promoError}</p>}
+          {promoApplied && <p className="text-xs text-green-600 mt-1 font-medium">🎉 {discount}% chegirma!</p>}
         </div>
 
-        {/* Breakdown */}
-        <div className="mt-6 space-y-2.5">
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-500">Kurs narxi</span>
-            <span className="text-gray-900">50 000 so'm</span>
-          </div>
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-500">Chegirma</span>
-            <span className="text-green-500">-0 so'm</span>
-          </div>
-          <div className="h-px bg-gray-200" />
-          <div className="flex justify-between items-baseline">
-            <span className="font-bold text-gray-900">Jami to'lov</span>
-            <span className="text-xl font-bold text-primary-500">50 000 so'm</span>
-          </div>
+        {/* Screenshot yuklash */}
+        <div className="mt-5">
+          <p className="text-xs text-gray-500 uppercase font-semibold mb-2">To'lov screenshoti *</p>
+          <label className={`flex flex-col items-center justify-center w-full border-2 border-dashed rounded-xl p-5 cursor-pointer transition-colors ${
+            screenshotFile ? "border-green-300 bg-green-50" : "border-gray-300 bg-gray-50 hover:border-primary-300"
+          }`}>
+            {screenshotPreview ? (
+              <div className="relative">
+                <img src={screenshotPreview} alt="Screenshot" className="max-h-40 rounded-lg shadow-sm" />
+                <button
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); setScreenshotFile(null); setScreenshotPreview(""); }}
+                  className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs"
+                >✕</button>
+              </div>
+            ) : (
+              <>
+                <Image size={32} className="text-gray-400 mb-2" />
+                <p className="text-sm text-gray-600 font-medium">To'lov screenshotini yuklang</p>
+                <p className="text-xs text-gray-400 mt-1">PNG, JPG — max 5MB</p>
+              </>
+            )}
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) {
+                  setScreenshotFile(file);
+                  setScreenshotPreview(URL.createObjectURL(file));
+                }
+              }}
+            />
+          </label>
         </div>
 
-        {/* Pay button */}
+        {/* CTA */}
         <button
-          onClick={handlePayment}
-          className="w-full bg-primary-500 text-white font-bold py-4 rounded-xl mt-6 text-base"
+          onClick={handleSubmitPayment}
+          disabled={submitting || !screenshotFile}
+          className="w-full bg-green-600 text-white font-bold py-4 rounded-xl mt-6 text-base disabled:opacity-50 active:bg-green-700 flex items-center justify-center gap-2"
         >
-          To'lov qilish
+          {submitting ? "Yuborilmoqda..." : "✅ To'lov qildim — tasdiqlash so'rash"}
         </button>
 
-        {/* Security */}
-        <div className="text-center mt-4 mb-8">
-          <p className="text-xs text-gray-500 flex items-center justify-center gap-1">
-            🛡️ <span className="uppercase font-medium">Xavfsiz to'lov</span>
-          </p>
-          <p className="text-[10px] text-gray-400 mt-1">
-            Sizning to'lov ma'lumotlaringiz shifrlangan va xavfsiz kanallar orqali o'tkaziladi.
-          </p>
-        </div>
+        <p className="text-[10px] text-gray-400 text-center mt-3 mb-8">
+          To'lovni qilganingizdan keyin tugmani bosing. Admin 5-30 daqiqa ichida obunangizni faollashtiradi.
+        </p>
       </div>
     </div>
   );
