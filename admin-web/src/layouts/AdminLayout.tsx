@@ -12,9 +12,11 @@ import {
   FileEdit,
   Settings,
   Search,
-  Plus,
   LogOut,
   Share2,
+  Menu,
+  X,
+  Image,
 } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth } from "@shared/firebase";
@@ -33,6 +35,8 @@ const sidebarItems = [
   { path: "/payments", label: "To'lovlar", icon: FileEdit },
   { path: "/promos", label: "Promo kodlar", icon: Tag },
   { path: "/analytics", label: "Statistikalar", icon: BarChart3 },
+  { path: "/banners", label: "Bannerlar", icon: Image },
+  { path: "/news-items", label: "Yangiliklar", icon: Newspaper },
   { path: "/settings", label: "Sozlamalar", icon: Settings },
 ];
 
@@ -40,6 +44,12 @@ export default function AdminLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const [unreadCount, setUnreadCount] = useState(0);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  // Sahifa o'zgarganda mobile menuni yopish
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location.pathname]);
 
   useEffect(() => {
     loadNotifCount();
@@ -62,10 +72,17 @@ export default function AdminLayout() {
 
   return (
     <div className="flex h-screen overflow-hidden">
-      {/* Sidebar */}
-      <aside className="hidden lg:flex w-64 bg-white border-r border-gray-200 flex-col shrink-0">
+      {/* Mobile sidebar overlay */}
+      {mobileMenuOpen && (
+        <div className="fixed inset-0 z-40 lg:hidden" onClick={() => setMobileMenuOpen(false)}>
+          <div className="absolute inset-0 bg-black/50" />
+        </div>
+      )}
+
+      {/* Sidebar — desktop: static, mobile: slide-in */}
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-gray-200 flex flex-col shrink-0 transform transition-transform duration-300 lg:relative lg:translate-x-0 ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`}>
         {/* Logo */}
-        <div className="h-16 flex items-center px-6 border-b border-gray-100">
+        <div className="h-16 flex items-center justify-between px-6 border-b border-gray-100">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 bg-primary-500 rounded-lg flex items-center justify-center">
               <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -74,6 +91,9 @@ export default function AdminLayout() {
             </div>
             <span className="text-lg font-bold text-primary-500">EduKids Admin</span>
           </div>
+          <button onClick={() => setMobileMenuOpen(false)} className="lg:hidden p-1 text-gray-400 hover:text-gray-600">
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         {/* Navigation */}
@@ -117,14 +137,19 @@ export default function AdminLayout() {
         <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6">
           {location.pathname === "/courses" ? (
             <>
-              {/* Search */}
-              <div className="relative w-96">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Qidiruv: kurslar, o'quvchilar, tranzaksiyalar..."
-                  className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                />
+              {/* Hamburger + Search */}
+              <div className="flex items-center gap-3">
+                <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden p-2 text-gray-500 hover:text-gray-700">
+                  <Menu className="w-5 h-5" />
+                </button>
+                <div className="relative w-64 md:w-96 hidden sm:block">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Qidiruv: kurslar, o'quvchilar..."
+                    className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  />
+                </div>
               </div>
 
               <div className="flex items-center gap-4">
@@ -138,22 +163,16 @@ export default function AdminLayout() {
                   )}
                 </Link>
 
-                {/* New course button */}
-                <NavLink to="/courses" className="btn-primary flex items-center gap-2">
-                  <Plus className="w-4 h-4" />
-                  Yangi yaratish
-                </NavLink>
+                {/* New course button removed */}
 
-                {/* Status */}
-                <div className="flex items-center gap-2 text-xs text-gray-500">
-                  <span>Tizim:</span>
-                  <span className="text-success font-medium">Barqaror</span>
-                </div>
               </div>
             </>
           ) : (
             <>
-              <div></div>
+              <button onClick={() => setMobileMenuOpen(true)} className="lg:hidden p-2 text-gray-500 hover:text-gray-700">
+                <Menu className="w-5 h-5" />
+              </button>
+              <div className="hidden lg:block"></div>
               <div className="flex items-center gap-4">
                 <Link to="/notifications" className="relative p-2 text-gray-500 hover:text-gray-700">
                   <Bell className="w-5 h-5" />
@@ -173,16 +192,6 @@ export default function AdminLayout() {
           <Outlet />
         </main>
 
-        {/* Bottom bar */}
-        <footer className="h-8 bg-white border-t border-gray-100 flex items-center justify-between px-6 text-xs text-gray-400">
-          <span>© 2024 EduKids Admin Panel · All Rights Reserved</span>
-          <div className="flex items-center gap-4">
-            <span>Foydalanish shartlari</span>
-            <span>Maxfiylik siyosati</span>
-            <span>Yordam markazi</span>
-            <span>Version 2.4.0</span>
-          </div>
-        </footer>
       </div>
     </div>
   );

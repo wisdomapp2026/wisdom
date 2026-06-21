@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Save, DollarSign, Globe, Shield, Bell, Palette, Server } from "lucide-react";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "@shared/firebase";
+import LoadingButton from "../components/LoadingButton";
 
 interface PlatformSettings {
   // Premium narxlar
@@ -101,14 +102,13 @@ export default function Settings() {
           <h1 className="text-2xl font-bold text-gray-900">Sozlamalar</h1>
           <p className="text-sm text-gray-500 mt-1">Platformaning umumiy sozlamalari va narxlarni boshqarish</p>
         </div>
-        <button
+        <LoadingButton
           onClick={handleSave}
-          disabled={saving}
-          className="btn-primary flex items-center gap-2 text-sm shrink-0 disabled:opacity-50"
+          className="btn-primary flex items-center gap-2 text-sm shrink-0"
         >
           <Save size={16} />
-          {saving ? "Saqlanmoqda..." : saved ? "✓ Saqlandi!" : "Saqlash"}
-        </button>
+          Saqlash
+        </LoadingButton>
       </div>
 
       {/* Tabs */}

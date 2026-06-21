@@ -9,6 +9,7 @@ import {
   saveMotivationSettings,
 } from "@shared/repositories";
 import type { MotivationalPhrase, MotivationSettings, MotivationPlacement } from "@shared/types";
+import LoadingButton from "../components/LoadingButton";
 
 type Tab = "home" | "courses_list" | "course" | "topic";
 
@@ -282,13 +283,13 @@ function MotivationTab({ placement }: { placement: MotivationPlacement }) {
             autoFocus
           />
           <div className="flex gap-2 mt-3">
-            <button
+            <LoadingButton
               onClick={handleAdd}
-              disabled={saving || !newText.trim()}
-              className="btn-primary text-sm disabled:opacity-50"
+              disabled={!newText.trim()}
+              className="btn-primary text-sm"
             >
-              {saving ? "Qo'shilmoqda..." : "Qo'shish"}
-            </button>
+              Qo'shish
+            </LoadingButton>
             <button onClick={() => { setShowAddForm(false); setNewText(""); }} className="btn-outline text-sm">
               Bekor
             </button>
@@ -342,7 +343,7 @@ function MotivationTab({ placement }: { placement: MotivationPlacement }) {
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   {/* Faol/O'chirilgan toggle */}
-                  <button
+                  <LoadingButton
                     onClick={() => handleToggleActive(phrase.id, phrase.isActive)}
                     className={`text-[10px] font-medium px-2 py-1 rounded border ${
                       phrase.isActive
@@ -351,21 +352,22 @@ function MotivationTab({ placement }: { placement: MotivationPlacement }) {
                     }`}
                   >
                     {phrase.isActive ? "Faol" : "O'chiq"}
-                  </button>
+                  </LoadingButton>
                   <button
                     onClick={() => { setEditingId(phrase.id); setEditText(phrase.text); }}
-                    className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded"
+                    className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded transition-all active:scale-95"
                     title="Tahrirlash"
                   >
                     <Edit className="w-4 h-4" />
                   </button>
-                  <button
+                  <LoadingButton
                     onClick={() => handleDelete(phrase.id)}
                     className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded"
                     title="O'chirish"
+                    iconOnly
                   >
                     <Trash2 className="w-4 h-4" />
-                  </button>
+                  </LoadingButton>
                 </div>
               </div>
             )}

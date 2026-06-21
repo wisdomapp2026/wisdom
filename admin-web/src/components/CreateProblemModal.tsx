@@ -1,9 +1,10 @@
 import { useState, useRef, useEffect } from "react";
 import { X, Upload } from "lucide-react";
-import { createProblem, updateProblem } from "@shared/repositories";
+import { createProblem, updateProblem, saveTestToLibrary } from "@shared/repositories";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { storage } from "@shared/firebase";
-import type { Problem } from "@shared/types";
+import type { Problem, Test, Question } from "@shared/types";
+import RichMathInput from "./RichMathInput";
 
 interface Props {
   open: boolean;
@@ -23,7 +24,7 @@ export default function CreateProblemModal({ open, courseId, topicId, existingCo
   const [videoType, setVideoType] = useState<"youtube" | "upload" | "youtube_time">("youtube");
   const [tags, setTags] = useState("");
   const [estimatedMinutes, setEstimatedMinutes] = useState(3);
-  const [solutionText, setSolutionText] = useState("");
+  const [solutionSteps, setSolutionSteps] = useState<string[]>([""]);
   const [loading, setLoading] = useState(false);
   // YouTube with time
   const [startMin, setStartMin] = useState(0);
@@ -38,6 +39,12 @@ export default function CreateProblemModal({ open, courseId, topicId, existingCo
   const [solutionImage, setSolutionImage] = useState("");
   const [uploadingSolImg, setUploadingSolImg] = useState(false);
   const solutionImageRef = useRef<HTMLInputElement>(null);
+  // Test variantlari (ixtiyoriy — to'ldirilsa test bazaga ham saqlanadi)
+  const [optionA, setOptionA] = useState("");
+  const [optionB, setOptionB] = useState("");
+  const [optionC, setOptionC] = useState("");
+  const [optionD, setOptionD] = useState("");
+  const [correctAnswer, setCorrectAnswer] = useState<"A" | "B" | "C" | "D">("A");
 
   // Edit mode — formani to'ldirish
   useEffect(() => {
@@ -48,7 +55,7 @@ export default function CreateProblemModal({ open, courseId, topicId, existingCo
       setVideoType(editData.videoType || "youtube");
       setTags(editData.tags?.join(", ") || "");
       setEstimatedMinutes(editData.estimatedMinutes || 3);
-      setSolutionText(editData.solution?.map((s) => s.text).join("\n") || "");
+      setSolutionSteps(editData.solution && editData.solution.length > 0 ? editData.solution.map((s) => s.text) : [""]);
       setSolutionImage(editData.solutionImage || "");
       // YouTube time parsing
       if (editData.videoUrl && editData.videoUrl.includes("start=")) {
@@ -66,9 +73,10 @@ export default function CreateProblemModal({ open, courseId, topicId, existingCo
       }
     } else if (open && !editData) {
       setContent(""); setDifficulty("easy"); setVideoUrl(""); setVideoType("youtube");
-      setTags(""); setEstimatedMinutes(3); setSolutionText("");
+      setTags(""); setEstimatedMinutes(3); setSolutionSteps([""]);
       setStartMin(0); setStartSec(0); setEndMin(0); setEndSec(0);
       setUploadedFileName(""); setSolutionImage("");
+      setOptionA(""); setOptionB(""); setOptionC(""); setOptionD(""); setCorrectAnswer("A");
     }
   }, [open, editData]);
 
@@ -90,9 +98,10 @@ export default function CreateProblemModal({ open, courseId, topicId, existingCo
       finalVideoType = "youtube";
     }
 
-    const solutionSteps = solutionText
-      ? solutionText.split("\n").map((line, i) => ({ stepNumber: i + 1, text: line.trim() })).filter((s) => s.text)
-      : undefined;
+    const builtSolutionSteps = solutionSteps
+      .map((text, i) => ({ stepNumber: i + 1, text: text.trim() }))
+      .filter((s) => s.text);
+    const finalSolution = builtSolutionSteps.length > 0 ? builtSolutionSteps : undefined;
 
     try {
       if (editData) {
@@ -104,7 +113,7 @@ export default function CreateProblemModal({ open, courseId, topicId, existingCo
           videoType: finalVideoType,
           tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
           estimatedMinutes,
-          solution: solutionSteps,
+          solution: finalSolution,
           solutionImage: solutionImage || undefined,
         });
       } else {
@@ -124,12 +133,87 @@ export default function CreateProblemModal({ open, courseId, topicId, existingCo
           videoType: finalVideoType,
           tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
           estimatedMinutes,
-          solution: solutionSteps,
+          solution: finalSolution,
           solutionImage: solutionImage || undefined,
           createdAt: now,
         };
 
         await createProblem(courseId, topicId, problem);
+
+        // Agar variant to'ldirilgan bo'lsa — test bazaga ham saqlash
+        const hasOptions = optionA.trim() || optionB.trim() || optionC.trim() || optionD.trim();
+        if (hasOptions) {
+          const testQuestion: Question = {
+            id: `q-${id}`,
+            type: "multiple_choice",
+            content,
+            options: [
+              { label: "A", text: optionA.trim() },
+              { label: "B", text: optionB.trim() },
+              { label: "C", text: optionC.trim() },
+              { label: "D", text: optionD.trim() },
+            ],
+            correctAnswer,
+            points: difficulty === "hard" ? 10 : difficulty === "medium" ? 5 : 3,
+            estimatedMinutes,
+            difficulty,
+            tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
+          };
+
+          const testEntry: Test = {
+            id: `tlib-${id}`,
+            courseId,
+            title: content.slice(0, 60) + (content.length > 60 ? "..." : ""),
+            description: `Mavzu: ${topicId} · Misol: ${id}`,
+            version: "Draft v1",
+            status: "draft",
+            passingScore: 1,
+            shuffleQuestions: false,
+            totalPoints: testQuestion.points,
+            totalTime: estimatedMinutes,
+            questions: [testQuestion],
+            createdAt: now,
+            updatedAt: now,
+            createdBy: "admin",
+          };
+
+          await saveTestToLibrary(testEntry);
+
+          // Test Builder (Content Library) localStorage ga ham yozish
+          try {
+            const tbQuestions = JSON.parse(localStorage.getItem("tb_questions") || "[]");
+            const tbFolders = JSON.parse(localStorage.getItem("tb_folders") || "[]");
+            const tagList = tags.split(",").map((t) => t.trim()).filter(Boolean);
+            const folderName = tagList[0] || "Umumiy";
+
+            // Papka mavjudmi tekshirish, yo'qsa yaratish
+            let folder = tbFolders.find((f: any) => f.name === folderName);
+            if (!folder) {
+              folder = { id: `folder-${Date.now()}`, name: folderName, questionIds: [] };
+              tbFolders.push(folder);
+            }
+
+            // Savolni qo'shish
+            const newQ = {
+              id: testQuestion.id,
+              content,
+              difficulty,
+              time: `${estimatedMinutes} min`,
+              tags: tagList,
+              order: tbQuestions.length + 1,
+              folderId: folder.id,
+              options: testQuestion.options,
+              correctAnswer,
+            };
+            tbQuestions.push(newQ);
+            folder.questionIds.push(testQuestion.id);
+
+            localStorage.setItem("tb_questions", JSON.stringify(tbQuestions));
+            localStorage.setItem("tb_folders", JSON.stringify(tbFolders));
+          } catch (err) {
+            console.error("LocalStorage ga yozishda xatolik:", err);
+          }
+        }
       }
 
       onCreated();
@@ -183,7 +267,8 @@ export default function CreateProblemModal({ open, courseId, topicId, existingCo
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 overflow-y-auto py-8">
+    <div className="fixed inset-0 z-50 bg-black/50 overflow-y-auto">
+      <div className="min-h-full flex items-start justify-center py-8 px-4">
       <div className="bg-white rounded-2xl w-full max-w-2xl p-6 shadow-xl">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold text-gray-900">{editData ? "Misolni tahrirlash" : "Yangi misol qo'shish"}</h2>
@@ -194,22 +279,15 @@ export default function CreateProblemModal({ open, courseId, topicId, existingCo
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Content - LaTeX qo'llab-quvvatlaydi */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Misol matni * <span className="text-xs text-gray-400">(LaTeX: $$formula$$ ichida yozing)</span>
-            </label>
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="Masalan: $$3x + 12 = 36$$. $$x$$ ni toping."
-              rows={4}
-              className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none font-mono"
-              required
-            />
-            <p className="text-xs text-gray-400 mt-1">
-              💡 Word dan nusxalasangiz LaTeX formulalar $$...$$ ichida turishi kerak
-            </p>
-          </div>
+          <RichMathInput
+            value={content}
+            onChange={setContent}
+            label="Misol matni *"
+            placeholder="Masalan: $$3x + 12 = 36$$. $$x$$ ni toping."
+            rows={4}
+            required
+            hint="💡 Word dan nusxalasangiz LaTeX formulalar $$...$$ ichida turishi kerak. Rasm paste qilish mumkin."
+          />
 
           {/* Rasm yuklash (placeholder) */}
           <div>
@@ -382,17 +460,45 @@ export default function CreateProblemModal({ open, courseId, topicId, existingCo
 
           {/* Solution steps */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Yechim bosqichlari <span className="text-xs text-gray-400">(LaTeX: $$formula$$, har bir qator = 1 qadam)</span>
-            </label>
-            <textarea
-              value={solutionText}
-              onChange={(e) => setSolutionText(e.target.value)}
-              placeholder={"$$3x = 36 - 12 = 24$$\n$$x = 24 ÷ 3 = 8$$\nJavob: x = 8"}
-              rows={4}
-              className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm resize-none font-mono"
-            />
-            <p className="text-xs text-gray-400 mt-1">💡 LaTeX formulalarni $$...$$ ichida yozing. Masalan: $$\\frac{3}{4} + \\frac{1}{2} = \\frac{5}{4}$$</p>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm font-medium text-gray-700">Yechim bosqichlari</label>
+              <span className="text-xs text-gray-400">Har bir bosqichni alohida qo'shing</span>
+            </div>
+            <div className="space-y-3">
+              {solutionSteps.map((step, idx) => (
+                <div key={idx} className="flex gap-2 items-start">
+                  <div className="w-7 h-7 mt-7 rounded-full bg-blue-100 text-blue-600 font-bold text-xs flex items-center justify-center shrink-0">
+                    {idx + 1}
+                  </div>
+                  <div className="flex-1">
+                    <RichMathInput
+                      value={step}
+                      onChange={(v) => setSolutionSteps((prev) => prev.map((s, i) => i === idx ? v : s))}
+                      placeholder={`${idx + 1}-bosqich (bir nechta qator bo'lishi mumkin). $$formula$$`}
+                      rows={2}
+                    />
+                  </div>
+                  {solutionSteps.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setSolutionSteps((prev) => prev.filter((_, i) => i !== idx))}
+                      className="w-7 h-7 mt-7 rounded-full text-red-500 hover:bg-red-50 flex items-center justify-center shrink-0"
+                      title="Bosqichni o'chirish"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setSolutionSteps((prev) => [...prev, ""])}
+              className="mt-2 text-sm text-primary-600 font-medium flex items-center gap-1 hover:text-primary-700"
+            >
+              + Yangi bosqich qo'shish
+            </button>
+            <p className="text-xs text-gray-400 mt-1">💡 Har bir bosqich student appda "Keyingi bosqich" bosilganda birin-ketin ko'rinadi. LaTeX va rasm qo'llab-quvvatlanadi.</p>
             {/* Yechim rasmi */}
             <div className="mt-3">
               <label className="block text-xs font-medium text-gray-600 mb-1">Yechim rasmi (ixtiyoriy)</label>
@@ -417,6 +523,51 @@ export default function CreateProblemModal({ open, courseId, topicId, existingCo
             </div>
           </div>
 
+          {/* Test variantlari (ixtiyoriy) */}
+          <div className="border border-orange-200 bg-orange-50/30 rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-gray-700">
+                  Test variantlari <span className="text-xs text-gray-400">(ixtiyoriy — to'ldirsa test bazaga saqlanadi)</span>
+                </label>
+                <span className="text-[10px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium">Test baza</span>
+              </div>
+              <p className="text-xs text-gray-500 -mt-1">LaTeX formulalarni $$...$$ ichida paste qilishingiz mumkin. Rasm ham paste qilish mumkin.</p>
+              <div className="space-y-2">
+                {[
+                  { label: "A", value: optionA, set: setOptionA },
+                  { label: "B", value: optionB, set: setOptionB },
+                  { label: "C", value: optionC, set: setOptionC },
+                  { label: "D", value: optionD, set: setOptionD },
+                ].map((opt) => (
+                  <div key={opt.label} className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setCorrectAnswer(opt.label as any)}
+                      className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 border-2 transition-all ${
+                        correctAnswer === opt.label
+                          ? "border-green-500 bg-green-500 text-white"
+                          : "border-gray-300 text-gray-500 hover:border-green-300"
+                      }`}
+                      title={correctAnswer === opt.label ? "To'g'ri javob" : "To'g'ri deb belgilash"}
+                    >
+                      {opt.label}
+                    </button>
+                    <div className="flex-1">
+                      <RichMathInput
+                        value={opt.value}
+                        onChange={opt.set}
+                        placeholder={`Variant ${opt.label}`}
+                        singleLine
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11px] text-gray-400">
+                🟢 Yashil doira = to'g'ri javob. Variantlar to'ldirilsa misol test bazaga ham saqlanadi (studentda misol ichida ko'rinmaydi).
+              </p>
+            </div>
+
           <div className="flex gap-3 pt-4 border-t border-gray-100">
             <button type="button" onClick={onClose} className="flex-1 btn-outline">Bekor</button>
             <button type="submit" disabled={loading || !content} className="flex-1 btn-primary disabled:opacity-50">
@@ -424,6 +575,7 @@ export default function CreateProblemModal({ open, courseId, topicId, existingCo
             </button>
           </div>
         </form>
+      </div>
       </div>
     </div>
   );

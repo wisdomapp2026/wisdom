@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { ChevronDown, ChevronRight as ChevRight, Plus, Edit, Trash2, Filter, Search, FolderPlus, X, GripVertical, Save } from "lucide-react";
-import { saveTestToLibrary } from "@shared/repositories";
+import { ChevronDown, ChevronRight as ChevRight, Plus, Edit, Trash2, Filter, Search, FolderPlus, X, GripVertical, Save, Loader2 } from "lucide-react";
+import { saveTestToLibrary, getAllTBQuestions, saveTBQuestion, deleteTBQuestion, getAllTBFolders, saveTBFolder, deleteTBFolder } from "@shared/repositories";
 import type { Test, Question as TQuestion } from "@shared/types";
 import CreateQuestionModal from "../components/CreateQuestionModal";
 
@@ -22,6 +22,8 @@ interface Question {
   options?: { label: string; text: string; image?: string }[];
   correctAnswer?: string;
   image?: string;
+  videoUrl?: string;
+  videoType?: "youtube" | "upload";
 }
 
 const defaultQuestions: Question[] = [
@@ -40,15 +42,15 @@ const defaultFolders: Folder[] = [
 const diffColors: Record<string, string> = { easy: "bg-green-100 text-green-700", medium: "bg-yellow-100 text-yellow-700", hard: "bg-red-100 text-red-700" };
 const diffLabels: Record<string, string> = { easy: "Oson", medium: "O'rta", hard: "Qiyin" };
 
-// LocalStorage persist
+// LocalStorage fallback (migratsiya uchun)
 function loadState<T>(key: string, fallback: T): T {
   try { const s = localStorage.getItem(key); return s ? JSON.parse(s) : fallback; } catch { return fallback; }
 }
 function saveState(key: string, val: any) { localStorage.setItem(key, JSON.stringify(val)); }
 
 export default function TestBuilder() {
-  const [folders, setFolders] = useState<Folder[]>(() => loadState("tb_folders", defaultFolders));
-  const [questions, setQuestions] = useState<Question[]>(() => loadState("tb_questions", defaultQuestions));
+  const [folders, setFolders] = useState<Folder[]>([]);
+  const [questions, setQuestions] = useState<Question[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState("");
@@ -60,10 +62,53 @@ export default function TestBuilder() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
   const [saving, setSaving] = useState(false);
+  const [loadingData, setLoadingData] = useState(true);
 
-  // Persist on change
-  useEffect(() => { saveState("tb_folders", folders); }, [folders]);
-  useEffect(() => { saveState("tb_questions", questions); }, [questions]);
+  // Firestore dan yuklash
+  useEffect(() => {
+    loadFromFirestore();
+  }, []);
+
+  async function loadFromFirestore() {
+    setLoadingData(true);
+    try {
+      const [dbQuestions, dbFolders] = await Promise.all([
+        getAllTBQuestions(),
+        getAllTBFolders(),
+      ]);
+
+      if (dbQuestions.length > 0 || dbFolders.length > 0) {
+        // Firestore dan olish
+        setQuestions(dbQuestions as Question[]);
+        setFolders(dbFolders as Folder[]);
+      } else {
+        // Firestore bo'sh — localStorage dan migratsiya qilish (bir martalik)
+        const localQ = loadState<Question[]>("tb_questions", []);
+        const localF = loadState<Folder[]>("tb_folders", []);
+        if (localQ.length > 0 || localF.length > 0) {
+          // Migratsiya: localStorage dan Firestore ga ko'chirish
+          for (const q of localQ) await saveTBQuestion(q);
+          for (const f of localF) await saveTBFolder(f);
+          setQuestions(localQ);
+          setFolders(localF);
+        }
+      }
+    } catch (err) {
+      console.error("Test builder yuklashda xatolik:", err);
+      // Fallback: localStorage dan o'qish
+      setQuestions(loadState("tb_questions", []));
+      setFolders(loadState("tb_folders", []));
+    } finally {
+      setLoadingData(false);
+    }
+  }
+
+  // Firestore + localStorage sync (har bir o'zgarishda)
+  useEffect(() => {
+    if (loadingData) return; // Birinchi yuklash paytida sync qilmaslik
+    saveState("tb_folders", folders);
+    saveState("tb_questions", questions);
+  }, [folders, questions]);
 
   const sortedQuestions = [...questions].sort((a, b) => b.order - a.order);
 
@@ -88,18 +133,26 @@ export default function TestBuilder() {
   // Folder CRUD
   function addFolder() {
     if (!newFolderName.trim()) return;
-    setFolders([...folders, { id: `f-${Date.now()}`, name: newFolderName, questionIds: [] }]);
+    const newFolder = { id: `f-${Date.now()}`, name: newFolderName, questionIds: [] };
+    setFolders([...folders, newFolder]);
+    saveTBFolder(newFolder); // Firestore
     setNewFolderName("");
     setShowNewFolder(false);
   }
   function deleteFolder(id: string) {
     if (!confirm("Papkani o'chirishga ishonchingiz komilmi?")) return;
-    // Papka ichidagi testlarni chiqarib tashlash
-    setQuestions(questions.map((q) => q.folderId === id ? { ...q, folderId: undefined } : q));
+    const updatedQuestions = questions.map((q) => q.folderId === id ? { ...q, folderId: undefined } : q);
+    setQuestions(updatedQuestions);
     setFolders(folders.filter((f) => f.id !== id));
+    // Firestore
+    deleteTBFolder(id);
+    updatedQuestions.filter((q) => q.folderId === undefined).forEach((q) => saveTBQuestion(q));
   }
   function saveEditFolder(id: string) {
-    setFolders(folders.map((f) => f.id === id ? { ...f, name: editFolderName } : f));
+    const updated = folders.map((f) => f.id === id ? { ...f, name: editFolderName } : f);
+    setFolders(updated);
+    const folder = updated.find((f) => f.id === id);
+    if (folder) saveTBFolder(folder); // Firestore
     setEditingFolderId(null);
   }
 
@@ -113,6 +166,7 @@ export default function TestBuilder() {
     setQuestions(questions.filter((q) => q.id !== id));
     setSelectedIds(selectedIds.filter((x) => x !== id));
     setFolders(folders.map((f) => ({ ...f, questionIds: f.questionIds.filter((x) => x !== id) })));
+    deleteTBQuestion(id); // Firestore
   }
 
   // Drop on folder
@@ -120,8 +174,14 @@ export default function TestBuilder() {
   function handleDropOnFolder(folderId: string) {
     const ids = draggedIds.length > 0 ? draggedIds : selectedIds;
     if (ids.length === 0) return;
-    setFolders(folders.map((f) => f.id === folderId ? { ...f, questionIds: [...new Set([...f.questionIds, ...ids])] } : f));
-    setQuestions(questions.map((q) => ids.includes(q.id) ? { ...q, folderId } : q));
+    const updatedFolders = folders.map((f) => f.id === folderId ? { ...f, questionIds: [...new Set([...f.questionIds, ...ids])] } : f);
+    const updatedQuestions = questions.map((q) => ids.includes(q.id) ? { ...q, folderId } : q);
+    setFolders(updatedFolders);
+    setQuestions(updatedQuestions);
+    // Firestore sync
+    const folder = updatedFolders.find((f) => f.id === folderId);
+    if (folder) saveTBFolder(folder);
+    updatedQuestions.filter((q) => ids.includes(q.id)).forEach((q) => saveTBQuestion(q));
     setDraggedIds([]);
     setSelectedIds([]);
   }
@@ -129,6 +189,15 @@ export default function TestBuilder() {
   // Get questions in folder
   function getQuestionsInFolder(folderId: string): Question[] {
     return questions.filter((q) => q.folderId === folderId);
+  }
+
+  if (loadingData) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-8 h-8 text-primary-500 animate-spin" />
+        <span className="ml-3 text-gray-500">Test bazasi yuklanmoqda...</span>
+      </div>
+    );
   }
 
   return (
@@ -252,6 +321,8 @@ export default function TestBuilder() {
                       if (!confirm(`${selectedIds.length} ta testni o'chirishga ishonchingiz komilmi?`)) return;
                       setQuestions(questions.filter((q) => !selectedIds.includes(q.id)));
                       setFolders(folders.map((f) => ({ ...f, questionIds: f.questionIds.filter((id) => !selectedIds.includes(id)) })));
+                      // Firestore dan o'chirish
+                      selectedIds.forEach((id) => deleteTBQuestion(id));
                       setSelectedIds([]);
                     }}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500 text-white text-sm font-medium rounded-lg hover:bg-red-600 transition-colors"
@@ -374,7 +445,9 @@ export default function TestBuilder() {
         onSave={(q) => {
           const newId = `q-${Date.now()}`;
           const newOrder = questions.length > 0 ? Math.max(...questions.map((x) => x.order)) + 1 : 1;
-          setQuestions([...questions, { id: newId, content: q.content, difficulty: q.difficulty, time: q.time, tags: q.tags, order: newOrder, folderId: undefined, options: q.options, correctAnswer: q.correctAnswer, image: q.image }]);
+          const newQuestion: Question = { id: newId, content: q.content, difficulty: q.difficulty, time: q.time, tags: q.tags, order: newOrder, folderId: undefined, options: q.options, correctAnswer: q.correctAnswer, image: q.image, videoUrl: q.videoUrl, videoType: q.videoType };
+          setQuestions([...questions, newQuestion]);
+          saveTBQuestion(newQuestion); // Firestore
         }}
       />
 
@@ -390,10 +463,12 @@ export default function TestBuilder() {
           options: editingQuestion.options || [],
           correctAnswer: editingQuestion.correctAnswer || "A",
           image: editingQuestion.image,
+          videoUrl: editingQuestion.videoUrl,
+          videoType: editingQuestion.videoType,
         } : null}
         onSave={(q) => {
           if (!editingQuestion) return;
-          setQuestions(questions.map((x) => x.id === editingQuestion.id ? {
+          const updated = questions.map((x) => x.id === editingQuestion.id ? {
             ...x,
             content: q.content,
             difficulty: q.difficulty,
@@ -402,7 +477,12 @@ export default function TestBuilder() {
             options: q.options,
             correctAnswer: q.correctAnswer,
             image: q.image,
-          } : x));
+            videoUrl: q.videoUrl,
+            videoType: q.videoType,
+          } : x);
+          setQuestions(updated);
+          const updatedQ = updated.find((x) => x.id === editingQuestion.id);
+          if (updatedQ) saveTBQuestion(updatedQ); // Firestore
           setEditingQuestion(null);
         }}
       />

@@ -5,6 +5,7 @@ import type { Test, TestResult, Course, User } from "@shared/types";
 import { Eye, RotateCcw, Trophy } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { TestsLoader } from "../components/PageLoader";
+import { cachedFetch } from "../hooks/useCache";
 
 interface TestWithCourse extends Test {
   courseName: string;
@@ -45,12 +46,12 @@ export default function Tests() {
 
   async function loadData() {
     try {
-      const courses = await getAllCourses();
+      const courses = await cachedFetch("all-courses", getAllCourses);
 
       // Barcha published testlarni yuklash
       const allTests: TestWithCourse[] = [];
       for (const course of courses) {
-        const tests = await getTestsByCourse(course.id);
+        const tests = await cachedFetch(`tests-${course.id}`, () => getTestsByCourse(course.id));
         for (const t of tests) {
           if (t.status === "published") {
             allTests.push({ ...t, courseName: course.title, courseCategory: course.category });
@@ -61,7 +62,7 @@ export default function Tests() {
 
       // Foydalanuvchi natijalari
       if (user) {
-        const userResults = await getTestResultsByUser(user.uid);
+        const userResults = await cachedFetch(`results-${user.uid}`, () => getTestResultsByUser(user.uid));
         const withTests: ResultWithTest[] = userResults.map((r) => ({
           result: r,
           test: allTests.find((t) => t.id === r.testId) || null,
@@ -72,8 +73,8 @@ export default function Tests() {
       // Motivatsion fraza
       try {
         const [phrases, settings] = await Promise.all([
-          getMotivationPhrases("course"),
-          getMotivationSettings("course"),
+          cachedFetch("motivation-course", () => getMotivationPhrases("course")),
+          cachedFetch("motivation-settings-course", () => getMotivationSettings("course")),
         ]);
         const active = phrases.filter((p) => p.isActive);
         if (active.length > 0) {
@@ -88,7 +89,7 @@ export default function Tests() {
 
       // Leaderboard — barcha foydalanuvchilarning o'rtacha bali
       try {
-        const allResults = await getAllTestResults();
+        const allResults = await cachedFetch("all-test-results", getAllTestResults, 120_000);
         // userId bo'yicha guruhlash
         const userScores: Record<string, { total: number; count: number }> = {};
         for (const r of allResults) {
@@ -100,7 +101,7 @@ export default function Tests() {
         // Foydalanuvchi ma'lumotlarini olish va tartiblash
         const entries: LeaderboardEntry[] = [];
         for (const [userId, data] of Object.entries(userScores)) {
-          const userData = await getUserById(userId);
+          const userData = await cachedFetch(`user-${userId}`, () => getUserById(userId), 300_000);
           entries.push({
             userId,
             userName: userData?.name || "Foydalanuvchi",

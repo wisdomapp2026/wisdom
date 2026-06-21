@@ -4,6 +4,7 @@ import { Plus, Search, FileText, Clock, Loader2, Edit, Trash2, Eye, List, Globe,
 import { getAllCourses, getTestsByCourse, deleteTest, updateTest, getAllTestLists, createTestList, updateTestList, deleteTestList } from "@shared/repositories";
 import type { Course, Test, TestList } from "@shared/types";
 import CreateTestListModal from "../components/CreateTestListModal";
+import LoadingButton from "../components/LoadingButton";
 
 interface TestWithCourse extends Test {
   courseName: string;
@@ -278,7 +279,7 @@ export default function Tests() {
 
                   <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                     {/* Published toggle */}
-                    <button
+                    <LoadingButton
                       onClick={() => handleToggleStatus(list)}
                       className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
                         list.status === "published"
@@ -292,23 +293,24 @@ export default function Tests() {
                       ) : (
                         <><GlobeLock className="w-3.5 h-3.5" /> Draft</>
                       )}
-                    </button>
+                    </LoadingButton>
                     {/* Edit */}
                     <button
                       onClick={() => { setEditingListId(list.id); setEditListTitle(list.title); }}
-                      className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg"
+                      className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all active:scale-95"
                       title="Tahrirlash"
                     >
                       <Edit className="w-4 h-4" />
                     </button>
                     {/* Delete */}
-                    <button
+                    <LoadingButton
                       onClick={() => handleDeleteTestList(list)}
                       className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"
                       title="O'chirish"
+                      iconOnly
                     >
                       <Trash2 className="w-4 h-4" />
-                    </button>
+                    </LoadingButton>
                   </div>
                 </div>
 

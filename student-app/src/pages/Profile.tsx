@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Settings, Bell, ChevronRight, Shield, HelpCircle, LogOut, CreditCard, BookOpen, Play, Moon } from "lucide-react";
+import { Settings, Bell, ChevronRight, Shield, HelpCircle, LogOut, CreditCard, BookOpen, Play, Moon, Star } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useDarkMode } from "../hooks/useDarkMode";
+import { ProfileLoader } from "../components/PageLoader";
 import { getUserById, getAllProgressByUser, getTestResultsByUser, getUserSubscription, getAllCourses, getTopicsByCourse, getTopicById, getCourseById, getPaymentsByUser } from "@shared/repositories";
 import type { User, UserProgress, TestResult, Subscription, Course, Topic, Payment } from "@shared/types";
 
@@ -107,21 +108,18 @@ export default function Profile() {
           <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto">
             <span className="text-3xl">👤</span>
           </div>
-          <h2 className="text-xl font-bold mt-4">Tizimga kiring</h2>
-          <p className="text-sm text-gray-500 mt-2">O'z natijalaringiz va progressingizni kuzatish uchun tizimga kiring.</p>
-          <Link to="/login" className="block mt-6 bg-primary-500 text-white font-bold py-3.5 rounded-xl text-center">Kirish</Link>
-          <Link to="/register" className="block mt-3 border border-gray-200 text-gray-700 font-medium py-3.5 rounded-xl text-center">Ro'yxatdan o'tish</Link>
+          <h2 className="text-xl font-bold mt-4">Siz tizimga kirmagansiz</h2>
+          <p className="text-sm text-gray-500 mt-2">Akkauntga kirasizmi yoki mehmon sifatida davom etasizmi?</p>
+          <Link to="/login" className="block mt-6 bg-primary-500 text-white font-bold py-3.5 rounded-xl text-center">Akkauntga kirish</Link>
+          <Link to="/register" className="block mt-3 border border-primary-500 text-primary-500 font-medium py-3.5 rounded-xl text-center">Ro'yxatdan o'tish</Link>
+          <Link to="/" className="block mt-3 text-gray-500 font-medium py-3.5 text-center text-sm">Mehmon sifatida davom etish →</Link>
         </div>
       </div>
     );
   }
 
   if (loading) {
-    return (
-      <div className="page-content flex items-center justify-center">
-        <div className="w-8 h-8 border-3 border-primary-500 border-t-transparent rounded-full animate-spin" />
-      </div>
-    );
+    return <ProfileLoader />;
   }
 
   const displayName = userData?.name || user?.displayName || user?.email?.split("@")[0] || "Foydalanuvchi";
@@ -133,12 +131,12 @@ export default function Profile() {
       <header className="px-5 pt-4 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Profil</h1>
         <div className="flex gap-2">
-          <button className="w-9 h-9 bg-gray-50 rounded-full flex items-center justify-center border border-gray-100">
+          <Link to="/notifications" className="w-9 h-9 bg-gray-50 rounded-full flex items-center justify-center border border-gray-100 relative">
             <Bell size={18} className="text-gray-500" />
-          </button>
-          <button className="w-9 h-9 bg-gray-50 rounded-full flex items-center justify-center border border-gray-100">
+          </Link>
+          <Link to="/profile/edit" className="w-9 h-9 bg-gray-50 rounded-full flex items-center justify-center border border-gray-100">
             <Settings size={18} className="text-gray-500" />
-          </button>
+          </Link>
         </div>
       </header>
 
@@ -173,9 +171,9 @@ export default function Profile() {
         </div>
 
         {/* Profilni tahrirlash */}
-        <button className="mt-4 w-52 border-2 border-primary-500 text-primary-500 font-semibold py-2.5 rounded-xl text-sm active:bg-primary-50">
+        <Link to="/profile/edit" className="mt-4 w-52 border-2 border-primary-500 text-primary-500 font-semibold py-2.5 rounded-xl text-sm active:bg-primary-50 text-center block">
           Profilni tahrirlash
-        </button>
+        </Link>
       </div>
 
       {/* Davom etayotgan darslar */}
@@ -216,7 +214,7 @@ export default function Profile() {
                   </div>
                   <div className="mt-3 flex items-center gap-1.5 text-primary-500">
                     <Play size={12} fill="currentColor" />
-                    <span className="text-[11px] font-medium">Savom ettirish</span>
+                    <span className="text-[11px] font-medium">Davom ettirish</span>
                   </div>
                 </button>
               ))}
@@ -281,45 +279,6 @@ export default function Profile() {
         )}
       </section>
 
-      {/* To'lovlar */}
-      <section className="px-5 mt-7">
-        <h3 className="font-bold text-gray-900 mb-3">To'lovlarim</h3>
-        {payments.length > 0 ? (
-          <div className="space-y-2.5">
-            {payments.map((p) => (
-              <div key={p.id} className="bg-white border border-gray-100 rounded-xl p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{p.courseTitle}</p>
-                    <p className="text-xs text-gray-500 mt-0.5">{new Date(p.createdAt).toLocaleDateString("uz")}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-bold text-gray-900">{p.amount.toLocaleString()} so'm</p>
-                    <span className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium mt-0.5 ${
-                      p.status === "success" ? "bg-green-100 text-green-700" :
-                      p.status === "pending" ? "bg-yellow-100 text-yellow-700" :
-                      "bg-red-100 text-red-700"
-                    }`}>
-                      {p.status === "success" ? "✅ Tasdiqlangan" : p.status === "pending" ? "⏳ Kutilmoqda" : "❌ Rad etilgan"}
-                    </span>
-                  </div>
-                </div>
-                {p.status === "pending" && (
-                  <p className="text-[10px] text-yellow-600 mt-2 bg-yellow-50 px-2 py-1 rounded">
-                    Admin tekshirmoqda. Odatda 5-30 daqiqa kutiladi.
-                  </p>
-                )}
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="bg-gray-50 border border-gray-100 rounded-xl p-4 text-center">
-            <p className="text-sm text-gray-500">Hali to'lov amalga oshirilmagan</p>
-            <Link to="/subscription" className="text-sm text-primary-500 font-medium mt-1 inline-block">Obuna bo'lish →</Link>
-          </div>
-        )}
-      </section>
-
       {/* Sozlamalar */}
       <section className="px-5 mt-7">
         <h3 className="font-bold text-gray-900 mb-3">Sozlamalar</h3>
@@ -336,9 +295,11 @@ export default function Profile() {
           </button>
 
           {[
+            { icon: <Star size={18} className="text-yellow-500" />, label: "Tanlangan mavzular", to: "/profile/favorites" },
+            { icon: <CreditCard size={18} className="text-green-500" />, label: "To'lovlarim", to: "/profile/payments" },
             { icon: <Settings size={18} className="text-gray-500" />, label: "Shaxsiy ma'lumotlar", to: "/profile/edit" },
             { icon: <Shield size={18} className="text-gray-500" />, label: "Promokodlarim", to: "/profile/promo" },
-            { icon: <Bell size={18} className="text-gray-500" />, label: "Bildirishnomalar", to: "" },
+            { icon: <Bell size={18} className="text-gray-500" />, label: "Bildirishnomalar", to: "/notifications" },
             { icon: <HelpCircle size={18} className="text-gray-500" />, label: "Yordam", to: "/profile/help" },
             { icon: <ChevronRight size={18} className="text-gray-500" />, label: "Bog'lanish", to: "/messages" },
           ].map((item, i) => (

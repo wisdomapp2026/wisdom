@@ -63,12 +63,13 @@ export interface Subscription {
 // COURSES (Kurslar / Fanlar)
 // ============================================================
 
-/** Kursni tanishtirish bo'limi (video + matn) */
+/** Kursni tanishtirish bo'limi (video + matn + rasm) */
 export interface CourseIntroduction {
   videoUrl?: string; // YouTube yoki upload qilingan video
   videoType?: "youtube" | "upload";
   text: string; // Kurs haqida qisqacha tushuntirish
   thumbnailUrl?: string; // Video uchun thumbnail rasm
+  imageUrl?: string; // Tanishtirish rasmi (admin upload qiladi)
 }
 
 export interface Course {
@@ -77,7 +78,10 @@ export interface Course {
   description: string;
   category: string; // "Matematika", "Ona tili", "Ingliz tili"
   coverImage?: string; // Storage URL
+  coverPosition?: string; // "50% 50%" — CSS object-position (drag orqali tanlanadi)
+  coverFit?: "cover" | "contain"; // CSS object-fit
   isPremium: boolean;
+  isHidden?: boolean; // Admin yashirgan — studentda ko'rinmaydi
   price?: number; // agar alohida sotilsa
   totalStudents: number;
   onlineNow: number;
@@ -93,16 +97,35 @@ export interface Course {
 }
 
 // ============================================================
+// FOLDERS (Papkalar / Kitoblar — kurs ichida mavzu va testlarni guruhlash)
+// ============================================================
+export interface Folder {
+  id: string;
+  courseId: string;
+  title: string; // "IDC 1", "IDC 2" kabi kitob nomi
+  description?: string;
+  icon?: string; // emoji
+  coverImage?: string; // kitob muqovasi (Storage URL)
+  order: number;
+  isPremium?: boolean;
+  isHidden?: boolean; // Admin yashirgan — studentda ko'rinmaydi
+  createdAt: number;
+  updatedAt: number;
+}
+
+// ============================================================
 // TOPICS (Mavzular / Darslar - kurs ichida)
 // ============================================================
 export interface Topic {
   id: string;
   courseId: string;
+  folderId?: string; // qaysi papkaga tegishli (bo'sh bo'lsa — papkasiz)
   title: string; // "1-mavzu: Sonlar"
   description: string; // "Learn what variables are and..."
   icon?: string; // emoji yoki icon nomi
   order: number;
   isPremium: boolean;
+  isHidden?: boolean; // Admin yashirgan — studentda ko'rinmaydi
   createdAt: number;
   updatedAt: number;
 }
@@ -113,6 +136,7 @@ export interface Topic {
 export interface Advice {
   id: string;
   courseId: string;
+  folderId?: string; // qaysi papkaga tegishli (bo'sh bo'lsa — papkasiz)
   title: string; // "Maslahat"
   text: string; // "IDC-1 Geometriya bo'limini tugatishdan oldin..."
   icon?: string; // emoji yoki icon nomi
@@ -136,6 +160,8 @@ export interface Problem {
   order: number;
   /** Premium misol (login + obuna talab etiladi) */
   isPremium?: boolean;
+  /** Admin yashirgan — studentda ko'rinmaydi */
+  isHidden?: boolean;
   /** Video yechim — YouTube URL yoki upload */
   videoUrl?: string;
   videoType?: "youtube" | "upload";
@@ -162,6 +188,7 @@ export interface SolutionStep {
 export interface Test {
   id: string;
   courseId: string;
+  folderId?: string; // qaysi papkaga tegishli (bo'sh bo'lsa — papkasiz)
   title: string; // "Mathematics Mid-Term Assessment"
   description?: string;
   version: string; // "Draft v1", "Published"
@@ -192,6 +219,9 @@ export interface Question {
   difficulty: Difficulty;
   tags: string[];
   topicTag?: string; // "TOPIC: SQUARES" kabi
+  /** Video yechim — noto'g'ri javob berilganda tavsiya qilinadi */
+  videoUrl?: string;
+  videoType?: "youtube" | "upload";
 }
 
 export interface QuestionOption {
@@ -271,6 +301,12 @@ export interface Payment {
   status: "pending" | "success" | "failed";
   promoCode?: string;
   discount: number;
+  /** Student pul o'tkazgan karta raqami (masalan: 8600 **** **** 1234) */
+  cardNumber?: string;
+  /** Admin kartasi (pul qayerga tushgan) */
+  recipientCard?: string;
+  /** To'lov screenshoti (chek rasmi) */
+  screenshotUrl?: string;
   createdAt: number;
 }
 
@@ -286,6 +322,86 @@ export interface Message {
   text: string;
   isRead: boolean;
   createdAt: number;
+}
+
+// ============================================================
+// FAVORITE TOPICS (Tanlangan mavzular — student bookmark qiladi)
+// ============================================================
+export interface FavoriteTopic {
+  id: string; // `${userId}_${topicId}`
+  userId: string;
+  courseId: string;
+  topicId: string;
+  topicTitle: string;
+  createdAt: number;
+}
+
+// ============================================================
+// USER ACTIVITY (O'quvchi faolligi — kunlik ishlatish vaqti)
+// ============================================================
+export interface UserActivity {
+  id: string; // `${userId}_${dateStr}` masalan: "user123_2026-06-19"
+  userId: string;
+  userName: string;
+  date: string; // "2026-06-19" formatda
+  totalMinutes: number; // shu kunda jami ishlatish vaqti (daqiqalarda)
+  sessions: ActivitySession[]; // kirish/chiqish sessiyalari
+  lastActiveAt: number; // oxirgi faollik timestamp
+}
+
+export interface ActivitySession {
+  startedAt: number; // sessiya boshlangan vaqt (timestamp)
+  endedAt?: number; // sessiya tugagan vaqt
+  durationMinutes: number; // daqiqada
+}
+
+// ============================================================
+// NEWS ITEMS (Yangiliklar — admin bosh sahifada boshqaradi)
+// ============================================================
+export type NewsItemType = "image" | "video";
+
+export interface NewsItem {
+  id: string;
+  title: string;
+  body?: string; // To'liq matn (batafsil)
+  type: NewsItemType;
+  imageUrl?: string; // Rasm (thumbnail yoki asosiy rasm)
+  videoUrl?: string; // YouTube yoki upload video
+  videoType?: "youtube" | "upload";
+  duration?: string; // "03:45" kabi
+  /** Rasmli yangilik uchun tashqi havola (brauzerda ochiladi) */
+  linkUrl?: string;
+  isActive: boolean;
+  order: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+// ============================================================
+// HOME BANNERS (Bosh sahifa bannerlari — admin boshqaradi)
+// ============================================================
+export interface HomeBanner {
+  id: string;
+  title: string; // "Milliy sertifikatga tayyormisiz?"
+  subtitle?: string; // qo'shimcha kichik matn
+  buttonText: string; // "Boshlash"
+  courseId?: string; // tugma bosilganda qaysi kursga o'tadi
+  linkUrl?: string; // yoki to'g'ridan-to'g'ri URL
+  bgColor: string; // fon rangi (hex yoki tailwind) masalan: "#3b82f6"
+  imageUrl?: string; // banner rasmi (ixtiyoriy)
+  /** Rasm pozitsiyasi (CSS object-position): "center", "top", "left center" kabi */
+  imagePosition?: string;
+  /** Rasm o'lchami (CSS object-fit): "cover" | "contain" */
+  imageFit?: "cover" | "contain";
+  /** Rasmni banner bo'ylab to'liq yoyish (fon sifatida) */
+  imageFullWidth?: boolean;
+  /** Rasm qirqish: nechta foiz ko'rsatiladi (0-100, yuqoridan qirqish) */
+  imageCropTop?: number;
+  imageCropBottom?: number;
+  isActive: boolean;
+  order: number;
+  createdAt: number;
+  updatedAt: number;
 }
 
 // ============================================================

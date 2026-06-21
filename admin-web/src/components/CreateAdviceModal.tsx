@@ -2,16 +2,18 @@ import { useState } from "react";
 import { X } from "lucide-react";
 import { createAdvice } from "@shared/repositories";
 import type { Advice, Topic } from "@shared/types";
+import LoadingButton from "./LoadingButton";
 
 interface Props {
   open: boolean;
   courseId: string;
   topics: Topic[];
+  folderId?: string; // qaysi papkaga qo'shilmoqda
   onClose: () => void;
   onCreated: () => void;
 }
 
-export default function CreateAdviceModal({ open, courseId, topics, onClose, onCreated }: Props) {
+export default function CreateAdviceModal({ open, courseId, topics, folderId, onClose, onCreated }: Props) {
   const [title, setTitle] = useState("Maslahat");
   const [text, setText] = useState("");
   const [afterTopicOrder, setAfterTopicOrder] = useState(topics.length > 0 ? topics[0].order : 1);
@@ -29,6 +31,7 @@ export default function CreateAdviceModal({ open, courseId, topics, onClose, onC
     const advice: Advice = {
       id,
       courseId,
+      ...(folderId ? { folderId } : {}),
       title: title.trim() || "Maslahat",
       text: text.trim(),
       icon: "💡",
@@ -102,9 +105,9 @@ export default function CreateAdviceModal({ open, courseId, topics, onClose, onC
 
           <div className="flex gap-3 pt-4 border-t border-gray-100">
             <button type="button" onClick={onClose} className="flex-1 btn-outline">Bekor</button>
-            <button type="submit" disabled={loading || !text.trim()} className="flex-1 btn-primary disabled:opacity-50">
-              {loading ? "Yaratilmoqda..." : "Qo'shish"}
-            </button>
+            <LoadingButton type="submit" loading={loading} disabled={!text.trim()} className="flex-1 btn-primary">
+              Qo'shish
+            </LoadingButton>
           </div>
         </form>
       </div>

@@ -23,7 +23,7 @@ export default function BottomNav() {
       {navItems.map(({ path, label, icon: Icon }) => {
         const isActive = path === "/" ? location.pathname === "/" : location.pathname.startsWith(path);
         return (
-          <NavLink key={path} to={path} className={clsx("nav-item", isActive && "active")}>
+          <NavLink key={path} to={path} className={clsx("nav-item", isActive && "active")} aria-label={label}>
             <Icon size={22} strokeWidth={isActive ? 2.5 : 1.8} />
             <span>{label}</span>
           </NavLink>

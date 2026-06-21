@@ -14,6 +14,8 @@ interface LibQuestion {
   folderId?: string;
   options?: { label: string; text: string }[];
   correctAnswer?: string;
+  videoUrl?: string;
+  videoType?: "youtube" | "upload";
 }
 
 interface LibFolder {
@@ -26,6 +28,7 @@ interface Props {
   open: boolean;
   courseId: string;
   existingTestIds: string[];
+  folderId?: string; // qaysi papkaga qo'shilmoqda
   onClose: () => void;
   onImported: () => void;
 }
@@ -42,7 +45,7 @@ function loadFromStorage<T>(key: string, fallback: T): T {
   }
 }
 
-export default function ImportTestModal({ open, courseId, existingTestIds, onClose, onImported }: Props) {
+export default function ImportTestModal({ open, courseId, existingTestIds, folderId, onClose, onImported }: Props) {
   const [activeTab, setActiveTab] = useState<"library" | "testlists">("library");
 
   // Content Library
@@ -158,11 +161,14 @@ export default function ImportTestModal({ open, courseId, existingTestIds, onClo
         estimatedMinutes: parseInt(q.time) || 3,
         difficulty: q.difficulty,
         tags: q.tags,
+        ...(q.videoUrl ? { videoUrl: q.videoUrl } : {}),
+        ...(q.videoType ? { videoType: q.videoType } : {}),
       }));
 
       const test: Test = {
         id: testId,
         courseId,
+        ...(folderId ? { folderId } : {}),
         title,
         description: `${selectedQuestions.length} ta savol · ${testTime} daqiqa`,
         version: "Published",
@@ -215,12 +221,15 @@ export default function ImportTestModal({ open, courseId, existingTestIds, onClo
           estimatedMinutes: parseInt(q.time) || 3,
           difficulty: q.difficulty,
           tags: q.tags,
+          ...(q.videoUrl ? { videoUrl: q.videoUrl } : {}),
+          ...(q.videoType ? { videoType: q.videoType } : {}),
         }));
 
         const listTotalTime = testQuestions.reduce((sum, q) => sum + q.estimatedMinutes, 0);
         const test: Test = {
           id: testId,
           courseId,
+          ...(folderId ? { folderId } : {}),
           title: list.title,
           description: `${listQuestions.length} ta savol · ${listTotalTime} daqiqa`,
           version: "Published",

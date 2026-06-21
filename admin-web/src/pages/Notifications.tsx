@@ -1,7 +1,10 @@
 import { useState, useEffect } from "react";
-import { MessageCircle, CreditCard, UserPlus, FileText, Check, CheckCheck } from "lucide-react";
+import { MessageCircle, CreditCard, UserPlus, FileText, Check, CheckCheck, X, Trash2 } from "lucide-react";
 import { getAdminNotifications, markNotificationRead, markAllNotificationsRead } from "@shared/repositories";
+import { deleteDoc, doc } from "firebase/firestore";
+import { db } from "@shared/firebase";
 import type { AdminNotification } from "@shared/types";
+import LoadingButton from "../components/LoadingButton";
 
 const typeIcons: Record<string, { icon: React.ReactNode; bg: string }> = {
   new_message: { icon: <MessageCircle size={16} className="text-blue-500" />, bg: "bg-blue-50" },
@@ -32,6 +35,11 @@ export default function Notifications() {
     await loadData();
   }
 
+  async function handleDelete(id: string) {
+    await deleteDoc(doc(db, "adminNotifications", id));
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  }
+
   const unreadCount = notifications.filter((n) => !n.isRead).length;
 
   if (loading) {
@@ -46,9 +54,9 @@ export default function Notifications() {
           <p className="text-gray-500 mt-1">{unreadCount > 0 ? `${unreadCount} ta o'qilmagan` : "Barcha o'qilgan"}</p>
         </div>
         {unreadCount > 0 && (
-          <button onClick={handleMarkAllRead} className="btn-outline text-sm flex items-center gap-2">
+          <LoadingButton onClick={handleMarkAllRead} className="btn-outline text-sm flex items-center gap-2">
             <CheckCheck className="w-4 h-4" /> Barchasini o'qilgan deb belgilash
-          </button>
+          </LoadingButton>
         )}
       </div>
 
@@ -66,8 +74,7 @@ export default function Notifications() {
               return (
                 <div
                   key={notif.id}
-                  className={`flex items-start gap-3 p-4 cursor-pointer hover:bg-gray-50 transition-colors ${!notif.isRead ? "bg-blue-50/30" : ""}`}
-                  onClick={() => !notif.isRead && handleMarkRead(notif.id)}
+                  className={`flex items-start gap-3 p-4 hover:bg-gray-50 transition-colors ${!notif.isRead ? "bg-blue-50/30" : ""}`}
                 >
                   <div className={`w-9 h-9 ${typeInfo.bg} rounded-lg flex items-center justify-center shrink-0 mt-0.5`}>
                     {typeInfo.icon}
@@ -79,6 +86,26 @@ export default function Notifications() {
                     </div>
                     <p className="text-xs text-gray-500 mt-0.5 truncate">{notif.body}</p>
                     <p className="text-[10px] text-gray-400 mt-1">{timeAgo}</p>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0 mt-1">
+                    {!notif.isRead && (
+                      <LoadingButton
+                        onClick={() => handleMarkRead(notif.id)}
+                        className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded-lg"
+                        title="O'qildi deb belgilash"
+                        iconOnly
+                      >
+                        <Check className="w-4 h-4" />
+                      </LoadingButton>
+                    )}
+                    <LoadingButton
+                      onClick={() => handleDelete(notif.id)}
+                      className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg"
+                      title="O'chirish"
+                      iconOnly
+                    >
+                      <X className="w-4 h-4" />
+                    </LoadingButton>
                   </div>
                 </div>
               );

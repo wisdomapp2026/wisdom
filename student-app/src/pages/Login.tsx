@@ -75,7 +75,7 @@ export default function Login() {
               required
               minLength={6}
             />
-            <button type="button" onClick={() => setShowPassword(!showPassword)} className="text-gray-400">
+            <button type="button" onClick={() => setShowPassword(!showPassword)} className="w-10 h-10 flex items-center justify-center text-gray-400 rounded-lg" aria-label={showPassword ? "Parolni yashirish" : "Parolni ko'rsatish"}>
               {showPassword ? "🙈" : "👁"}
             </button>
           </div>
@@ -111,6 +111,9 @@ export default function Login() {
       {/* Register link */}
       <p className="text-sm text-gray-500">Hisobingiz yo'qmi?</p>
       <Link to="/register" className="text-base font-bold text-primary-500 mt-1">Ro'yxatdan o'tish</Link>
+
+      {/* Mehmon sifatida kirish */}
+      <Link to="/" className="mt-6 text-sm text-gray-400 font-medium">Mehmon sifatida kirish →</Link>
     </div>
   );
 }

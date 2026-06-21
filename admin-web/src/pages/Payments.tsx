@@ -1,14 +1,15 @@
 import { useState, useEffect } from "react";
-import { Check, X, Clock } from "lucide-react";
-import { getRecentPayments, createSubscription } from "@shared/repositories";
+import { Check, X, Clock, Eye, Phone, CreditCard, Calendar, Image } from "lucide-react";
+import { getRecentPayments, createSubscription, getUserById } from "@shared/repositories";
 import { doc, updateDoc } from "firebase/firestore";
 import { db } from "@shared/firebase";
-import type { Payment, Subscription } from "@shared/types";
+import type { Payment, Subscription, User } from "@shared/types";
 
 export default function Payments() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "pending" | "success">("all");
+  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
 
   useEffect(() => { loadData(); }, []);
 
@@ -109,7 +110,7 @@ export default function Payments() {
               </thead>
               <tbody>
                 {filtered.map((p) => (
-                  <tr key={p.id} className={`border-b border-gray-50 ${p.status === "pending" ? "bg-yellow-50/30" : ""}`}>
+                  <tr key={p.id} onClick={() => setSelectedPayment(p)} className={`border-b border-gray-50 cursor-pointer hover:bg-gray-50 ${p.status === "pending" ? "bg-yellow-50/30" : ""}`}>
                     <td className="px-4 py-3 font-medium text-gray-900">{p.userName}</td>
                     <td className="px-4 py-3 text-gray-600 text-xs">{p.courseTitle}</td>
                     <td className="px-4 py-3 font-semibold text-gray-900">{p.amount.toLocaleString()} so'm</td>
@@ -165,6 +166,165 @@ export default function Payments() {
             </table>
           </div>
         )}
+      </div>
+
+      {/* To'lov tafsilotlari modali */}
+      {selectedPayment && (
+        <PaymentDetailModal
+          payment={selectedPayment}
+          onClose={() => setSelectedPayment(null)}
+          onApprove={handleApprove}
+          onReject={handleReject}
+        />
+      )}
+    </div>
+  );
+}
+
+// ===== To'lov tafsilotlari modal =====
+function PaymentDetailModal({ payment, onClose, onApprove, onReject }: {
+  payment: Payment;
+  onClose: () => void;
+  onApprove: (p: Payment) => void;
+  onReject: (id: string) => void;
+}) {
+  const [userData, setUserData] = useState<User | null>(null);
+  const [loadingUser, setLoadingUser] = useState(true);
+
+  useEffect(() => {
+    getUserById(payment.userId).then((u) => { setUserData(u); setLoadingUser(false); }).catch(() => setLoadingUser(false));
+  }, [payment.userId]);
+
+  const date = new Date(payment.createdAt);
+  const methodLabels: Record<string, string> = { click: "Click", payme: "Payme", uzum_bank: "Uzum Bank", card: "Bank kartasi" };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-100">
+          <h2 className="text-lg font-bold text-gray-900">To'lov tafsilotlari</h2>
+          <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-5">
+          {/* Status */}
+          <div className="flex items-center justify-center">
+            <span className={`inline-flex items-center gap-2 text-sm px-4 py-2 rounded-full font-semibold ${
+              payment.status === "success" ? "bg-green-100 text-green-700" :
+              payment.status === "pending" ? "bg-yellow-100 text-yellow-700" :
+              "bg-red-100 text-red-700"
+            }`}>
+              {payment.status === "success" && <Check size={16} />}
+              {payment.status === "pending" && <Clock size={16} />}
+              {payment.status === "failed" && <X size={16} />}
+              {payment.status === "success" ? "Tasdiqlangan" : payment.status === "pending" ? "Kutilmoqda" : "Rad etilgan"}
+            </span>
+          </div>
+
+          {/* Summa */}
+          <div className="text-center">
+            <p className="text-3xl font-bold text-gray-900">{payment.amount.toLocaleString()} so'm</p>
+            {payment.discount > 0 && (
+              <p className="text-sm text-green-600 mt-1">Chegirma: -{payment.discount}% (promo: {payment.promoCode})</p>
+            )}
+          </div>
+
+          {/* O'quvchi ma'lumotlari */}
+          <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase">O'quvchi</h3>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-600">Ism</span>
+              <span className="text-sm font-medium text-gray-900">{payment.userName}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-600 flex items-center gap-1"><Phone size={12} /> Telefon</span>
+              <span className="text-sm font-medium text-gray-900">{loadingUser ? "..." : userData?.phone || "Noma'lum"}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-600">User ID</span>
+              <span className="text-xs font-mono text-gray-500">{payment.userId}</span>
+            </div>
+          </div>
+
+          {/* To'lov ma'lumotlari */}
+          <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase">To'lov ma'lumotlari</h3>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-600">Tarif</span>
+              <span className="text-sm font-medium text-gray-900">{payment.courseTitle}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-600 flex items-center gap-1"><CreditCard size={12} /> To'lov usuli</span>
+              <span className="text-sm font-medium text-gray-900">{methodLabels[payment.method] || payment.method}</span>
+            </div>
+            {payment.recipientCard && (
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Qabul qiluvchi karta</span>
+                <span className="text-sm font-mono font-medium text-gray-900">{payment.recipientCard}</span>
+              </div>
+            )}
+            {payment.cardNumber && (
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Yuboruvchi karta</span>
+                <span className="text-sm font-mono font-medium text-gray-900">{payment.cardNumber}</span>
+              </div>
+            )}
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-600 flex items-center gap-1"><Calendar size={12} /> Sana</span>
+              <span className="text-sm font-medium text-gray-900">{date.toLocaleDateString("uz-UZ", { year: "numeric", month: "long", day: "numeric" })}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-600">Vaqt</span>
+              <span className="text-sm font-medium text-gray-900">{date.toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-gray-600">To'lov ID</span>
+              <span className="text-xs font-mono text-gray-500">{payment.id}</span>
+            </div>
+            {payment.promoCode && (
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Promo kod</span>
+                <span className="text-sm font-mono font-medium text-green-700 bg-green-50 px-2 py-0.5 rounded">{payment.promoCode} (-{payment.discount}%)</span>
+              </div>
+            )}
+          </div>
+
+          {/* Screenshot */}
+          <div className="bg-gray-50 rounded-xl p-4">
+            <h3 className="text-xs font-semibold text-gray-500 uppercase mb-3 flex items-center gap-1"><Image size={12} /> Chek / Screenshot</h3>
+            {payment.screenshotUrl ? (
+              <a href={payment.screenshotUrl} target="_blank" rel="noopener noreferrer">
+                <img src={payment.screenshotUrl} alt="To'lov screenshoti" className="w-full max-h-64 object-contain rounded-lg border border-gray-200" />
+              </a>
+            ) : (
+              <div className="text-center py-6 border-2 border-dashed border-gray-200 rounded-lg">
+                <Image size={24} className="mx-auto text-gray-300 mb-2" />
+                <p className="text-xs text-gray-400">Screenshot yuklanmagan</p>
+              </div>
+            )}
+          </div>
+
+          {/* Amallar */}
+          {payment.status === "pending" && (
+            <div className="flex gap-3">
+              <button
+                onClick={() => { onApprove(payment); onClose(); }}
+                className="flex-1 bg-green-500 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-green-600"
+              >
+                <Check size={16} /> Tasdiqlash
+              </button>
+              <button
+                onClick={() => { onReject(payment.id); onClose(); }}
+                className="flex-1 bg-red-500 text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 hover:bg-red-600"
+              >
+                <X size={16} /> Rad etish
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

@@ -6,11 +6,13 @@ import {
   BookOpen,
   Trophy,
   ArrowUp,
+  Activity,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { getAllCourses, getAllStudents, getRecentPayments, getStudentCountByCourse } from "@shared/repositories";
 import type { Course, User, Payment } from "@shared/types";
+import StudentActivityModal from "../components/StudentActivityModal";
 import {
   AreaChart,
   Area,
@@ -35,6 +37,7 @@ interface DashboardData {
 export default function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activityModalOpen, setActivityModalOpen] = useState(false);
 
   useEffect(() => {
     loadDashboard();
@@ -109,6 +112,9 @@ export default function Dashboard() {
           <p className="text-sm text-gray-500 mt-1">Platformadagi bugungi asosiy ko'rsatkichlar va yangilanishlar bilan tanishing.</p>
         </div>
         <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          <button onClick={() => setActivityModalOpen(true)} className="btn-outline text-sm flex items-center gap-1.5">
+            <Activity className="w-4 h-4 text-green-500" /> Faollik
+          </button>
           <button className="btn-outline text-sm">Oxirgi 7 kun</button>
           <button className="btn-primary text-sm">Hisobotni yuklash</button>
         </div>
@@ -286,6 +292,9 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* O'quvchilarning faolligi modali */}
+      <StudentActivityModal isOpen={activityModalOpen} onClose={() => setActivityModalOpen(false)} />
     </div>
   );
 }

@@ -1,6 +1,8 @@
 import { useState } from "react";
-import { Edit, Trash2, Plus, Play, Video, X, Check } from "lucide-react";
+import { Edit, Trash2, Plus, Play, Video, X, Check, Upload, ImageIcon } from "lucide-react";
 import { updateCourse } from "@shared/repositories";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { storage } from "@shared/firebase";
 import { deleteField } from "firebase/firestore";
 import type { Course, CourseIntroduction } from "@shared/types";
 
@@ -15,6 +17,9 @@ export default function CourseIntroSection({ course, onUpdate }: Props) {
   const [videoUrl, setVideoUrl] = useState(course.introduction?.videoUrl || "");
   const [videoType, setVideoType] = useState<"youtube" | "upload">(course.introduction?.videoType || "youtube");
   const [thumbnailUrl, setThumbnailUrl] = useState(course.introduction?.thumbnailUrl || "");
+  const [imageUrl, setImageUrl] = useState(course.introduction?.imageUrl || "");
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState(course.introduction?.imageUrl || "");
   const [saving, setSaving] = useState(false);
 
   const hasIntro = !!course.introduction;
@@ -27,15 +32,26 @@ export default function CourseIntroSection({ course, onUpdate }: Props) {
 
   async function handleSave() {
     setSaving(true);
-    const introduction: CourseIntroduction = {
-      text: text.trim(),
-      videoUrl: videoUrl.trim(),
-      videoType,
-      thumbnailUrl: thumbnailUrl.trim() || (videoType === "youtube" ? getYouTubeThumbnail(videoUrl) : ""),
-    };
     try {
+      // Rasm upload (agar yangi fayl tanlangan bo'lsa)
+      let finalImageUrl = imageUrl;
+      if (imageFile) {
+        const storageRef = ref(storage, `course-intro/${course.id}/${Date.now()}-${imageFile.name}`);
+        await uploadBytes(storageRef, imageFile);
+        finalImageUrl = await getDownloadURL(storageRef);
+      }
+
+      const introduction: CourseIntroduction = {
+        text: text.trim(),
+        videoUrl: videoUrl.trim(),
+        videoType,
+        thumbnailUrl: thumbnailUrl.trim() || (videoType === "youtube" ? getYouTubeThumbnail(videoUrl) : ""),
+        ...(finalImageUrl ? { imageUrl: finalImageUrl } : {}),
+      };
       await updateCourse(course.id, { introduction });
       onUpdate({ ...course, introduction });
+      setImageUrl(finalImageUrl);
+      setImageFile(null);
       setEditing(false);
     } catch (err) {
       console.error("Introduction saqlashda xatolik:", err);
@@ -162,6 +178,46 @@ export default function CourseIntroSection({ course, onUpdate }: Props) {
           )}
         </div>
 
+        {/* Rasm yuklash */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Tanishtirish rasmi (ixtiyoriy)</label>
+          <div className="flex items-center gap-3">
+            {imagePreview ? (
+              <div className="relative w-24 h-16 rounded-lg overflow-hidden border border-gray-200 shrink-0">
+                <img src={imagePreview} alt="" className="w-full h-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => { setImageFile(null); setImagePreview(""); setImageUrl(""); }}
+                  className="absolute top-1 right-1 w-5 h-5 bg-black/60 text-white rounded-full text-xs flex items-center justify-center"
+                >
+                  ✕
+                </button>
+              </div>
+            ) : (
+              <div className="w-24 h-16 rounded-lg border-2 border-dashed border-gray-200 flex items-center justify-center shrink-0">
+                <ImageIcon className="w-5 h-5 text-gray-300" />
+              </div>
+            )}
+            <label className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 cursor-pointer hover:bg-gray-50">
+              <Upload className="w-4 h-4" />
+              {imageFile ? "Rasmni almashtirish" : "Rasm yuklash"}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    setImageFile(file);
+                    setImagePreview(URL.createObjectURL(file));
+                  }
+                }}
+              />
+            </label>
+          </div>
+          <p className="text-xs text-gray-400 mt-1">Kurs haqida rasm qo'shish (banner yoki screenshot)</p>
+        </div>
+
         <div className="flex gap-3 pt-4 border-t border-gray-100">
           <button onClick={() => setEditing(false)} className="flex-1 btn-outline">Bekor</button>
           <button
@@ -235,9 +291,21 @@ export default function CourseIntroSection({ course, onUpdate }: Props) {
                 ⚠️ Video qo'shilmagan
               </span>
             )}
+            {intro.imageUrl && (
+              <span className="flex items-center gap-1 text-blue-600">
+                <ImageIcon className="w-3 h-3" /> Rasm biriktirilgan
+              </span>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Rasm preview (agar bor bo'lsa) */}
+      {intro.imageUrl && (
+        <div className="mt-3 rounded-lg overflow-hidden border border-gray-100">
+          <img src={intro.imageUrl} alt="Kurs tanishtirish rasmi" className="w-full max-h-48 object-cover" />
+        </div>
+      )}
     </div>
   );
 }

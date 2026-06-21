@@ -17,6 +17,8 @@ import Payments from "./pages/Payments";
 import Promos from "./pages/Promos";
 import Analytics from "./pages/Analytics";
 import Settings from "./pages/Settings";
+import Banners from "./pages/Banners";
+import NewsItems from "./pages/NewsItems";
 import Motivations from "./pages/Motivations";
 import SocialLinks from "./pages/SocialLinks";
 import Notifications from "./pages/Notifications";
@@ -66,6 +68,8 @@ export default function App() {
         <Route path="promos" element={<Promos />} />
         <Route path="analytics" element={<Analytics />} />
         <Route path="settings" element={<Settings />} />
+        <Route path="banners" element={<Banners />} />
+        <Route path="news-items" element={<NewsItems />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

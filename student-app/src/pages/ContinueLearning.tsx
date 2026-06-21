@@ -5,6 +5,8 @@ import type { UserProgress, Course, Topic } from "@shared/types";
 import { Clock, Play, ChevronRight } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { ContinueLoader } from "../components/PageLoader";
+import { cachedFetch } from "../hooks/useCache";
+import { getLocalProgress } from "../hooks/useLocalProgress";
 
 interface RecentCourse {
   progress: UserProgress;
@@ -21,15 +23,23 @@ export default function ContinueLearning() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (authLoading) return; // Auth hali tekshirilmagan — kutamiz
-    if (user) loadData();
-    else setLoading(false);
+    if (authLoading) return;
+    loadData();
   }, [user, authLoading]);
 
   async function loadData() {
-    if (!user) return;
     try {
-      const allProgress = await getAllProgressByUser(user.uid);
+      let allProgress: UserProgress[] = [];
+
+      if (user) {
+        // Login qilgan — DB dan olish
+        allProgress = await cachedFetch(`progress-${user.uid}`, () => getAllProgressByUser(user.uid));
+      } else {
+        // Guest — localStorage dan olish
+        const localData = getLocalProgress();
+        allProgress = Object.values(localData);
+      }
+
       if (allProgress.length === 0) {
         setLoading(false);
         return;
@@ -42,14 +52,22 @@ export default function ContinueLearning() {
       const results = await Promise.all(
         sorted.slice(0, 5).map(async (prog) => {
           const [course, topics] = await Promise.all([
-            getCourseById(prog.courseId),
-            getTopicsByCourse(prog.courseId),
+            cachedFetch(`course-${prog.courseId}`, () => getCourseById(prog.courseId)),
+            cachedFetch(`topics-${prog.courseId}`, () => getTopicsByCourse(prog.courseId)),
           ]);
           if (!course) return null;
 
-          let currentTopic: Topic | null = null;
-          if (prog.currentTopicId) {
-            currentTopic = await getTopicById(prog.courseId, prog.currentTopicId);
+          // Navbatdagi tugatilmagan mavzuni topish (order bo'yicha birinchi completed bo'lmagan)
+          const sortedTopics = [...topics].sort((a, b) => a.order - b.order);
+          const nextTopic = sortedTopics.find((t) => !prog.completedTopics.includes(t.id)) || null;
+
+          // Agar nextTopic topilmasa, currentTopicId dan olish (fallback)
+          let currentTopic: Topic | null = nextTopic;
+          if (!currentTopic && prog.currentTopicId) {
+            currentTopic = await cachedFetch(
+              `topic-${prog.courseId}-${prog.currentTopicId}`,
+              () => getTopicById(prog.courseId, prog.currentTopicId!)
+            );
           }
 
           const remainingTopics = topics.length - prog.completedTopics.length;

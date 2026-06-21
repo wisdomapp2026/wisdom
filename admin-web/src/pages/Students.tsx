@@ -1,13 +1,15 @@
 import { useState, useEffect } from "react";
-import { Search, Loader2, Eye, Users, X, Edit, Key, BookOpen, FileText, CreditCard, Ban, Trash2, ShieldOff } from "lucide-react";
-import { getAllStudents, getAllProgressByUser, getTestResultsByUser, getRecentPayments, updateUser, banUser, unbanUser, deleteUserCompletely } from "@shared/repositories";
-import type { User, UserProgress, TestResult, Payment } from "@shared/types";
+import { Search, Loader2, Eye, Users, X, Edit, Key, BookOpen, FileText, CreditCard, Ban, Trash2, ShieldOff, Clock } from "lucide-react";
+import { getAllStudents, getAllProgressByUser, getTestResultsByUser, getRecentPayments, updateUser, banUser, unbanUser, deleteUserCompletely, getTodayActiveStudents, getAllStudentActivities } from "@shared/repositories";
+import type { User, UserProgress, TestResult, Payment, UserActivity } from "@shared/types";
+import LoadingButton from "../components/LoadingButton";
 
 export default function Students() {
   const [students, setStudents] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStudent, setSelectedStudent] = useState<User | null>(null);
+  const [activityMap, setActivityMap] = useState<Map<string, UserActivity>>(new Map());
 
   useEffect(() => {
     loadStudents();
@@ -15,8 +17,21 @@ export default function Students() {
 
   async function loadStudents() {
     try {
-      const data = await getAllStudents();
+      const [data, activities] = await Promise.all([
+        getAllStudents(),
+        getAllStudentActivities(30), // oxirgi 30 kunlik faollik
+      ]);
       setStudents(data);
+
+      // Har bir o'quvchi uchun eng oxirgi faollik
+      const map = new Map<string, UserActivity>();
+      activities.forEach((a) => {
+        const existing = map.get(a.userId);
+        if (!existing || a.lastActiveAt > existing.lastActiveAt) {
+          map.set(a.userId, a);
+        }
+      });
+      setActivityMap(map);
     } catch (err) {
       console.error("O'quvchilarni yuklashda xatolik:", err);
     } finally {
@@ -68,6 +83,7 @@ export default function Students() {
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">O'quvchi</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Telefon</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Sinf</th>
+                <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Oxirgi faollik</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Ro'yxatdan o'tgan</th>
                 <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Amallar</th>
               </tr>
@@ -77,11 +93,15 @@ export default function Students() {
                 <tr key={student.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <div className={`w-9 h-9 rounded-full flex items-center justify-center ${student.isBanned ? "bg-red-100" : "bg-primary-100"}`}>
-                        <span className={`text-sm font-bold ${student.isBanned ? "text-red-600" : "text-primary-600"}`}>
-                          {student.name.charAt(0).toUpperCase()}
-                        </span>
-                      </div>
+                      {student.avatar ? (
+                        <img src={student.avatar} alt={student.name} className="w-9 h-9 rounded-full object-cover border border-gray-200" />
+                      ) : (
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center ${student.isBanned ? "bg-red-100" : "bg-primary-100"}`}>
+                          <span className={`text-sm font-bold ${student.isBanned ? "text-red-600" : "text-primary-600"}`}>
+                            {student.name.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                      )}
                       <div>
                         <div className="flex items-center gap-2">
                           <p className="font-medium text-gray-900 text-sm">{student.name}</p>
@@ -96,6 +116,32 @@ export default function Students() {
                   </td>
                   <td className="px-6 py-4">
                     <span className="text-sm text-gray-600">{student.grade || "—"}</span>
+                  </td>
+                  <td className="px-6 py-4">
+                    {(() => {
+                      const activity = activityMap.get(student.id);
+                      if (!activity) return <span className="text-sm text-gray-400">—</span>;
+                      const isOnline = Date.now() - activity.lastActiveAt < 300000; // 5 daqiqa ichida
+                      return (
+                        <div>
+                          {isOnline ? (
+                            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-600">
+                              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                              Hozir online
+                            </span>
+                          ) : (
+                            <span className="text-sm text-gray-600">
+                              {new Date(activity.lastActiveAt).toLocaleDateString("uz-UZ")},{" "}
+                              {new Date(activity.lastActiveAt).toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" })}
+                            </span>
+                          )}
+                          <p className="text-[10px] text-gray-400 mt-0.5 flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            {activity.totalMinutes < 1 ? "< 1 daq" : activity.totalMinutes < 60 ? `${activity.totalMinutes} daq` : `${Math.floor(activity.totalMinutes / 60)} soat ${activity.totalMinutes % 60} daq`}
+                          </p>
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td className="px-6 py-4">
                     <span className="text-sm text-gray-600">
@@ -141,6 +187,7 @@ export default function Students() {
 // ===== Student Detail Modal =====
 function StudentDetailModal({ student, onClose, onUpdated }: { student: User; onClose: () => void; onUpdated: () => void }) {
   const [activeTab, setActiveTab] = useState<"info" | "courses" | "tests" | "payments">("info");
+  const [zoomAvatar, setZoomAvatar] = useState(false);
   const [progress, setProgress] = useState<UserProgress[]>([]);
   const [testResults, setTestResults] = useState<TestResult[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -202,11 +249,10 @@ function StudentDetailModal({ student, onClose, onUpdated }: { student: User; on
         phone: editPhone,
         grade: editGrade || undefined,
       });
-      // Parol o'zgartirish (Firebase Auth — client-side da cheklov bor, faqat ma'lumot saqlanadi)
+      // Parol o'zgartirish — hozircha qo'llab-quvvatlanmaydi
       if (newPassword) {
-        // Note: Firebase Auth parolni server-side yoki Admin SDK orqali o'zgartirish kerak
-        // Hozircha faqat alert ko'rsatamiz
-        alert("Parol o'zgartirish Firebase Admin SDK talab qiladi. Backend qo'shilganda ishlaydi.");
+        // Firebase Auth parolni faqat user o'zi yoki Admin SDK orqali o'zgartirishi mumkin
+        // Hozircha bu funksiya ishlamaydi
       }
       setEditMode(false);
       onUpdated();
@@ -223,9 +269,19 @@ function StudentDetailModal({ student, onClose, onUpdated }: { student: User; on
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
           <div className="flex items-center gap-4">
-            <div className={`w-14 h-14 rounded-full flex items-center justify-center ${student.isBanned ? "bg-red-100" : "bg-primary-100"}`}>
-              <span className={`text-xl font-bold ${student.isBanned ? "text-red-600" : "text-primary-600"}`}>{student.name.charAt(0).toUpperCase()}</span>
-            </div>
+            {student.avatar ? (
+              <button
+                onClick={() => setZoomAvatar(true)}
+                className="w-14 h-14 rounded-full overflow-hidden border-2 border-gray-200 hover:border-primary-400 transition-colors cursor-zoom-in"
+                title="Rasmni kattalashtirish"
+              >
+                <img src={student.avatar} alt={student.name} className="w-full h-full object-cover" />
+              </button>
+            ) : (
+              <div className={`w-14 h-14 rounded-full flex items-center justify-center ${student.isBanned ? "bg-red-100" : "bg-primary-100"}`}>
+                <span className={`text-xl font-bold ${student.isBanned ? "text-red-600" : "text-primary-600"}`}>{student.name.charAt(0).toUpperCase()}</span>
+              </div>
+            )}
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-bold text-gray-900">{student.name}</h2>
@@ -236,7 +292,7 @@ function StudentDetailModal({ student, onClose, onUpdated }: { student: User; on
           </div>
           <div className="flex items-center gap-2">
             {/* Ban/Unban */}
-            <button
+            <LoadingButton
               onClick={handleBan}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border ${
                 student.isBanned
@@ -247,15 +303,15 @@ function StudentDetailModal({ student, onClose, onUpdated }: { student: User; on
             >
               {student.isBanned ? <ShieldOff className="w-3.5 h-3.5" /> : <Ban className="w-3.5 h-3.5" />}
               {student.isBanned ? "Banni yechish" : "Ban qilish"}
-            </button>
+            </LoadingButton>
             {/* Delete */}
-            <button
+            <LoadingButton
               onClick={handleDelete}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-red-200 text-red-700 hover:bg-red-50"
               title="To'liq o'chirish"
             >
               <Trash2 className="w-3.5 h-3.5" /> O'chirish
-            </button>
+            </LoadingButton>
             <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600">
               <X className="w-5 h-5" />
             </button>
@@ -332,9 +388,9 @@ function StudentDetailModal({ student, onClose, onUpdated }: { student: User; on
                     </div>
                   </div>
                   <div className="flex gap-3 pt-4 border-t border-gray-100">
-                    <button onClick={handleSave} disabled={saving} className="btn-primary text-sm disabled:opacity-50">
-                      {saving ? "Saqlanmoqda..." : "Saqlash"}
-                    </button>
+                    <LoadingButton onClick={handleSave} className="btn-primary text-sm">
+                      Saqlash
+                    </LoadingButton>
                     <button onClick={() => setEditMode(false)} className="btn-outline text-sm">Bekor</button>
                   </div>
                 </div>
@@ -398,6 +454,27 @@ function StudentDetailModal({ student, onClose, onUpdated }: { student: User; on
           )}
         </div>
       </div>
+
+      {/* Avatar zoom modal */}
+      {zoomAvatar && student.avatar && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center cursor-zoom-out"
+          onClick={() => setZoomAvatar(false)}
+        >
+          <img
+            src={student.avatar}
+            alt={student.name}
+            className="max-w-[90vw] max-h-[90vh] rounded-2xl shadow-2xl object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
+          <button
+            onClick={() => setZoomAvatar(false)}
+            className="absolute top-4 right-4 w-10 h-10 bg-white/20 backdrop-blur-sm text-white rounded-full flex items-center justify-center hover:bg-white/30"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }

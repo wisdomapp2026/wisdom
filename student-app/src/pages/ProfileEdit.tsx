@@ -1,10 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ChevronLeft, Save } from "lucide-react";
+import { ChevronLeft, Save, Camera } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { getUserById, updateUser } from "@shared/repositories";
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
 import { auth } from "@shared/firebase";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { storage } from "@shared/firebase";
 
 export default function ProfileEdit() {
   const { user } = useAuth();
@@ -13,6 +15,9 @@ export default function ProfileEdit() {
   const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState("");
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   // Parol
   const [oldPassword, setOldPassword] = useState("");
@@ -25,6 +30,7 @@ export default function ProfileEdit() {
         if (u) {
           setName(u.name || "");
           setPhone(u.phone || "");
+          setAvatarUrl(u.avatar || "");
         }
       });
     }
@@ -35,13 +41,33 @@ export default function ProfileEdit() {
     setSaving(true);
     setMessage("");
     try {
-      await updateUser(user.uid, { name: name.trim(), phone: phone.trim() });
+      await updateUser(user.uid, { name: name.trim(), phone: phone.trim(), avatar: avatarUrl || undefined });
       setMessage("Ma'lumotlar saqlandi!");
       setTimeout(() => setMessage(""), 3000);
     } catch (err) {
       setMessage("Xatolik yuz berdi");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    setAvatarUploading(true);
+    try {
+      const storageRef = ref(storage, `avatars/${user.uid}/${Date.now()}-${file.name}`);
+      await uploadBytes(storageRef, file);
+      const url = await getDownloadURL(storageRef);
+      setAvatarUrl(url);
+      // Darhol saqlash
+      await updateUser(user.uid, { avatar: url });
+      setMessage("Rasm yuklandi!");
+      setTimeout(() => setMessage(""), 3000);
+    } catch (err) {
+      setMessage("Rasm yuklashda xatolik");
+    } finally {
+      setAvatarUploading(false);
     }
   }
 
@@ -68,6 +94,37 @@ export default function ProfileEdit() {
       </header>
 
       <div className="px-5 mt-6 space-y-5">
+        {/* Avatar */}
+        <div className="flex flex-col items-center">
+          <div className="relative">
+            <div className="w-24 h-24 rounded-full overflow-hidden bg-gray-200 border-2 border-white shadow-lg">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full bg-primary-500 flex items-center justify-center">
+                  <span className="text-3xl font-bold text-white">{name.charAt(0).toUpperCase() || "?"}</span>
+                </div>
+              )}
+            </div>
+            <button
+              onClick={() => fileRef.current?.click()}
+              disabled={avatarUploading}
+              className="absolute bottom-0 right-0 w-8 h-8 bg-primary-500 text-white rounded-full flex items-center justify-center shadow-md border-2 border-white active:bg-primary-600 disabled:opacity-50"
+            >
+              <Camera size={14} />
+            </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleAvatarUpload}
+            />
+          </div>
+          {avatarUploading && <p className="text-xs text-primary-500 mt-2 animate-pulse">Yuklanmoqda...</p>}
+          <p className="text-xs text-gray-400 mt-2">Rasmni o'zgartirish uchun kamera ikonkasini bosing</p>
+        </div>
+
         {/* Ism */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Ism va familiya</label>

@@ -2,16 +2,18 @@ import { useState } from "react";
 import { X } from "lucide-react";
 import { createTopic } from "@shared/repositories";
 import type { Topic } from "@shared/types";
+import LoadingButton from "./LoadingButton";
 
 interface Props {
   open: boolean;
   courseId: string;
   existingCount: number;
+  folderId?: string; // qaysi papkaga qo'shilmoqda
   onClose: () => void;
   onCreated: () => void;
 }
 
-export default function CreateTopicModal({ open, courseId, existingCount, onClose, onCreated }: Props) {
+export default function CreateTopicModal({ open, courseId, existingCount, folderId, onClose, onCreated }: Props) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [isPremium, setIsPremium] = useState(false);
@@ -24,12 +26,13 @@ export default function CreateTopicModal({ open, courseId, existingCount, onClos
     setLoading(true);
 
     const order = existingCount + 1;
-    const id = `topic-${String(order).padStart(2, "0")}`;
+    const id = `topic-${Date.now()}`;
     const now = Date.now();
 
     const topic: Topic = {
       id,
       courseId,
+      ...(folderId ? { folderId } : {}),
       title: `${order}-mavzu: ${title}`,
       description,
       icon: "📖",
@@ -100,9 +103,9 @@ export default function CreateTopicModal({ open, courseId, existingCount, onClos
 
           <div className="flex gap-3 pt-4 border-t border-gray-100">
             <button type="button" onClick={onClose} className="flex-1 btn-outline">Bekor</button>
-            <button type="submit" disabled={loading || !title} className="flex-1 btn-primary disabled:opacity-50">
-              {loading ? "Yaratilmoqda..." : "Qo'shish"}
-            </button>
+            <LoadingButton type="submit" loading={loading} disabled={!title} className="flex-1 btn-primary">
+              Qo'shish
+            </LoadingButton>
           </div>
         </form>
       </div>

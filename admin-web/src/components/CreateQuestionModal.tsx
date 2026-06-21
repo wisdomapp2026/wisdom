@@ -17,6 +17,8 @@ interface NewQuestion {
   options: QuestionOption[];
   correctAnswer: string;
   image?: string;
+  videoUrl?: string;
+  videoType?: "youtube" | "upload";
 }
 
 interface Props {
@@ -48,6 +50,7 @@ export default function CreateQuestionModal({ open, onClose, onSave, initialData
   ]);
   const [correctAnswer, setCorrectAnswer] = useState("A");
   const [questionImage, setQuestionImage] = useState("");
+  const [videoUrl, setVideoUrl] = useState("");
   const [uploading, setUploading] = useState(false);
   const [pastedImages, setPastedImages] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -64,12 +67,13 @@ export default function CreateQuestionModal({ open, onClose, onSave, initialData
       ]);
       setCorrectAnswer(initialData.correctAnswer || "A");
       setQuestionImage(initialData.image || "");
+      setVideoUrl(initialData.videoUrl || "");
       setPastedImages([]);
     } else if (open && !initialData) {
       // Yangi savol — formani tozalash
       setContent(""); setDifficulty("medium"); setTimeMinutes(3); setTags("");
       setOptions([{ label: "A", text: "" }, { label: "B", text: "" }, { label: "C", text: "" }, { label: "D", text: "" }]);
-      setCorrectAnswer("A"); setQuestionImage(""); setPastedImages([]);
+      setCorrectAnswer("A"); setQuestionImage(""); setVideoUrl(""); setPastedImages([]);
     }
   }, [open, initialData]);
 
@@ -149,11 +153,13 @@ export default function CreateQuestionModal({ open, onClose, onSave, initialData
       options: options.filter((o) => o.text.trim() || o.image),
       correctAnswer,
       image: questionImage || pastedImages[0] || undefined,
+      videoUrl: videoUrl.trim() || undefined,
+      videoType: videoUrl.trim() ? (videoUrl.includes("youtube") || videoUrl.includes("youtu.be") ? "youtube" : "upload") : undefined,
     });
 
     // Reset
     setContent(""); setOptions([{ label: "A", text: "" }, { label: "B", text: "" }, { label: "C", text: "" }, { label: "D", text: "" }]);
-    setCorrectAnswer("A"); setTags(""); setTimeMinutes(3); setQuestionImage(""); setPastedImages([]);
+    setCorrectAnswer("A"); setTags(""); setTimeMinutes(3); setQuestionImage(""); setPastedImages([]); setVideoUrl("");
     onClose();
   }
 
@@ -313,6 +319,19 @@ export default function CreateQuestionModal({ open, onClose, onSave, initialData
           <div className="bg-green-50 border border-green-200 rounded-xl p-3 flex items-center gap-3">
             <span className="text-green-600 font-bold">✓</span>
             <p className="text-sm text-green-800">To'g'ri javob: <strong>{correctAnswer}</strong> — {options.find((o) => o.label === correctAnswer)?.text || "(matn kiritilmagan)"}</p>
+          </div>
+
+          {/* Video yechim URL */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">🎬 Video yechim URL (ixtiyoriy)</label>
+            <input
+              type="url"
+              value={videoUrl}
+              onChange={(e) => setVideoUrl(e.target.value)}
+              placeholder="https://youtube.com/watch?v=... yoki video link"
+              className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+            <p className="text-xs text-gray-400 mt-1">Noto'g'ri javob berilganda shu video tavsiya etiladi</p>
           </div>
 
           {/* Actions */}

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Plus, Trash2, Edit, Check, X } from "lucide-react";
 import { getAllPromoCodes, createPromoCode, updatePromoCode, deletePromoCode } from "@shared/repositories";
 import type { PromoCode } from "@shared/types";
+import LoadingButton from "../components/LoadingButton";
 
 export default function Promos() {
   const [promos, setPromos] = useState<PromoCode[]>([]);
@@ -83,7 +84,7 @@ export default function Promos() {
             </div>
           </div>
           <div className="flex gap-2">
-            <button onClick={handleAdd} disabled={saving || !newCode.trim()} className="btn-primary text-sm disabled:opacity-50">{saving ? "Yaratilmoqda..." : "Yaratish"}</button>
+            <LoadingButton onClick={handleAdd} disabled={!newCode.trim()} className="btn-primary text-sm">Yaratish</LoadingButton>
             <button onClick={() => setShowAdd(false)} className="btn-outline text-sm">Bekor</button>
           </div>
         </div>
@@ -114,12 +115,12 @@ export default function Promos() {
                   <td className="px-4 py-3 text-primary-500 font-semibold">{p.discountPercent}%</td>
                   <td className="px-4 py-3 text-gray-600">{p.usedCount} / {p.maxUses || "∞"}</td>
                   <td className="px-4 py-3">
-                    <button onClick={() => handleToggle(p.id, p.isActive)} className={`text-xs px-2 py-1 rounded-full font-medium ${p.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                    <LoadingButton onClick={() => handleToggle(p.id, p.isActive)} className={`text-xs px-2 py-1 rounded-full font-medium ${p.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
                       {p.isActive ? "Faol" : "O'chiq"}
-                    </button>
+                    </LoadingButton>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <button onClick={() => handleDelete(p.id)} className="p-1.5 text-gray-400 hover:text-red-500 rounded"><Trash2 className="w-4 h-4" /></button>
+                    <LoadingButton onClick={() => handleDelete(p.id)} className="p-1.5 text-gray-400 hover:text-red-500 rounded" iconOnly><Trash2 className="w-4 h-4" /></LoadingButton>
                   </td>
                 </tr>
               ))}

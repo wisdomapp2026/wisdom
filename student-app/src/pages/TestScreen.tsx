@@ -1,10 +1,13 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { getTestById, saveTestResult, getAllCourses, getTestsByCourse } from "@shared/repositories";
 import type { Test, Question, TestResult } from "@shared/types";
 import LatexText from "../components/LatexText";
 import { useAuth } from "../hooks/useAuth";
+import { cachedFetch } from "../hooks/useCache";
+
+const LOCAL_TEST_RESULTS_KEY = "edukids_local_test_results";
 
 export default function TestScreen() {
   const { testId } = useParams<{ testId: string }>();
@@ -17,22 +20,25 @@ export default function TestScreen() {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [timeLeft, setTimeLeft] = useState(0);
+  const [finished, setFinished] = useState(false);
+  const finishingRef = useRef(false); // dublikat finish oldini olish
 
   useEffect(() => {
     if (!testId) return;
-    // Testni barcha kurslardan qidirish
     findAndLoadTest(testId);
   }, [testId]);
 
   async function findAndLoadTest(tId: string) {
     try {
-      const courses = await getAllCourses();
+      // cachedFetch orqali kurslarni tez olish
+      const courses = await cachedFetch("all-courses", getAllCourses);
       for (const course of courses) {
-        const t = await getTestById(course.id, tId);
-        if (t) {
-          setTest(t);
+        const tests = await cachedFetch(`tests-${course.id}`, () => getTestsByCourse(course.id));
+        const found = tests.find((t) => t.id === tId);
+        if (found) {
+          setTest(found);
           setCourseId(course.id);
-          setTimeLeft(t.totalTime * 60);
+          setTimeLeft(found.totalTime * 60);
           break;
         }
       }
@@ -43,12 +49,29 @@ export default function TestScreen() {
     }
   }
 
-  // Timer
+  // Timer — 0 ga yetganda auto-submit
   useEffect(() => {
-    if (timeLeft <= 0) return;
-    const interval = setInterval(() => setTimeLeft((t) => t - 1), 1000);
+    if (timeLeft <= 0 || finished) return;
+    const interval = setInterval(() => {
+      setTimeLeft((t) => {
+        if (t <= 1) {
+          // Vaqt tugadi — avtomatik yakunlash
+          clearInterval(interval);
+          handleAutoFinish();
+          return 0;
+        }
+        return t - 1;
+      });
+    }, 1000);
     return () => clearInterval(interval);
-  }, [timeLeft]);
+  }, [timeLeft > 0, finished]);
+
+  // Auto-finish funksiya (timer tugganda)
+  const handleAutoFinish = useCallback(() => {
+    if (!finishingRef.current) {
+      finishTest();
+    }
+  }, [answers, test, courseId, user]);
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-3 border-primary-500 border-t-transparent rounded-full animate-spin" /></div>;
@@ -65,53 +88,73 @@ export default function TestScreen() {
   const seconds = timeLeft % 60;
 
   function selectAnswer(label: string) {
+    if (finished) return; // Yakunlangan testda javob berish mumkin emas
     setSelected(label);
     setAnswers({ ...answers, [q.id]: label });
   }
 
   function goNext() {
+    if (finished) return;
     if (current < questions.length - 1) {
       setCurrent(current + 1);
       setSelected(answers[questions[current + 1]?.id] || null);
     } else {
-      // Test tugadi — natijani saqlash va natija sahifasiga o'tish
       finishTest();
     }
   }
 
   async function finishTest() {
+    // Dublikat finish oldini olish
+    if (finishingRef.current) return;
+    finishingRef.current = true;
+    setFinished(true);
+
     const correct = questions.filter((qq) => answers[qq.id] === qq.correctAnswer).length;
     const score = Math.round((correct / questions.length) * 100);
     const timeTaken = (test!.totalTime * 60) - timeLeft;
+    const grade = score >= 90 ? "A" : score >= 75 ? "B" : score >= 60 ? "C" : "D";
 
-    // Natijani Firestore ga saqlash
-    if (user && test) {
-      const grade = score >= 90 ? "A" : score >= 75 ? "B" : score >= 60 ? "C" : "D";
+    const resultData = {
+      testId: test!.id,
+      courseId,
+      score,
+      correctCount: correct,
+      totalQuestions: questions.length,
+      timeTaken,
+      grade,
+      answers: questions.map((qq) => ({
+        questionId: qq.id,
+        selectedAnswer: answers[qq.id] || "",
+        isCorrect: answers[qq.id] === qq.correctAnswer,
+      })),
+      completedAt: Date.now(),
+    };
+
+    if (user) {
+      // Login qilgan — DB ga saqlash
       const result: TestResult = {
-        id: `result-${user.uid}-${test.id}-${Date.now()}`,
-        testId: test.id,
+        ...resultData,
+        id: `result-${user.uid}-${test!.id}-${Date.now()}`,
         userId: user.uid,
-        courseId: courseId,
-        score,
-        correctCount: correct,
-        totalQuestions: questions.length,
-        timeTaken,
-        grade,
-        answers: questions.map((qq) => ({
-          questionId: qq.id,
-          selectedAnswer: answers[qq.id] || "",
-          isCorrect: answers[qq.id] === qq.correctAnswer,
-        })),
-        completedAt: Date.now(),
       };
       try {
         await saveTestResult(result);
       } catch (err) {
         console.error("Natijani saqlashda xatolik:", err);
+        // DB ga saqlanmasa — local ga ham saqlash (zaxira)
+        saveTestResultLocally(result);
       }
+    } else {
+      // Guest — localStorage ga saqlash
+      const result: TestResult = {
+        ...resultData,
+        id: `result-guest-${test!.id}-${Date.now()}`,
+        userId: "guest",
+      };
+      saveTestResultLocally(result);
     }
 
-    navigate(`/test-result?score=${score}&correct=${correct}&total=${questions.length}&time=${timeTaken}`);
+    navigate(`/test-result?score=${score}&correct=${correct}&total=${questions.length}&time=${timeTaken}&resultId=${resultData.testId}`);
   }
 
   function goPrev() {
@@ -128,9 +171,11 @@ export default function TestScreen() {
         <div className="flex items-center justify-between">
           <h1 className="text-lg font-bold text-gray-900 truncate flex-1">{test.title}</h1>
           <div className="flex items-center gap-2">
-            <div className="bg-primary-50 px-3 py-1.5 rounded-full flex items-center gap-1">
-              <span className="text-primary-500 text-xs">⏱</span>
-              <span className="text-primary-500 font-bold text-sm">{String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}</span>
+            <div className={`px-3 py-1.5 rounded-full flex items-center gap-1 ${timeLeft <= 60 ? "bg-red-50" : "bg-primary-50"} ${timeLeft <= 10 && timeLeft > 0 ? "animate-shake" : ""}`}>
+              <span className={`text-xs ${timeLeft <= 60 ? "text-red-500" : "text-primary-500"}`}>⏱</span>
+              <span className={`font-bold text-sm ${timeLeft <= 60 ? "text-red-500 animate-pulse" : "text-primary-500"}`}>
+                {String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}
+              </span>
             </div>
             <button
               onClick={() => {
@@ -138,7 +183,8 @@ export default function TestScreen() {
                   finishTest();
                 }
               }}
-              className="bg-red-500 text-white text-xs font-semibold px-3 py-1.5 rounded-full active:bg-red-600"
+              disabled={finished}
+              className="bg-red-500 text-white text-xs font-semibold px-3 py-1.5 rounded-full active:bg-red-600 disabled:opacity-50"
             >
               Yakunlash
             </button>
@@ -146,8 +192,15 @@ export default function TestScreen() {
         </div>
       </header>
 
+      {/* Vaqt tugadi xabari */}
+      {timeLeft === 0 && finished && (
+        <div className="mx-5 bg-red-50 border border-red-200 rounded-xl p-3 text-center">
+          <p className="text-sm text-red-700 font-medium">⏱ Vaqt tugadi! Test avtomatik yakunlandi.</p>
+        </div>
+      )}
+
       {/* Progress */}
-      <div className="px-5">
+      <div className="px-5 mt-2">
         <p className="text-[11px] text-primary-500 font-medium uppercase">Joriy progress</p>
         <div className="flex items-center justify-between mt-1">
           <p className="text-xl font-bold text-gray-900">
@@ -181,9 +234,10 @@ export default function TestScreen() {
             <button
               key={opt.label}
               onClick={() => selectAnswer(opt.label)}
+              disabled={finished}
               className={`w-full flex items-center px-5 py-4 rounded-xl border transition-all text-left ${
                 isSelected ? "border-primary-500 bg-primary-50" : "border-gray-200 bg-white hover:border-gray-300"
-              }`}
+              } ${finished ? "opacity-60 cursor-not-allowed" : ""}`}
             >
               <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-4 text-sm font-bold shrink-0 ${
                 isSelected ? "bg-primary-500 text-white" : "bg-gray-100 text-gray-600"
@@ -203,10 +257,25 @@ export default function TestScreen() {
         <button onClick={goPrev} disabled={current === 0} className="flex items-center gap-1 text-sm text-gray-400 disabled:opacity-40">
           <ChevronLeft size={16} /> Oldingi
         </button>
-        <button onClick={goNext} className="bg-primary-500 text-white font-bold text-sm px-6 py-3 rounded-xl flex items-center gap-2">
+        <button onClick={goNext} disabled={finished} className="bg-primary-500 text-white font-bold text-sm px-6 py-3 rounded-xl flex items-center gap-2 disabled:opacity-50">
           {current === questions.length - 1 ? "Tugatish" : "Keyingi savol"} <ChevronRight size={16} />
         </button>
       </div>
     </div>
   );
+}
+
+/** Guest test natijasini localStorage ga saqlash */
+function saveTestResultLocally(result: TestResult): void {
+  try {
+    const raw = localStorage.getItem(LOCAL_TEST_RESULTS_KEY);
+    const existing: TestResult[] = raw ? JSON.parse(raw) : [];
+    existing.unshift(result);
+    // Faqat oxirgi 50 ta natijani saqlash (localStorage limitini oshirmaslik uchun)
+    const trimmed = existing.slice(0, 50);
+    localStorage.setItem(LOCAL_TEST_RESULTS_KEY, JSON.stringify(trimmed));
+  } catch {
+    // localStorage to'lgan — eski natijalarni o'chirish
+    localStorage.setItem(LOCAL_TEST_RESULTS_KEY, JSON.stringify([result]));
+  }
 }

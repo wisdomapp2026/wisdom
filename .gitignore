@@ -35,3 +35,6 @@ web-build/
 
 # Screenshots (design reference, not code)
 EDUKIDS SKRINSHOT/
+
+# Local Netlify folder
+.netlify

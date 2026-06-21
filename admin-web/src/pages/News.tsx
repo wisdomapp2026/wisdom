@@ -1,7 +1,10 @@
 import { useState, useEffect } from "react";
-import { MessageCircle, Send, Loader2, Check, User, X } from "lucide-react";
+import { MessageCircle, Send, Loader2, Check, User, X, Megaphone } from "lucide-react";
 import { getAllMessages, markMessageAsRead, sendMessage } from "@shared/repositories";
+import { setDoc, doc } from "firebase/firestore";
+import { db } from "@shared/firebase";
 import type { Message } from "@shared/types";
+import LoadingButton from "../components/LoadingButton";
 
 // O'quvchilarni guruhlash
 interface StudentThread {
@@ -19,6 +22,10 @@ export default function News() {
   const [selectedThread, setSelectedThread] = useState<StudentThread | null>(null);
   const [replyText, setReplyText] = useState("");
   const [sending, setSending] = useState(false);
+  const [showBroadcastForm, setShowBroadcastForm] = useState(false);
+  const [broadcastTitle, setBroadcastTitle] = useState("");
+  const [broadcastBody, setBroadcastBody] = useState("");
+  const [broadcastSending, setBroadcastSending] = useState(false);
 
   useEffect(() => {
     loadMessages();
@@ -32,6 +39,33 @@ export default function News() {
       console.error("Habarlarni yuklashda xatolik:", err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleSendBroadcast(e: React.FormEvent) {
+    e.preventDefault();
+    if (!broadcastTitle.trim() || !broadcastBody.trim()) return;
+    setBroadcastSending(true);
+    try {
+      const now = Date.now();
+      const id = `broadcast-${now}`;
+      await setDoc(doc(db, "studentNotifications", id), {
+        id,
+        type: "general",
+        title: broadcastTitle.trim(),
+        body: broadcastBody.trim(),
+        isRead: false,
+        createdAt: now,
+      });
+      setBroadcastTitle("");
+      setBroadcastBody("");
+      setShowBroadcastForm(false);
+      alert("✅ Habar barcha o'quvchilarga yuborildi!");
+    } catch (err) {
+      console.error("Habar yuborishda xatolik:", err);
+      alert("Xatolik yuz berdi!");
+    } finally {
+      setBroadcastSending(false);
     }
   }
 
@@ -129,7 +163,49 @@ export default function News() {
             O'quvchilardan kelgan murojatlar ({threads.length} ta suhbat{totalUnread > 0 ? `, ${totalUnread} ta o'qilmagan` : ""})
           </p>
         </div>
+        <button onClick={() => setShowBroadcastForm(!showBroadcastForm)} className="btn-primary text-sm flex items-center gap-2">
+          <Megaphone className="w-4 h-4" /> Umumiy habar yuborish
+        </button>
       </div>
+
+      {/* Umumiy habar yuborish formasi */}
+      {showBroadcastForm && (
+        <div className="bg-white rounded-xl border border-primary-200 p-5 shadow-sm space-y-4">
+          <div className="flex items-center gap-2">
+            <Megaphone className="w-5 h-5 text-primary-500" />
+            <h3 className="font-semibold text-gray-900">Barcha o'quvchilarga habar yuborish</h3>
+          </div>
+          <form onSubmit={handleSendBroadcast} className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Sarlavha *</label>
+              <input
+                value={broadcastTitle}
+                onChange={(e) => setBroadcastTitle(e.target.value)}
+                placeholder="Masalan: Yangi kurs qo'shildi!"
+                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Habar matni *</label>
+              <textarea
+                value={broadcastBody}
+                onChange={(e) => setBroadcastBody(e.target.value)}
+                placeholder="O'quvchilarga yubormoqchi bo'lgan xabaringiz..."
+                rows={3}
+                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary-500"
+                required
+              />
+            </div>
+            <div className="flex gap-3">
+              <LoadingButton type="submit" loading={broadcastSending} disabled={!broadcastTitle.trim() || !broadcastBody.trim()} className="btn-primary text-sm flex items-center gap-2">
+                <Send className="w-4 h-4" /> Yuborish
+              </LoadingButton>
+              <button type="button" onClick={() => setShowBroadcastForm(false)} className="btn-outline text-sm">Bekor</button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {loading && (
         <div className="flex items-center justify-center py-20">

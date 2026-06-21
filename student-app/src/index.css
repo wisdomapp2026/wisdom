@@ -10,49 +10,53 @@
     @apply text-gray-900 antialiased bg-gray-50;
     font-family: "Inter", system-ui, sans-serif;
   }
-  /* Dark mode */
+
+  /* Dark mode — Tailwind class strategy bilan */
   .dark body,
   .dark #root {
     @apply bg-gray-900 text-gray-100;
   }
-  .dark .bg-white {
-    background-color: #1f2937 !important;
-  }
-  .dark .bg-gray-50 {
-    background-color: #111827 !important;
-  }
-  .dark .border-gray-100,
-  .dark .border-gray-200 {
-    border-color: #374151 !important;
-  }
-  .dark .text-gray-900 {
-    color: #f3f4f6 !important;
-  }
-  .dark .text-gray-700 {
-    color: #d1d5db !important;
-  }
-  .dark .text-gray-600 {
-    color: #9ca3af !important;
-  }
-  .dark .text-gray-500 {
-    color: #9ca3af !important;
-  }
-  .dark .bottom-nav {
-    background-color: #1f2937 !important;
-    border-color: #374151 !important;
-  }
-  /* Mobile frame — web da telefon shaklida ko'rsatish */
+  .dark .bg-white { background-color: #1f2937; }
+  .dark .bg-gray-50 { background-color: #111827; }
+  .dark .border-gray-100, .dark .border-gray-200 { border-color: #374151; }
+  .dark .text-gray-900 { color: #f3f4f6; }
+  .dark .text-gray-700 { color: #d1d5db; }
+  .dark .text-gray-600 { color: #9ca3af; }
+  .dark .text-gray-500 { color: #9ca3af; }
+  .dark .bottom-nav { background-color: #1f2937; border-color: #374151; }
+  .dark .page-content { background-color: #111827; }
+
+  /* Mobile frame */
   #root {
     @apply max-w-mobile mx-auto min-h-screen bg-white relative shadow-xl;
+  }
+
+  /* Minimal touch target — barcha interaktiv elementlar uchun */
+  button, a, [role="button"] {
+    min-height: 36px;
+  }
+
+  /* Focus visible — keyboard navigation uchun */
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-primary-500;
+  }
+
+  /* Lazy loading images — layout shift oldini olish */
+  img {
+    content-visibility: auto;
   }
 }
 
 @layer components {
   .bottom-nav {
     @apply fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-mobile bg-white border-t border-gray-100 flex items-center justify-around py-2 pb-3 z-50;
+    transition: background-color 0.2s, border-color 0.2s;
   }
   .nav-item {
-    @apply flex flex-col items-center gap-0.5 text-gray-400 text-[10px] font-medium;
+    @apply flex flex-col items-center gap-0.5 text-gray-400 text-xs font-medium py-1 px-3;
+    min-height: 44px;
+    min-width: 44px;
+    justify-content: center;
   }
   .nav-item.active {
     @apply text-primary-500;
@@ -60,5 +64,103 @@
   .page-content {
     @apply pb-20 min-h-screen;
   }
+
+  /* ===== DESIGN TOKENS ===== */
+
+  /* Touch-friendly button — minimum 44px */
+  .btn-touch {
+    @apply flex items-center justify-center;
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Standard pill/chip — touch-friendly */
+  .pill {
+    @apply shrink-0 px-4 py-2.5 rounded-full text-sm font-medium;
+    min-height: 40px;
+  }
+  .pill-active {
+    @apply bg-gray-900 text-white;
+  }
+  .pill-inactive {
+    @apply bg-gray-100 text-gray-600;
+  }
+
+  /* Card styles — consistent radius and border */
+  .card {
+    @apply bg-white rounded-2xl border border-gray-100;
+  }
+  .card-sm {
+    @apply bg-white rounded-xl border border-gray-100;
+  }
+
+  /* Horizontal scroll container with fade edges */
+  .scroll-fade {
+    mask-image: linear-gradient(to right, transparent 0%, black 16px, black calc(100% - 16px), transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, transparent 0%, black 16px, black calc(100% - 16px), transparent 100%);
+  }
 }
 
+/* ===== ANIMATIONS ===== */
+@keyframes shimmerMove {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes spinSmooth {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-3px); }
+  75% { transform: translateX(3px); }
+}
+
+.page-content {
+  animation: fadeIn 0.25s ease-out;
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease-out;
+}
+
+.animate-shake {
+  animation: shake 0.4s ease-in-out;
+}
+
+/* ===== REDUCED MOTION ===== */
+@media (prefers-reduced-motion: reduce) {
+  .page-content,
+  .animate-fadeIn {
+    animation: none !important;
+  }
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+/* ===== UTILITIES ===== */
+.border-3 {
+  border-width: 3px;
+}
+
+/* Scrollbar hide */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Image lazy placeholder */
+.img-placeholder {
+  @apply bg-gradient-to-br from-gray-200 to-gray-100 animate-pulse;
+}

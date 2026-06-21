@@ -27,6 +27,7 @@ export default function Payment() {
   const [userName, setUserName] = useState("");
   const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
   const [screenshotPreview, setScreenshotPreview] = useState("");
+  const [senderCard, setSenderCard] = useState("");
 
   const finalAmount = Math.max(0, baseAmount - Math.round(baseAmount * discount / 100));
 
@@ -99,11 +100,14 @@ export default function Payment() {
       status: "pending",
       promoCode: promoApplied ? promo : undefined,
       discount,
+      cardNumber: senderCard.trim() || undefined,
+      recipientCard: cardNumber,
+      screenshotUrl: "",
       createdAt: now,
     };
 
     try {
-      // Payment ga screenshot URL qo'shish (extra field)
+      // Payment ga screenshot URL qo'shish
       await createPayment({ ...payment, screenshotUrl } as any);
 
       // Admin bildirishnoma
@@ -219,6 +223,23 @@ export default function Payment() {
           </div>
           {promoError && <p className="text-xs text-red-500 mt-1">{promoError}</p>}
           {promoApplied && <p className="text-xs text-green-600 mt-1 font-medium">🎉 {discount}% chegirma!</p>}
+        </div>
+
+        {/* O'z karta raqami */}
+        <div className="mt-5">
+          <p className="text-xs text-gray-500 uppercase font-semibold mb-2">Sizning karta raqamingiz</p>
+          <input
+            value={senderCard}
+            onChange={(e) => {
+              // Faqat raqamlar va bo'shliq
+              const val = e.target.value.replace(/[^\d\s]/g, "").replace(/\s+/g, " ");
+              setSenderCard(val);
+            }}
+            placeholder="8600 1234 5678 9012"
+            maxLength={19}
+            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary-500"
+          />
+          <p className="text-xs text-gray-400 mt-1">Pul o'tkazgan kartangiz raqamini kiriting</p>
         </div>
 
         {/* Screenshot yuklash */}

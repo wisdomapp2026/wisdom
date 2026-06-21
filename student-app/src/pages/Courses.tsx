@@ -4,6 +4,8 @@ import { getAllCourses, getMotivationPhrases, getMotivationSettings, getStudentC
 import type { Course, Category } from "@shared/types";
 import { useAuth } from "../hooks/useAuth";
 import { CoursesLoader } from "../components/PageLoader";
+import { cachedFetch } from "../hooks/useCache";
+import { getLocalProgress } from "../hooks/useLocalProgress";
 
 const DEFAULT_CATEGORIES = ["Barchasi", "Jarayonda"];
 
@@ -17,7 +19,10 @@ export default function Courses() {
   const [activeCategory, setActiveCategory] = useState("Barchasi");
   const [courses, setCourses] = useState<CourseWithRealStats[]>([]);
   const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => {
+    // Kesh mavjud bo'lsa loading ko'rsatmaymiz
+    return localStorage.getItem("edukids_cache_all-courses") === null;
+  });
   const [motivationPhrase, setMotivationPhrase] = useState("Har kuni tashlangan kichik qadamlar katta yutuqlarga olib keladi. Siz ajoyib natija ko'rsatyapsiz!");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -30,7 +35,7 @@ export default function Courses() {
 
   async function loadCategories() {
     try {
-      const cats = await getAllCategories();
+      const cats = await cachedFetch("all-categories", getAllCategories);
       const catNames = cats.map((c) => c.name);
       setCategories(["Barchasi", "Jarayonda", ...catNames]);
     } catch (err) {
@@ -40,20 +45,28 @@ export default function Courses() {
 
   async function loadCourses() {
     try {
-      const data = await getAllCourses();
+      const data = await cachedFetch("all-courses", getAllCourses);
+      // Yashirilgan kurslarni filterlash
+      const visibleData = (data as Course[]).filter((c) => !c.isHidden);
 
       // Bir marta barcha progressni olish (kurs boshiga alohida query emas)
       let userProgressMap: Record<string, number> = {};
       if (user) {
-        const allProgress = await getAllProgressByUser(user.uid);
+        const allProgress = await cachedFetch(`progress-${user.uid}`, () => getAllProgressByUser(user.uid));
         for (const prog of allProgress) {
           userProgressMap[prog.courseId] = prog.progressPercent || 0;
+        }
+      } else {
+        // Guest — localStorage dan progress olish
+        const localData = getLocalProgress();
+        for (const [courseId, prog] of Object.entries(localData)) {
+          userProgressMap[courseId] = prog.progressPercent || 0;
         }
       }
 
       const withStats = await Promise.all(
-        data.map(async (c) => {
-          const realStudentCount = await getStudentCountByCourse(c.id);
+        visibleData.map(async (c) => {
+          const realStudentCount = await cachedFetch(`students-${c.id}`, () => getStudentCountByCourse(c.id));
           const realProgress = userProgressMap[c.id] || 0;
           return { ...c, realStudentCount, realProgress };
         })
@@ -69,8 +82,8 @@ export default function Courses() {
   async function loadMotivation() {
     try {
       const [phrases, settings] = await Promise.all([
-        getMotivationPhrases("courses_list"),
-        getMotivationSettings("courses_list"),
+        cachedFetch("motivation-courses_list", () => getMotivationPhrases("courses_list")),
+        cachedFetch("motivation-settings-courses_list", () => getMotivationSettings("courses_list")),
       ]);
       const activePhrases = phrases.filter((p) => p.isActive);
       if (activePhrases.length > 0) {
@@ -90,10 +103,8 @@ export default function Courses() {
     }
   }
 
-  // Agar Firestore'dan kurslar bo'sh bo'lsa, demo ko'rsatamiz
-  const allCourses = courses.length > 0 ? courses : [
-    { id: "demo-boshlangich-matematika", title: "Boshlang'ich Matematika", description: "Matematika asoslari: arifmetika, geometriya va algebraning boshlang'ich tushunchalari.", category: "Matematika", tags: ["Boshlang'ich"], isPremium: false, totalStudents: 0, onlineNow: 0, realStudentCount: 0, realProgress: 0 },
-  ] as any[];
+  // Agar Firestore'dan kurslar bo'sh bo'lsa, bo'sh ro'yxat ko'rsatamiz
+  const allCourses = courses;
 
   // Filterlash
   const displayCourses = allCourses.filter((c) => {
@@ -111,7 +122,7 @@ export default function Courses() {
     <div className="page-content">
       <header className="px-5 pt-4 flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-900">Kurslar</h1>
-        <button className="text-gray-400">⋮</button>
+        <button className="w-10 h-10 flex items-center justify-center text-gray-500 rounded-lg" aria-label="Qo'shimcha">⋮</button>
       </header>
 
       {/* Qidiruv */}
@@ -127,10 +138,10 @@ export default function Courses() {
 
       {/* Kategoriyalar */}
       <div className="px-5 mt-4">
-        <p className="text-[11px] font-semibold text-gray-400 uppercase mb-2">Kategoriyalar</p>
-        <div className="flex gap-2 overflow-x-auto">
+        <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Kategoriyalar</p>
+        <div className="flex gap-2 overflow-x-auto scrollbar-hide">
           {categories.map((c) => (
-            <button key={c} onClick={() => setActiveCategory(c)} className={`shrink-0 px-4 py-1.5 rounded-full text-sm font-medium ${activeCategory === c ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600"}`}>{c}</button>
+            <button key={c} onClick={() => setActiveCategory(c)} className={`shrink-0 px-4 py-2.5 rounded-full text-sm font-medium ${activeCategory === c ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600"}`}>{c}</button>
           ))}
         </div>
       </div>
@@ -145,11 +156,38 @@ export default function Courses() {
       {loading && <CoursesLoader />}
 
       {/* Course list */}
+      {!loading && displayCourses.length === 0 && (
+        <div className="mx-5 mt-6 text-center py-12 border border-gray-100 rounded-2xl bg-white">
+          <p className="text-4xl mb-3">📚</p>
+          <p className="text-gray-600 font-medium">Hozircha kurslar mavjud emas</p>
+          <p className="text-sm text-gray-400 mt-1">Tez orada yangi kurslar qo'shiladi</p>
+        </div>
+      )}
       <div className="px-5 mt-3 space-y-4">
         {displayCourses.map((course) => {
           const color = colors[course.category] || colors.default;
           return (
-            <Link to={`/course/${course.id}`} key={course.id} className="block border border-gray-100 rounded-2xl p-5 hover:shadow-md transition-shadow bg-white">
+            <Link to={`/course/${course.id}`} key={course.id} className="block border border-gray-100 rounded-2xl overflow-hidden hover:shadow-md transition-shadow bg-white">
+              {/* Muqova rasmi */}
+              {course.coverImage ? (
+                <div className="h-40 overflow-hidden">
+                  <img
+                    src={course.coverImage}
+                    alt={course.title}
+                    className="w-full h-full"
+                    loading="lazy"
+                    style={{ objectFit: (course as any).coverFit || "cover", objectPosition: (course as any).coverPosition || "50% 50%" }}
+                  />
+                </div>
+              ) : (
+                <div className="h-32 bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
+                  <svg className="w-10 h-10 text-white/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                  </svg>
+                </div>
+              )}
+
+              <div className="p-5">
               {/* Yuqori qism: icon va statistikalar */}
               <div className="flex items-start justify-between mb-4">
                 {/* Icon */}
@@ -190,13 +228,18 @@ export default function Courses() {
                       <circle cx="12" cy="12" r="10" />
                       <path d="M12 6v6l4 2" />
                     </svg>
-                    Jarayonda
+                    {(course.realProgress || 0) > 0 ? "Jarayonda" : "Siz bu kursga qatnashmagansiz"}
                   </span>
-                  <span className="text-sm font-bold text-primary-500">{course.realProgress || 0}%</span>
+                  {(course.realProgress || 0) > 0 && (
+                    <span className="text-sm font-bold text-primary-500">{Math.min(100, course.realProgress)}%</span>
+                  )}
                 </div>
-                <div className="h-2 bg-gray-100 rounded-full">
-                  <div className="h-full bg-primary-500 rounded-full transition-all" style={{ width: `${course.realProgress || 0}%` }} />
-                </div>
+                {(course.realProgress || 0) > 0 && (
+                  <div className="h-2 bg-gray-100 rounded-full">
+                    <div className="h-full bg-primary-500 rounded-full transition-all" style={{ width: `${Math.min(100, course.realProgress)}%` }} />
+                  </div>
+                )}
+              </div>
               </div>
             </Link>
           );

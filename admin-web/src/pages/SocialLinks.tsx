@@ -4,6 +4,7 @@ import { getAllSocialLinks, createSocialLink, updateSocialLink, deleteSocialLink
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { storage } from "@shared/firebase";
 import type { SocialLink, SocialPlatform } from "@shared/types";
+import LoadingButton from "../components/LoadingButton";
 
 /** Platformalar ro'yxati va ularning ikonkalari */
 const PLATFORMS: { value: SocialPlatform; label: string; color: string; icon: string }[] = [
@@ -75,7 +76,7 @@ export default function SocialLinks() {
       platform: newPlatform,
       label: newLabel.trim() || platformInfo.label,
       url: newUrl.trim(),
-      iconUrl: iconUrl || undefined,
+      ...(iconUrl ? { iconUrl } : {}),
       isActive: true,
       order: links.length + 1,
       createdAt: now,
@@ -233,9 +234,9 @@ export default function SocialLinks() {
           </div>
 
           <div className="flex gap-2 pt-2">
-            <button onClick={handleAdd} disabled={saving || !newUrl.trim()} className="btn-primary text-sm disabled:opacity-50">
-              {saving ? "Qo'shilmoqda..." : "Qo'shish"}
-            </button>
+            <LoadingButton onClick={handleAdd} disabled={!newUrl.trim()} className="btn-primary text-sm">
+              Qo'shish
+            </LoadingButton>
             <button onClick={() => { setShowAddForm(false); setNewUrl(""); setNewLabel(""); }} className="btn-outline text-sm">
               Bekor
             </button>
@@ -278,9 +279,9 @@ export default function SocialLinks() {
                       />
                     </div>
                     <div className="flex gap-2">
-                      <button onClick={() => handleSaveEdit(link.id)} className="btn-primary text-xs px-3 py-1.5">
+                      <LoadingButton onClick={() => handleSaveEdit(link.id)} className="btn-primary text-xs px-3 py-1.5">
                         <Check className="w-3.5 h-3.5 inline mr-1" />Saqlash
-                      </button>
+                      </LoadingButton>
                       <button onClick={() => setEditingId(null)} className="btn-outline text-xs px-3 py-1.5">Bekor</button>
                     </div>
                   </div>
@@ -314,7 +315,7 @@ export default function SocialLinks() {
 
                   {/* Actions */}
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <button
+                    <LoadingButton
                       onClick={() => handleToggleActive(link.id, link.isActive)}
                       className={`text-[10px] font-medium px-2 py-1 rounded border ${
                         link.isActive
@@ -323,7 +324,7 @@ export default function SocialLinks() {
                       }`}
                     >
                       {link.isActive ? "Faol" : "O'chiq"}
-                    </button>
+                    </LoadingButton>
                     <a
                       href={link.url}
                       target="_blank"
@@ -336,18 +337,19 @@ export default function SocialLinks() {
                     </a>
                     <button
                       onClick={() => { setEditingId(link.id); setEditLabel(link.label); setEditUrl(link.url); }}
-                      className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded"
+                      className="p-1.5 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded transition-all active:scale-95"
                       title="Tahrirlash"
                     >
                       <Edit className="w-4 h-4" />
                     </button>
-                    <button
+                    <LoadingButton
                       onClick={() => handleDelete(link.id)}
                       className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded"
                       title="O'chirish"
+                      iconOnly
                     >
                       <Trash2 className="w-4 h-4" />
-                    </button>
+                    </LoadingButton>
                   </div>
                 </div>
               );

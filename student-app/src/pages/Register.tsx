@@ -51,7 +51,7 @@ export default function Register() {
     <div className="min-h-screen px-5 pt-4 bg-white">
       {/* Header */}
       <div className="flex items-center gap-3 mb-4">
-        <Link to="/login" className="text-2xl text-gray-600">‹</Link>
+        <Link to="/login" className="w-11 h-11 flex items-center justify-center rounded-xl text-2xl text-gray-600 hover:bg-gray-100 active:bg-gray-200" aria-label="Orqaga">‹</Link>
         <h1 className="text-lg font-bold">Ro'yxatdan o'tish</h1>
       </div>
       <div className="h-1 bg-primary-500 -mx-5 mb-8" />
@@ -97,7 +97,7 @@ export default function Register() {
               required
               minLength={6}
             />
-            <button type="button" onClick={() => setShowPassword(!showPassword)} className="text-gray-400">
+            <button type="button" onClick={() => setShowPassword(!showPassword)} className="w-10 h-10 flex items-center justify-center text-gray-400 rounded-lg" aria-label={showPassword ? "Parolni yashirish" : "Parolni ko'rsatish"}>
               {showPassword ? "🙈" : "👁"}
             </button>
           </div>
