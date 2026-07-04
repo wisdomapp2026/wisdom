@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Edit, Trash2, Plus, Play, Video, X, Check, Upload, ImageIcon, FileText, Paperclip } from "lucide-react";
-import { updateCourse } from "@shared/repositories";
+import { updateTopic } from "@shared/repositories";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { storage } from "@shared/firebase";
 import { deleteField } from "firebase/firestore";
-import type { Course, CourseIntroduction } from "@shared/types";
+import type { Topic, CourseIntroduction } from "@shared/types";
 import RichMathInput from "./RichMathInput";
 import LatexText from "./LatexText";
 
@@ -17,29 +17,33 @@ function isAllowedFile(fileName: string): boolean {
 }
 
 interface Props {
-  course: Course;
-  onUpdate: (updated: Course) => void;
+  courseId: string;
+  topic: Topic;
+  onUpdate: (updated: Topic) => void;
 }
 
-export default function CourseIntroSection({ course, onUpdate }: Props) {
+/**
+ * Modulni tanishtirish bo'limi — CourseIntroSection bilan bir xil uslub va imkoniyatlar,
+ * faqat kurs o'rniga modul (Topic) ustida ishlaydi.
+ */
+export default function TopicIntroSection({ courseId, topic, onUpdate }: Props) {
   const [editing, setEditing] = useState(false);
-  const [text, setText] = useState(course.introduction?.text || "");
-  const [videoUrl, setVideoUrl] = useState(course.introduction?.videoUrl || "");
-  const [videoType, setVideoType] = useState<"youtube" | "upload">(course.introduction?.videoType || "youtube");
-  const [thumbnailUrl, setThumbnailUrl] = useState(course.introduction?.thumbnailUrl || "");
-  const [imageUrl, setImageUrl] = useState(course.introduction?.imageUrl || "");
+  const [text, setText] = useState(topic.introduction?.text || "");
+  const [videoUrl, setVideoUrl] = useState(topic.introduction?.videoUrl || "");
+  const [videoType, setVideoType] = useState<"youtube" | "upload">(topic.introduction?.videoType || "youtube");
+  const [thumbnailUrl, setThumbnailUrl] = useState(topic.introduction?.thumbnailUrl || "");
+  const [imageUrl, setImageUrl] = useState(topic.introduction?.imageUrl || "");
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState(course.introduction?.imageUrl || "");
-  const [afterVideoText, setAfterVideoText] = useState(course.introduction?.afterVideoText || "");
+  const [imagePreview, setImagePreview] = useState(topic.introduction?.imageUrl || "");
+  const [afterVideoText, setAfterVideoText] = useState(topic.introduction?.afterVideoText || "");
   const [attachedFile, setAttachedFile] = useState<File | null>(null);
-  const [attachedFileUrl, setAttachedFileUrl] = useState(course.introduction?.attachedFileUrl || "");
-  const [attachedFileName, setAttachedFileName] = useState(course.introduction?.attachedFileName || "");
+  const [attachedFileUrl, setAttachedFileUrl] = useState(topic.introduction?.attachedFileUrl || "");
+  const [attachedFileName, setAttachedFileName] = useState(topic.introduction?.attachedFileName || "");
   const [fileError, setFileError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const hasIntro = !!course.introduction;
+  const hasIntro = !!topic.introduction;
 
-  // YouTube thumbnail avtomatik olish
   function getYouTubeThumbnail(url: string): string {
     const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&?]+)/);
     return match ? `https://img.youtube.com/vi/${match[1]}/mqdefault.jpg` : "";
@@ -48,10 +52,9 @@ export default function CourseIntroSection({ course, onUpdate }: Props) {
   async function handleSave() {
     setSaving(true);
     try {
-      // Rasm upload (agar yangi fayl tanlangan bo'lsa)
       let finalImageUrl = imageUrl;
       if (imageFile) {
-        const storageRef = ref(storage, `course-intro/${course.id}/${Date.now()}-${imageFile.name}`);
+        const storageRef = ref(storage, `topic-intro/${topic.id}/${Date.now()}-${imageFile.name}`);
         await uploadBytes(storageRef, imageFile);
         finalImageUrl = await getDownloadURL(storageRef);
       }
@@ -60,7 +63,7 @@ export default function CourseIntroSection({ course, onUpdate }: Props) {
       let finalFileUrl = attachedFileUrl;
       let finalFileName = attachedFileName;
       if (attachedFile) {
-        const storageRef = ref(storage, `course-intro/${course.id}/files/${Date.now()}-${attachedFile.name}`);
+        const storageRef = ref(storage, `topic-intro/${topic.id}/files/${Date.now()}-${attachedFile.name}`);
         await uploadBytes(storageRef, attachedFile);
         finalFileUrl = await getDownloadURL(storageRef);
         finalFileName = attachedFile.name;
@@ -75,8 +78,8 @@ export default function CourseIntroSection({ course, onUpdate }: Props) {
         ...(afterVideoText.trim() ? { afterVideoText: afterVideoText.trim() } : {}),
         ...(finalFileUrl ? { attachedFileUrl: finalFileUrl, attachedFileName: finalFileName } : {}),
       };
-      await updateCourse(course.id, { introduction });
-      onUpdate({ ...course, introduction });
+      await updateTopic(courseId, topic.id, { introduction });
+      onUpdate({ ...topic, introduction });
       setImageUrl(finalImageUrl);
       setImageFile(null);
       setAttachedFileUrl(finalFileUrl);
@@ -84,18 +87,18 @@ export default function CourseIntroSection({ course, onUpdate }: Props) {
       setAttachedFile(null);
       setEditing(false);
     } catch (err) {
-      console.error("Introduction saqlashda xatolik:", err);
+      console.error("Modul introduction saqlashda xatolik:", err);
     } finally {
       setSaving(false);
     }
   }
 
   async function handleDelete() {
-    if (!confirm("Kursni tanishtirish bo'limini o'chirishga ishonchingiz komilmi?")) return;
+    if (!confirm("Modulni tanishtirish bo'limini o'chirishga ishonchingiz komilmi?")) return;
     setSaving(true);
     try {
-      await updateCourse(course.id, { introduction: deleteField() } as any);
-      onUpdate({ ...course, introduction: undefined });
+      await updateTopic(courseId, topic.id, { introduction: deleteField() } as any);
+      onUpdate({ ...topic, introduction: undefined });
     } catch (err) {
       console.error("Introduction o'chirishda xatolik:", err);
     } finally {
@@ -105,15 +108,15 @@ export default function CourseIntroSection({ course, onUpdate }: Props) {
 
   async function handleAdd() {
     const introduction: CourseIntroduction = {
-      text: course.description || "Bu kursda nimalar o'rganiladi haqida qisqacha ma'lumot.",
+      text: topic.description || "Bu modulda nimalar o'rganiladi haqida qisqacha ma'lumot.",
       videoUrl: "",
       videoType: "youtube",
       thumbnailUrl: "",
     };
     setSaving(true);
     try {
-      await updateCourse(course.id, { introduction });
-      onUpdate({ ...course, introduction });
+      await updateTopic(courseId, topic.id, { introduction });
+      onUpdate({ ...topic, introduction });
       setText(introduction.text);
       setVideoUrl("");
       setVideoType("youtube");
@@ -130,18 +133,18 @@ export default function CourseIntroSection({ course, onUpdate }: Props) {
     }
   }
 
-  // Kursni tanishtirish bo'limi o'chirilgan — qo'shish tugmasi
+  // Bo'lim o'chirilgan — qo'shish tugmasi
   if (!hasIntro) {
     return (
       <div className="bg-white rounded-xl border border-dashed border-gray-300 p-6 text-center">
-        <p className="text-gray-400 mb-3">Kursni tanishtirish bo'limi o'chirilgan</p>
+        <p className="text-gray-400 mb-3">Modulni tanishtirish bo'limi o'chirilgan</p>
         <button
           onClick={handleAdd}
           disabled={saving}
           className="btn-primary text-sm inline-flex items-center gap-2"
         >
           <Plus className="w-4 h-4" />
-          Kursni tanishtirish bo'limini qo'shish
+          Modulni tanishtirish bo'limini qo'shish
         </button>
       </div>
     );
@@ -154,7 +157,7 @@ export default function CourseIntroSection({ course, onUpdate }: Props) {
         <div className="flex items-center justify-between">
           <h3 className="font-bold text-gray-900 flex items-center gap-2">
             <Video className="w-5 h-5 text-primary-500" />
-            Kursni tanishtirish — Tahrirlash
+            Modulni tanishtirish — Tahrirlash
           </h3>
           <button onClick={() => setEditing(false)} className="p-2 text-gray-400 hover:text-gray-600">
             <X className="w-5 h-5" />
@@ -166,7 +169,7 @@ export default function CourseIntroSection({ course, onUpdate }: Props) {
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder="Kurs haqida qisqacha ma'lumot yozing..."
+            placeholder="Modul haqida qisqacha ma'lumot yozing..."
             rows={3}
             className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
           />
@@ -249,7 +252,7 @@ export default function CourseIntroSection({ course, onUpdate }: Props) {
               />
             </label>
           </div>
-          <p className="text-xs text-gray-400 mt-1">Kurs haqida rasm qo'shish (banner yoki screenshot)</p>
+          <p className="text-xs text-gray-400 mt-1">Modul haqida rasm qo'shish (banner yoki screenshot)</p>
         </div>
 
         {/* Videodan keyingi matn — LaTeX formulalar yozish imkoni bilan */}
@@ -258,7 +261,7 @@ export default function CourseIntroSection({ course, onUpdate }: Props) {
             label="Videodan keyingi matn (ixtiyoriy)"
             value={afterVideoText}
             onChange={setAfterVideoText}
-            placeholder="Video ostida ko'rsatiladigan qo'shimcha tushuntirish, dastur mazmuni yoki tavsiyalar... Masalan: $$x^2 + y^2 = r^2$$"
+            placeholder="Video ostida ko'rsatiladigan qo'shimcha tushuntirish... Masalan: $$x^2 + y^2 = r^2$$"
             rows={4}
             hint="Bu matn student ilovada video ostida ko'rinadi. Matematik formula uchun Σ Formulalar panelidan foydalaning yoki $$...$$ ichida LaTeX yozing."
           />
@@ -328,7 +331,7 @@ export default function CourseIntroSection({ course, onUpdate }: Props) {
   }
 
   // Ko'rish rejimi
-  const intro = course.introduction!;
+  const intro = topic.introduction!;
   const thumbnail = intro.thumbnailUrl || (intro.videoType === "youtube" && intro.videoUrl ? getYouTubeThumbnail(intro.videoUrl) : "");
 
   return (
@@ -336,7 +339,7 @@ export default function CourseIntroSection({ course, onUpdate }: Props) {
       <div className="flex items-start justify-between mb-3">
         <h3 className="font-bold text-gray-900 flex items-center gap-2">
           <Video className="w-5 h-5 text-primary-500" />
-          Kursni tanishtirish
+          Modulni tanishtirish
         </h3>
         <div className="flex items-center gap-1.5">
           <button
@@ -408,7 +411,7 @@ export default function CourseIntroSection({ course, onUpdate }: Props) {
       {/* Rasm preview (agar bor bo'lsa) */}
       {intro.imageUrl && (
         <div className="mt-3 rounded-lg overflow-hidden border border-gray-100">
-          <img src={intro.imageUrl} alt="Kurs tanishtirish rasmi" className="w-full max-h-48 object-cover" />
+          <img src={intro.imageUrl} alt="Modul tanishtirish rasmi" className="w-full max-h-48 object-cover" />
         </div>
       )}
 

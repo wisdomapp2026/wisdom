@@ -1,14 +1,15 @@
 import { Link, useParams, useLocation } from "react-router-dom";
-import { useState, useEffect, useRef } from "react";
-import { getCourseById, getTopicsByCourse, getTestsByCourse, getUserProgress, setUserProgress, getProblemsByTopic, getAllProgressByCourse, getAdviceByCourse, getMotivationPhrases, getMotivationSettings, getActiveCourseLinks, getFoldersByCourse, markFolderPresence, clearFolderPresence, getFolderOnlineCount } from "@shared/repositories";
+import { useState, useEffect } from "react";
+import { getCourseById, getTopicsByCourse, getTestsByCourse, getUserProgress, setUserProgress, getProblemsByTopic, getAllProgressByCourse, getAdviceByCourse, getMotivationPhrases, getMotivationSettings, getActiveCourseLinks, getFoldersByCourse, getFolderOnlineCount } from "@shared/repositories";
 import type { Course, Topic, Test, UserProgress, Advice, MotivationalPhrase, MotivationSettings, SocialLink, Folder } from "@shared/types";
-import { Search, Bell, CheckCircle, Clock, Lock, FileText, Play, ChevronDown, ChevronUp, MessageSquare, ExternalLink, Users, UserPlus } from "lucide-react";
+import { Search, Bell, CheckCircle, Clock, Lock, FileText, Play, ChevronDown, ChevronUp, ChevronRight, MessageSquare, ExternalLink, Users, UserPlus, Download } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useSubscription } from "../hooks/useSubscription";
 import { CourseDetailLoader } from "../components/PageLoader";
 import NotificationBell from "../components/NotificationBell";
 import { getLocalCourseProgress, enrollLocalCourse, setLocalCourseProgress } from "../hooks/useLocalProgress";
 import { cachedFetch } from "../hooks/useCache";
+import LatexText from "../components/LatexText";
 
 export default function CourseDetail() {
   const { courseId } = useParams<{ courseId: string }>();
@@ -136,7 +137,7 @@ export default function CourseDetail() {
         setTotalStudentsInCourse(allProgress.length);
       }
 
-      // Har bir mavzudagi misol sonini olish (progress hisoblash uchun)
+      // Har bir moduldagi misol sonini olish (progress hisoblash uchun)
       const counts: Record<string, number> = {};
       for (const topic of t) {
         const problems = await getProblemsByTopic(courseId, topic.id);
@@ -183,7 +184,7 @@ export default function CourseDetail() {
   const completedProblems = userProgress?.completedProblems || [];
   const totalProblems = Object.values(topicProblemCounts).reduce((a, b) => a + b, 0);
 
-  // Mavzuni "tugatilgan" hisoblash — ichidagi barcha misollar ishlangan bo'lsa
+  // Modulni "tugatilgan" hisoblash — ichidagi barcha misollar ishlangan bo'lsa
   function isTopicCompleted(topicId: string): boolean {
     const totalP = topicProblemCounts[topicId] || 0;
     if (totalP === 0) return completedTopics.includes(topicId); // misol yo'q bo'lsa kirganligiga qarab
@@ -196,7 +197,7 @@ export default function CourseDetail() {
     ? Math.round((realCompletedCount / topics.length) * 100)
     : 0;
 
-  // Bitta papkadagi progress (shu papkadagi mavzular tugatilishiga qarab)
+  // Bitta papkadagi progress (shu papkadagi modullar tugatilishiga qarab)
   function getFolderProgress(folderId: string): number {
     const folderTopics = topics.filter((t) => t.folderId === folderId);
     if (folderTopics.length === 0) return 0;
@@ -204,7 +205,7 @@ export default function CourseDetail() {
     return Math.round((doneCount / folderTopics.length) * 100);
   }
 
-  // Bitta element (mavzu/test/maslahat) ni render qilish
+  // Bitta element (modul/test/maslahat) ni render qilish
   type RenderableItem = { type: "topic"; data: Topic; order: number } | { type: "test"; data: Test; order: number } | { type: "advice"; data: Advice; order: number };
   function renderItem(item: RenderableItem) {
     if (item.type === "topic") {
@@ -349,7 +350,7 @@ export default function CourseDetail() {
           <h3 className="text-lg font-bold text-gray-900 mb-1">{course?.title}</h3>
           <p className="text-sm text-gray-500 mb-4">{course?.description}</p>
           <div className="flex items-center justify-center gap-4 text-sm text-gray-500 mb-5">
-            <span>📚 {topics.length} mavzu</span>
+            <span>📚 {topics.length} modul</span>
             <span>👥 {totalStudentsInCourse} o'quvchi</span>
           </div>
           <button
@@ -372,19 +373,19 @@ export default function CourseDetail() {
       <div className="mx-5 mt-4 bg-primary-500 rounded-2xl p-5">
         {/* Header */}
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+          <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center shrink-0">
             <span className="text-white text-lg">🎓</span>
           </div>
-          <div>
-            <p className="text-white font-bold text-lg">{course?.title}</p>
-            <p className="text-white/60 text-[10px] uppercase tracking-wide">Level {Math.ceil(progressPercent / 25)} Academic Path</p>
+          <div className="min-w-0 flex-1">
+            <p className="text-white font-bold text-lg leading-tight truncate">{course?.title}</p>
+            <p className="text-white/60 text-[10px] uppercase tracking-wide mt-0.5">Level {Math.ceil(progressPercent / 25)} Academic Path</p>
           </div>
         </div>
 
         {/* Progress percent & modullar */}
         <div className="flex items-end justify-between mb-3">
           <p className="text-white text-4xl font-bold">{progressPercent}%</p>
-          <p className="text-white/80 text-sm font-medium">{realCompletedCount} / {topics.length} MAVZULAR</p>
+          <p className="text-white/80 text-sm font-medium">{realCompletedCount} / {topics.length} MODULLAR</p>
         </div>
 
         {/* Progress bar */}
@@ -428,14 +429,14 @@ export default function CourseDetail() {
         </div>
       )}
 
-      {/* Mavzular */}
+      {/* Modullar */}
       <div className="px-5 mt-6 flex justify-between items-center mb-4">
-        <h3 className="text-lg font-bold">Mavzular va Testlar</h3>
+        <h3 className="text-lg font-bold">Modullar va Testlar</h3>
       </div>
 
       <div className="px-5 space-y-3">
         {(() => {
-          // Mavzular, testlar va maslahatlarni bitta ro'yxatga birlashtirish (admin tartibi bo'yicha)
+          // Modullar, testlar va maslahatlarni bitta ro'yxatga birlashtirish (admin tartibi bo'yicha)
           type Item = { type: "topic"; data: Topic; order: number } | { type: "test"; data: Test; order: number } | { type: "advice"; data: Advice; order: number };
           const combined: Item[] = [];
           for (const topic of topics) {
@@ -467,11 +468,9 @@ export default function CourseDetail() {
                     folder={folder}
                     folderItems={folderItems}
                     hasSubscription={hasSubscription}
-                    renderItem={renderItem}
                     progress={getFolderProgress(folder.id)}
                     onlineCount={folderOnlineCounts[folder.id] || 0}
                     courseId={courseId!}
-                    userId={user?.uid}
                   />
                 );
               })}
@@ -494,8 +493,10 @@ export default function CourseDetail() {
 
 // ===== Kursni tanishtirish kartasi =====
 function CourseIntroCard({ introduction }: { introduction: NonNullable<Course["introduction"]> }) {
-  const [expanded, setExpanded] = useState(false);
-  const [showVideo, setShowVideo] = useState(false);
+  // Videodan keyingi matn (izoh) — akkordion, yopiq holatda boshlanadi
+  const [textExpanded, setTextExpanded] = useState(false);
+  // Video sahifaning o'zida ko'rsatiladi (modal emas), doim ochiq turadi — bosilgach pleer ishga tushadi
+  const [videoPlaying, setVideoPlaying] = useState(false);
 
   // YouTube thumbnail
   function getYouTubeThumbnail(url: string): string {
@@ -511,75 +512,48 @@ function CourseIntroCard({ introduction }: { introduction: NonNullable<Course["i
   }
 
   const thumbnail = introduction.thumbnailUrl || (introduction.videoType === "youtube" && introduction.videoUrl ? getYouTubeThumbnail(introduction.videoUrl) : "");
+  const isYoutube = introduction.videoType === "youtube" || !!introduction.videoUrl?.includes("youtube") || !!introduction.videoUrl?.includes("youtu.be");
 
   return (
-    <>
-      <div className="mx-5 mt-5">
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="w-full flex items-center border border-gray-100 rounded-xl p-4 gap-3 hover:shadow-sm transition-shadow bg-white"
-        >
-          {/* Thumbnail */}
-          {thumbnail ? (
-            <div className="relative w-16 h-12 rounded-lg overflow-hidden shrink-0 bg-gray-100">
-              <img src={thumbnail} alt="" className="w-full h-full object-cover" />
-              <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                <div className="w-6 h-6 bg-white/90 rounded-full flex items-center justify-center">
-                  <Play className="w-3 h-3 text-gray-800 ml-0.5" fill="currentColor" />
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="w-16 h-12 rounded-lg bg-primary-50 flex items-center justify-center shrink-0">
-              <Play className="w-5 h-5 text-primary-500" />
-            </div>
-          )}
-
-          {/* Text */}
-          <div className="flex-1 min-w-0 text-left">
-            <p className="font-semibold text-gray-900 text-sm">Kursni tanishtirish</p>
-            <p className="text-xs text-gray-500 truncate">{introduction.text}</p>
-          </div>
-
-          {/* Expand chevron */}
-          {expanded ? (
-            <ChevronUp className="w-5 h-5 text-primary-500 shrink-0" />
-          ) : (
-            <ChevronDown className="w-5 h-5 text-primary-500 shrink-0" />
-          )}
-        </button>
-
-        {/* Expanded content */}
-        {expanded && (
-          <div className="bg-white border border-t-0 border-gray-100 rounded-b-xl px-4 pb-4 -mt-1">
-            <p className="text-sm text-gray-700 leading-relaxed mb-3">{introduction.text}</p>
-            {introduction.imageUrl && (
-              <div className="mb-3 rounded-lg overflow-hidden">
-                <img src={introduction.imageUrl} alt="Kurs tanishtirish" className="w-full max-h-48 object-cover rounded-lg" />
-              </div>
-            )}
-            {introduction.videoUrl && (
-              <button
-                onClick={() => setShowVideo(true)}
-                className="w-full flex items-center justify-center gap-2 py-3 bg-primary-50 text-primary-600 text-sm font-medium rounded-lg active:bg-primary-100"
-              >
-                <Play className="w-4 h-4" fill="currentColor" /> Videoni ko'rish
-              </button>
-            )}
-          </div>
-        )}
+    <div className="mx-5 mt-5 bg-white border border-gray-100 rounded-xl p-4">
+      {/* Sarlavha */}
+      <div className="flex items-center gap-2 mb-3">
+        <Play className="w-4 h-4 text-primary-500" />
+        <p className="font-semibold text-gray-900 text-sm">Kursni tanishtirish</p>
       </div>
 
-      {/* Video Modal */}
-      {showVideo && introduction.videoUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80" onClick={() => setShowVideo(false)}>
-          <div className="w-full max-w-lg mx-4 rounded-2xl overflow-hidden shadow-xl bg-black" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-3 bg-gray-900">
-              <span className="text-white text-sm font-medium">Kursni tanishtirish</span>
-              <button onClick={() => setShowVideo(false)} className="text-white/70 hover:text-white text-lg">✕</button>
-            </div>
-            <div className="aspect-video">
-              {introduction.videoType === "youtube" || introduction.videoUrl.includes("youtube") || introduction.videoUrl.includes("youtu.be") ? (
+      {/* Qisqa matn */}
+      <p className="text-sm text-gray-700 leading-relaxed mb-3">{introduction.text}</p>
+
+      {introduction.imageUrl && (
+        <div className="mb-3 rounded-lg overflow-hidden">
+          <img src={introduction.imageUrl} alt="Kurs tanishtirish" className="w-full max-h-48 object-cover rounded-lg" />
+        </div>
+      )}
+
+      {/* Video — doim ochiq ko'rinadi (akkordion emas) */}
+      {introduction.videoUrl && (
+        <>
+          {!videoPlaying ? (
+            <button
+              onClick={() => setVideoPlaying(true)}
+              className="w-full relative rounded-lg overflow-hidden bg-black aspect-video flex items-center justify-center group"
+            >
+              {thumbnail ? (
+                <img src={thumbnail} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full bg-gray-900" />
+              )}
+              <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-active:bg-black/40 transition-colors">
+                <div className="w-14 h-14 bg-white/95 rounded-full flex items-center justify-center shadow-lg">
+                  <Play className="w-6 h-6 text-primary-600 ml-0.5" fill="currentColor" />
+                </div>
+              </div>
+              <span className="absolute bottom-2 left-2 text-white text-xs font-medium bg-black/50 px-2 py-1 rounded">Videoni ko'rish</span>
+            </button>
+          ) : (
+            <div className="w-full rounded-lg overflow-hidden bg-black aspect-video">
+              {isYoutube ? (
                 <iframe
                   src={getEmbedUrl(introduction.videoUrl)}
                   className="w-full h-full"
@@ -590,10 +564,52 @@ function CourseIntroCard({ introduction }: { introduction: NonNullable<Course["i
                 <video src={introduction.videoUrl} controls autoPlay className="w-full h-full" />
               )}
             </div>
-          </div>
+          )}
+        </>
+      )}
+
+      {/* Videodan keyingi matn — akkordion (drop-down), admin yozgan, LaTeX formulalarni qo'llab-quvvatlaydi */}
+      {introduction.afterVideoText && (
+        <div className="mt-3">
+          <button
+            onClick={() => setTextExpanded(!textExpanded)}
+            className="w-full flex items-center justify-between gap-2 py-2.5 border-t border-gray-100"
+          >
+            <span className="text-sm font-medium text-gray-700">Batafsil izoh</span>
+            {textExpanded ? (
+              <ChevronUp className="w-4 h-4 text-primary-500 shrink-0" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-primary-500 shrink-0" />
+            )}
+          </button>
+          {textExpanded && (
+            <div className="pb-1 overflow-hidden">
+              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+                <LatexText text={introduction.afterVideoText} />
+              </p>
+            </div>
+          )}
         </div>
       )}
-    </>
+
+      {/* Biriktirilgan fayl — student yuklab olishi mumkin */}
+      {introduction.attachedFileUrl && (
+        <a
+          href={introduction.attachedFileUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          download={introduction.attachedFileName}
+          className="mt-3 flex items-center gap-3 px-4 py-3 bg-orange-50 border border-orange-100 rounded-lg active:bg-orange-100 transition-colors"
+        >
+          <FileText className="w-5 h-5 text-orange-500 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-gray-900 truncate">{introduction.attachedFileName || "Biriktirilgan fayl"}</p>
+            <p className="text-[11px] text-gray-500">Yuklab olish uchun bosing</p>
+          </div>
+          <Download className="w-4 h-4 text-orange-500 shrink-0" />
+        </a>
+      )}
+    </div>
   );
 }
 
@@ -658,62 +674,27 @@ function FolderBlock({
   folder,
   folderItems,
   hasSubscription,
-  renderItem,
   progress,
   onlineCount,
   courseId,
-  userId,
 }: {
   folder: Folder;
   folderItems: FolderItem[];
   hasSubscription: boolean;
-  renderItem: (item: FolderItem) => React.ReactNode;
   progress: number;
   onlineCount: number;
   courseId: string;
-  userId?: string;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const [liveOnline, setLiveOnline] = useState(onlineCount);
   const isLocked = folder.isPremium && !hasSubscription;
-  const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => {
-    setLiveOnline(onlineCount);
-  }, [onlineCount]);
-
-  // Papka ochilganda — presence belgilash (heartbeat) va onlayn sonini yangilab turish
-  useEffect(() => {
-    if (!expanded || !userId || isLocked) return;
-
-    let cancelled = false;
-
-    async function beat() {
-      try {
-        await markFolderPresence(courseId, folder.id, userId!);
-        const cnt = await getFolderOnlineCount(courseId, folder.id);
-        if (!cancelled) setLiveOnline(cnt);
-      } catch {
-        // jim
-      }
-    }
-
-    beat();
-    heartbeatRef.current = setInterval(beat, 30000); // har 30 soniyada
-
-    return () => {
-      cancelled = true;
-      if (heartbeatRef.current) clearInterval(heartbeatRef.current);
-      clearFolderPresence(courseId, folder.id, userId!).catch(() => {});
-    };
-  }, [expanded, userId, isLocked, courseId, folder.id]);
-
   const totalTopics = folderItems.filter((it) => it.type === "topic").length;
 
   return (
-    <div className="border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm">
-      {/* Card header — muqova + ma'lumot */}
-      <button onClick={() => setExpanded(!expanded)} className="w-full flex gap-3 p-3 active:bg-gray-50 text-left">
+    <Link
+      to={isLocked ? "/premium-gate" : `/course/${courseId}/folder/${folder.id}`}
+      className="block border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm hover:shadow-md active:bg-gray-50 transition-all"
+    >
+      {/* Card — muqova + ma'lumot. Bosilganda alohida sahifa ochiladi */}
+      <div className="w-full flex gap-3 p-3 text-left">
         {/* Muqova */}
         <div className="w-20 h-28 rounded-xl overflow-hidden shrink-0 bg-gradient-to-br from-primary-100 to-primary-50 flex items-center justify-center relative">
           {folder.coverImage ? (
@@ -737,7 +718,7 @@ function FolderBlock({
                 <p className="text-xs text-gray-500 line-clamp-2 mt-0.5">{folder.description}</p>
               )}
             </div>
-            {expanded ? <ChevronUp className="w-5 h-5 text-primary-500 shrink-0" /> : <ChevronDown className="w-5 h-5 text-primary-500 shrink-0" />}
+            <ChevronRight className="w-5 h-5 text-primary-500 shrink-0" />
           </div>
 
           {/* Onlayn userlar + dars soni */}
@@ -745,9 +726,9 @@ function FolderBlock({
             <span className="flex items-center gap-1">
               📖 {totalTopics} dars{folderItems.length - totalTopics > 0 ? ` · ${folderItems.length - totalTopics} test` : ""}
             </span>
-            {liveOnline > 0 && (
+            {onlineCount > 0 && (
               <span className="flex items-center gap-1 text-green-600 font-medium">
-                <Users size={12} /> {liveOnline} onlayn
+                <Users size={12} /> {onlineCount} onlayn
                 <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
               </span>
             )}
@@ -764,18 +745,7 @@ function FolderBlock({
             </div>
           </div>
         </div>
-      </button>
-
-      {/* Papka ichidagi elementlar */}
-      {expanded && (
-        <div className="p-3 space-y-3 border-t border-gray-100 bg-gray-50/50">
-          {folderItems.length === 0 ? (
-            <p className="text-center text-xs text-gray-400 py-4">Bu bo'lim hozircha bo'sh</p>
-          ) : (
-            folderItems.map((item) => renderItem(item))
-          )}
-        </div>
-      )}
-    </div>
+      </div>
+    </Link>
   );
 }

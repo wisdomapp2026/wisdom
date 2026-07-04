@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { getAllCourses, getMotivationPhrases, getMotivationSettings, getStudentCountByCourse, getUserProgress, getTopicsByCourse, getAllCategories, getAllProgressByUser } from "@shared/repositories";
 import type { Course, Category } from "@shared/types";
 import { useAuth } from "../hooks/useAuth";
@@ -8,6 +8,8 @@ import { cachedFetch } from "../hooks/useCache";
 import { getLocalProgress } from "../hooks/useLocalProgress";
 
 const DEFAULT_CATEGORIES = ["Barchasi", "Jarayonda"];
+// Lazy load: bir vaqtda nechta kurs ko'rsatilishi (30 tadan keyin, ro'yxat oxiriga yetganda keyingi 30 tasi yuklanadi)
+const PAGE_SIZE = 30;
 
 interface CourseWithRealStats extends Course {
   realStudentCount: number;
@@ -17,7 +19,10 @@ interface CourseWithRealStats extends Course {
 export default function Courses() {
   const { user, loading: authLoading } = useAuth();
   const [activeCategory, setActiveCategory] = useState("Barchasi");
-  const [courses, setCourses] = useState<CourseWithRealStats[]>([]);
+  // Barcha (yashirilmagan) kurslar — statistikasiz, filterlash/qidiruv shu ro'yxat ustida ishlaydi
+  const [rawCourses, setRawCourses] = useState<Course[]>([]);
+  // Har bir kurs uchun hisoblangan statistika (faqat ekranda ko'rinadigan kurslar uchun to'ldiriladi)
+  const [statsMap, setStatsMap] = useState<Record<string, { realStudentCount: number; realProgress: number }>>({});
   const [categories, setCategories] = useState<string[]>(DEFAULT_CATEGORIES);
   const [loading, setLoading] = useState(() => {
     // Kesh mavjud bo'lsa loading ko'rsatmaymiz
@@ -25,6 +30,11 @@ export default function Courses() {
   });
   const [motivationPhrase, setMotivationPhrase] = useState("Har kuni tashlangan kichik qadamlar katta yutuqlarga olib keladi. Siz ajoyib natija ko'rsatyapsiz!");
   const [searchQuery, setSearchQuery] = useState("");
+
+  // Lazy load — nechta kurs hozircha ko'rsatilmoqda (30 tadan boshlab, oxiriga borilganda +30)
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (authLoading) return;
@@ -48,35 +58,50 @@ export default function Courses() {
       const data = await cachedFetch("all-courses", getAllCourses);
       // Yashirilgan kurslarni filterlash
       const visibleData = (data as Course[]).filter((c) => !c.isHidden);
-
-      // Bir marta barcha progressni olish (kurs boshiga alohida query emas)
-      let userProgressMap: Record<string, number> = {};
-      if (user) {
-        const allProgress = await cachedFetch(`progress-${user.uid}`, () => getAllProgressByUser(user.uid));
-        for (const prog of allProgress) {
-          userProgressMap[prog.courseId] = prog.progressPercent || 0;
-        }
-      } else {
-        // Guest — localStorage dan progress olish
-        const localData = getLocalProgress();
-        for (const [courseId, prog] of Object.entries(localData)) {
-          userProgressMap[courseId] = prog.progressPercent || 0;
-        }
-      }
-
-      const withStats = await Promise.all(
-        visibleData.map(async (c) => {
-          const realStudentCount = await cachedFetch(`students-${c.id}`, () => getStudentCountByCourse(c.id));
-          const realProgress = userProgressMap[c.id] || 0;
-          return { ...c, realStudentCount, realProgress };
-        })
-      );
-      setCourses(withStats);
+      setRawCourses(visibleData);
     } catch (err) {
       console.error("Kurslarni yuklashda xato:", err);
     } finally {
       setLoading(false);
     }
+  }
+
+  /** Foydalanuvchi progressini olish (bir marta, barcha kurslar uchun umumiy) */
+  const [userProgressMap, setUserProgressMap] = useState<Record<string, number>>({});
+  useEffect(() => {
+    if (authLoading) return;
+    loadProgressMap();
+  }, [user, authLoading]);
+
+  async function loadProgressMap() {
+    let map: Record<string, number> = {};
+    if (user) {
+      const allProgress = await cachedFetch(`progress-${user.uid}`, () => getAllProgressByUser(user.uid));
+      for (const prog of allProgress) map[prog.courseId] = prog.progressPercent || 0;
+    } else {
+      const localData = getLocalProgress();
+      for (const [courseId, prog] of Object.entries(localData)) map[courseId] = prog.progressPercent || 0;
+    }
+    setUserProgressMap(map);
+  }
+
+  /** Faqat hozir ekranda ko'rinadigan kurslar uchun o'quvchilar sonini yuklash (lazy) */
+  async function loadStatsFor(courseIds: string[]) {
+    const missing = courseIds.filter((id) => statsMap[id] === undefined);
+    if (missing.length === 0) return;
+    const results = await Promise.all(
+      missing.map(async (id) => {
+        const count = await cachedFetch(`students-${id}`, () => getStudentCountByCourse(id));
+        return [id, count] as const;
+      })
+    );
+    setStatsMap((prev) => {
+      const next = { ...prev };
+      for (const [id, count] of results) {
+        next[id] = { realStudentCount: count, realProgress: userProgressMap[id] || 0 };
+      }
+      return next;
+    });
   }
 
   async function loadMotivation() {
@@ -103,18 +128,57 @@ export default function Courses() {
     }
   }
 
-  // Agar Firestore'dan kurslar bo'sh bo'lsa, bo'sh ro'yxat ko'rsatamiz
-  const allCourses = courses;
+  // Barcha kurslarni real statistika bilan birlashtirish
+  const allCourses: CourseWithRealStats[] = rawCourses.map((c) => ({
+    ...c,
+    realStudentCount: statsMap[c.id]?.realStudentCount ?? 0,
+    realProgress: userProgressMap[c.id] || 0,
+  }));
 
-  // Filterlash
-  const displayCourses = allCourses.filter((c) => {
-    // Qidiruv
+  // Filterlash — qidiruv va kategoriya BARCHA kurslar ustida ishlaydi (lazy load dan mustaqil)
+  const filteredCourses = allCourses.filter((c) => {
     if (searchQuery && !c.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
-    // Kategoriya
     if (activeCategory === "Barchasi") return true;
     if (activeCategory === "Jarayonda") return (c.realProgress || 0) > 0;
     return c.category === activeCategory;
   });
+
+  // Lazy load — faqat visibleCount tagacha ko'rsatamiz
+  const displayCourses = filteredCourses.slice(0, visibleCount);
+  const hasMore = filteredCourses.length > visibleCount;
+
+  // Filter/qidiruv o'zgarganda sahifalashni boshidan boshlash
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [searchQuery, activeCategory]);
+
+  // Ekranda ko'rinadigan kurslar uchun statistikani (o'quvchilar soni) yuklash
+  useEffect(() => {
+    const ids = displayCourses.map((c) => c.id);
+    if (ids.length > 0) loadStatsFor(ids);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleCount, rawCourses.length, searchQuery, activeCategory]);
+
+  // Intersection Observer — ro'yxat oxiriga yetganda keyingi 30 tani yuklash
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore) {
+          setLoadingMore(true);
+          // Kichik kechikish — UX uchun tabiiy "yuklanish" hissi
+          setTimeout(() => {
+            setVisibleCount((prev) => prev + PAGE_SIZE);
+            setLoadingMore(false);
+          }, 150);
+        }
+      },
+      { rootMargin: "200px" }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore]);
 
   const colors: Record<string, string> = { Matematika: "#2196F3", "Ona tili": "#4CAF50", "Ingliz tili": "#9C27B0", Dasturlash: "#FF9800", default: "#F44336" };
 
@@ -245,6 +309,13 @@ export default function Courses() {
           );
         })}
       </div>
+
+      {/* Lazy load sentinel — ro'yxat oxiriga yetganda keyingi 30 ta kurs yuklanadi */}
+      {!loading && hasMore && (
+        <div ref={sentinelRef} className="flex items-center justify-center py-6">
+          <div className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+        </div>
+      )}
 
       {/* Tip */}
       <div className="mx-5 mt-5 bg-blue-50 rounded-xl p-4 flex items-center gap-3">

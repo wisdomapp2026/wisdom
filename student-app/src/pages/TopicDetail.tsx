@@ -1,8 +1,8 @@
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { getTopicById, getProblemsByTopic, getUserProgress, setUserProgress, getTopicsByCourse, getMotivationPhrases, getMotivationSettings, addFavoriteTopic, removeFavoriteTopic, isFavoriteTopic } from "@shared/repositories";
-import type { Topic, Problem, UserProgress } from "@shared/types";
-import { ChevronLeft, Star, Play, Lock, CheckCircle } from "lucide-react";
+import { getTopicById, getProblemsByTopic, getUserProgress, setUserProgress, getTopicsByCourse, getMotivationPhrases, getMotivationSettings, addFavoriteTopic, removeFavoriteTopic, isFavoriteTopic, getTestsByCourse } from "@shared/repositories";
+import type { Topic, Problem, UserProgress, Test } from "@shared/types";
+import { ChevronLeft, Star, Play, Lock, CheckCircle, ChevronDown, ChevronUp, FileText, Download } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { getLocalCourseProgress, setLocalCourseProgress } from "../hooks/useLocalProgress";
 import { invalidateCache, invalidateCacheByPrefix } from "../hooks/useCache";
@@ -21,6 +21,7 @@ export default function TopicDetail() {
   const { user, isLoggedIn } = useAuth();
   const [topic, setTopic] = useState<Topic | null>(null);
   const [problems, setProblems] = useState<Problem[]>([]);
+  const [topicTests, setTopicTests] = useState<Test[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [videoUrl, setVideoUrl] = useState("");
@@ -31,8 +32,15 @@ export default function TopicDetail() {
 
   useEffect(() => {
     if (!courseId || !topicId) return;
-    Promise.all([getTopicById(courseId, topicId), getProblemsByTopic(courseId, topicId)])
-      .then(([t, p]) => { setTopic(t); setProblems(p.filter(x => !x.isHidden)); })
+    Promise.all([getTopicById(courseId, topicId), getProblemsByTopic(courseId, topicId), getTestsByCourse(courseId)])
+      .then(([t, p, allTests]) => {
+        setTopic(t);
+        setProblems(p.filter(x => !x.isHidden));
+        // Faqat shu modulga tegishli (afterTopicOrder === topic.order) va published testlarni ko'rsatish
+        if (t) {
+          setTopicTests(allTests.filter(test => test.status === "published" && test.afterTopicOrder === t.order));
+        }
+      })
       .catch(console.error)
       .finally(() => setLoading(false));
 
@@ -64,13 +72,13 @@ export default function TopicDetail() {
     }
   }
 
-  // O'quvchi mavzuni ochganida progress saqlash
+  // O'quvchi modulni ochganida progress saqlash
   useEffect(() => {
     if (!courseId || !topicId) return;
     saveProgress();
   }, [courseId, topicId, user]);
 
-  // Tanlangan mavzu holatini tekshirish
+  // Tanlangan modul holatini tekshirish
   useEffect(() => {
     if (!user || !topicId) { setIsFavorite(false); return; }
     isFavoriteTopic(user.uid, topicId).then(setIsFavorite).catch(() => {});
@@ -97,7 +105,7 @@ export default function TopicDetail() {
         setIsFavorite(true);
       }
     } catch (err) {
-      console.error("Tanlangan mavzu xatosi:", err);
+      console.error("Tanlangan modul xatosi:", err);
     } finally {
       setFavLoading(false);
     }
@@ -116,7 +124,7 @@ export default function TopicDetail() {
         const allTopicIds = allTopics.map((t) => t.id);
 
         if (existing) {
-          // Faqat mavjud mavzularni saqlash (o'chirilganlarni tozalash)
+          // Faqat mavjud modullarni saqlash (o'chirilganlarni tozalash)
           const validCompleted = existing.completedTopics.filter((id) => allTopicIds.includes(id));
           const completedTopics = validCompleted.includes(topicId)
             ? validCompleted
@@ -146,7 +154,8 @@ export default function TopicDetail() {
             completedProblems: [],
             currentTopicId: topicId,
             progressPercent,
-            totalXP: 10,
+            // Modulni ochish o'z-o'zidan XP bermaydi — reyting faqat test natijalariga bog'liq
+            totalXP: 0,
             streak: 1,
             weeklyMinutes: [0, 0, 0, 0, 0, 0, 0],
             lastAccessedAt: Date.now(),
@@ -191,7 +200,8 @@ export default function TopicDetail() {
           completedProblems: [],
           currentTopicId: topicId,
           progressPercent,
-          totalXP: 10,
+          // Modulni ochish o'z-o'zidan XP bermaydi — reyting faqat test natijalariga bog'liq
+          totalXP: 0,
           streak: 1,
           weeklyMinutes: [0, 0, 0, 0, 0, 0, 0],
           lastAccessedAt: Date.now(),
@@ -233,12 +243,14 @@ export default function TopicDetail() {
             ? Math.round((completedTopics.length / allTopics.length) * 100)
             : 0;
 
+          // Eslatma: bu yerda totalXP OSHIRILMAYDI — yechimni ko'rish shunchaki
+          // ko'rsatish harakati, javob to'g'riligini tekshirmaydi.
+          // Reyting (XP) faqat testlarni to'g'ri ishlashga bog'liq (TestScreen.tsx).
           await setUserProgress({
             ...existing,
             completedTopics,
             completedProblems,
             progressPercent,
-            totalXP: (existing.totalXP || 0) + 5,
             lastAccessedAt: Date.now(),
           });
         } else {
@@ -250,7 +262,7 @@ export default function TopicDetail() {
             completedProblems: [problemId],
             currentTopicId: topicId,
             progressPercent: 0,
-            totalXP: 5,
+            totalXP: 0,
             streak: 1,
             weeklyMinutes: [0, 0, 0, 0, 0, 0, 0],
             lastAccessedAt: Date.now(),
@@ -284,7 +296,6 @@ export default function TopicDetail() {
           completedTopics,
           completedProblems,
           progressPercent,
-          totalXP: (existing.totalXP || 0) + 5,
           lastAccessedAt: Date.now(),
         });
       } else {
@@ -296,7 +307,7 @@ export default function TopicDetail() {
           completedProblems: [problemId],
           currentTopicId: topicId,
           progressPercent: 0,
-          totalXP: 5,
+          totalXP: 0,
           streak: 1,
           weeklyMinutes: [0, 0, 0, 0, 0, 0, 0],
           lastAccessedAt: Date.now(),
@@ -326,7 +337,7 @@ export default function TopicDetail() {
       <header className="bg-white px-5 pt-4 pb-4 border-b border-gray-100 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Link to={`/course/${courseId}`} className="text-gray-500"><ChevronLeft size={22} /></Link>
-          <h1 className="text-lg font-bold text-gray-900 truncate">{topic?.title || "Mavzu"}</h1>
+          <h1 className="text-lg font-bold text-gray-900 truncate">{topic?.title || "Modul"}</h1>
         </div>
         <button
           onClick={handleToggleFavorite}
@@ -350,10 +361,15 @@ export default function TopicDetail() {
         </div>
       )}
 
+      {/* Modulni tanishtirish — kursni tanishtirish blokiga o'xshash (video doim ochiq, izoh akkordion) */}
+      {topic?.introduction && topic.introduction.text && (
+        <TopicIntroCard introduction={topic.introduction} />
+      )}
+
       {/* Topic Mastery */}
       <div className="mx-5 mt-4 bg-white rounded-xl p-4 border border-gray-100">
         <div className="flex items-center justify-between">
-          <p className="font-semibold text-gray-900 text-sm">Mavzu darajasi</p>
+          <p className="font-semibold text-gray-900 text-sm">Modul darajasi</p>
           <p className="text-2xl font-bold text-primary-500">{mastery}%</p>
         </div>
         <p className="text-xs text-gray-500 mt-1">{freeProblems} / {problems.length} ta misol ochiq</p>
@@ -365,7 +381,7 @@ export default function TopicDetail() {
             <div className="w-5 h-5 bg-gray-300 rounded-full border-2 border-white" />
             <div className="w-5 h-5 bg-gray-400 rounded-full border-2 border-white" />
           </div>
-          <p className="text-[11px] text-gray-500">Siz va 12 nafar boshqalar hozir shu mavzuni o'rganmoqda</p>
+          <p className="text-[11px] text-gray-500">Siz va 12 nafar boshqalar hozir shu modulni o'rganmoqda</p>
         </div>
       </div>
 
@@ -385,6 +401,8 @@ export default function TopicDetail() {
               problem={p}
               index={i}
               isPremium={isPremium}
+              isLoggedIn={isLoggedIn}
+              onRequireAuth={() => setShowAuthModal(true)}
               onPremiumClick={handlePremiumClick}
               onPlayVideo={(url) => { setVideoUrl(url); setShowVideoModal(true); }}
               onSolutionViewed={handleProblemCompleted}
@@ -392,6 +410,43 @@ export default function TopicDetail() {
           );
         })}
       </div>
+
+      {/* Modul testlari — admin qo'shgan testlar */}
+      {topicTests.length > 0 && (
+        <div className="px-5 mt-6">
+          <h3 className="font-bold text-gray-900 mb-3">Testlar</h3>
+          <div className="space-y-3">
+            {topicTests.map((test) => {
+              const testLocked = test.isPremium && !isLoggedIn;
+              return (
+                <Link
+                  to={testLocked ? "/premium-gate" : `/test/${test.id}`}
+                  key={test.id}
+                  className={`flex items-center border rounded-xl p-4 gap-3 hover:shadow-sm transition-shadow ${testLocked ? "border-yellow-200 bg-yellow-50/30" : "border-orange-100 bg-orange-50/30"}`}
+                >
+                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${testLocked ? "bg-yellow-100" : "bg-orange-100"}`}>
+                    {testLocked ? <Lock size={18} className="text-yellow-500" /> : <FileText size={20} className="text-orange-500" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-gray-900 text-sm truncate">{test.title}</p>
+                    <div className="flex items-center gap-3 mt-1">
+                      <span className="text-[10px] text-gray-500">❓ {test.questions?.length || 0} savol</span>
+                      <span className="text-[10px] text-gray-500">⏱ {test.totalTime} daqiqa</span>
+                      {testLocked
+                        ? <span className="text-[10px] text-yellow-600 font-medium">🔒 Premium</span>
+                        : <span className="text-[10px] text-orange-600 font-medium">Test</span>
+                      }
+                    </div>
+                  </div>
+                  <span className={`text-[11px] font-semibold px-3 py-1.5 rounded-lg shrink-0 ${testLocked ? "bg-yellow-500 text-white" : "bg-primary-500 text-white"}`}>
+                    {testLocked ? "🔒 Sotib olish" : "Boshlash"}
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Eslatma */}
       <div className="mx-5 mt-6 bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
@@ -420,9 +475,131 @@ export default function TopicDetail() {
 }
 
 
+// ===== Modulni tanishtirish kartasi — CourseDetail dagi CourseIntroCard bilan bir xil uslub =====
+function TopicIntroCard({ introduction }: { introduction: NonNullable<Topic["introduction"]> }) {
+  // Videodan keyingi matn (izoh) — akkordion, yopiq holatda boshlanadi
+  const [textExpanded, setTextExpanded] = useState(false);
+  // Video sahifaning o'zida ko'rsatiladi (modal emas), doim ochiq turadi — bosilgach pleer ishga tushadi
+  const [videoPlaying, setVideoPlaying] = useState(false);
+
+  function getYouTubeThumbnail(url: string): string {
+    const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&?]+)/);
+    return match ? `https://img.youtube.com/vi/${match[1]}/mqdefault.jpg` : "";
+  }
+
+  function getEmbedUrl(url: string): string {
+    const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&?]+)/);
+    const videoId = match ? match[1] : "";
+    return `https://www.youtube.com/embed/${videoId}?autoplay=1`;
+  }
+
+  const thumbnail = introduction.thumbnailUrl || (introduction.videoType === "youtube" && introduction.videoUrl ? getYouTubeThumbnail(introduction.videoUrl) : "");
+  const isYoutube = introduction.videoType === "youtube" || !!introduction.videoUrl?.includes("youtube") || !!introduction.videoUrl?.includes("youtu.be");
+
+  return (
+    <div className="mx-5 mt-4 bg-white border border-gray-100 rounded-xl p-4">
+      {/* Sarlavha */}
+      <div className="flex items-center gap-2 mb-3">
+        <Play className="w-4 h-4 text-primary-500" />
+        <p className="font-semibold text-gray-900 text-sm">Modulni tanishtirish</p>
+      </div>
+
+      {/* Qisqa matn */}
+      <p className="text-sm text-gray-700 leading-relaxed mb-3">{introduction.text}</p>
+
+      {introduction.imageUrl && (
+        <div className="mb-3 rounded-lg overflow-hidden">
+          <img src={introduction.imageUrl} alt="Modul tanishtirish" className="w-full max-h-48 object-cover rounded-lg" />
+        </div>
+      )}
+
+      {/* Video — doim ochiq ko'rinadi (akkordion emas) */}
+      {introduction.videoUrl && (
+        <>
+          {!videoPlaying ? (
+            <button
+              onClick={() => setVideoPlaying(true)}
+              className="w-full relative rounded-lg overflow-hidden bg-black aspect-video flex items-center justify-center group"
+            >
+              {thumbnail ? (
+                <img src={thumbnail} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full bg-gray-900" />
+              )}
+              <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-active:bg-black/40 transition-colors">
+                <div className="w-14 h-14 bg-white/95 rounded-full flex items-center justify-center shadow-lg">
+                  <Play className="w-6 h-6 text-primary-600 ml-0.5" fill="currentColor" />
+                </div>
+              </div>
+              <span className="absolute bottom-2 left-2 text-white text-xs font-medium bg-black/50 px-2 py-1 rounded">Videoni ko'rish</span>
+            </button>
+          ) : (
+            <div className="w-full rounded-lg overflow-hidden bg-black aspect-video">
+              {isYoutube ? (
+                <iframe
+                  src={getEmbedUrl(introduction.videoUrl)}
+                  className="w-full h-full"
+                  allowFullScreen
+                  allow="autoplay; encrypted-media"
+                />
+              ) : (
+                <video src={introduction.videoUrl} controls autoPlay className="w-full h-full" />
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Videodan keyingi matn — akkordion (drop-down), admin yozgan, LaTeX formulalarni qo'llab-quvvatlaydi */}
+      {introduction.afterVideoText && (
+        <div className="mt-3">
+          <button
+            onClick={() => setTextExpanded(!textExpanded)}
+            className="w-full flex items-center justify-between gap-2 py-2.5 border-t border-gray-100"
+          >
+            <span className="text-sm font-medium text-gray-700">Batafsil izoh</span>
+            {textExpanded ? (
+              <ChevronUp className="w-4 h-4 text-primary-500 shrink-0" />
+            ) : (
+              <ChevronDown className="w-4 h-4 text-primary-500 shrink-0" />
+            )}
+          </button>
+          {textExpanded && (
+            <div className="pb-1 overflow-hidden">
+              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+                <LatexText text={introduction.afterVideoText} />
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Biriktirilgan fayl — student yuklab olishi mumkin */}
+      {introduction.attachedFileUrl && (
+        <a
+          href={introduction.attachedFileUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          download={introduction.attachedFileName}
+          className="mt-3 flex items-center gap-3 px-4 py-3 bg-orange-50 border border-orange-100 rounded-lg active:bg-orange-100 transition-colors"
+        >
+          <FileText className="w-5 h-5 text-orange-500 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-gray-900 truncate">{introduction.attachedFileName || "Biriktirilgan fayl"}</p>
+            <p className="text-[11px] text-gray-500">Yuklab olish uchun bosing</p>
+          </div>
+          <Download className="w-4 h-4 text-orange-500 shrink-0" />
+        </a>
+      )}
+    </div>
+  );
+}
+
+
 // ===== StudentProblemCard — flip effekti bilan =====
-function StudentProblemCard({ problem, index, isPremium, onPremiumClick, onPlayVideo, onSolutionViewed }: {
-  problem: Problem; index: number; isPremium: boolean;
+function StudentProblemCard({ problem, index, isPremium, isLoggedIn, onRequireAuth, onPremiumClick, onPlayVideo, onSolutionViewed }: {
+  problem: Problem; index: number; isPremium: boolean; isLoggedIn: boolean;
+  onRequireAuth: () => void;
   onPremiumClick: () => void; onPlayVideo: (url: string) => void; onSolutionViewed: (problemId: string) => void;
 }) {
   const [flipped, setFlipped] = useState(false);
@@ -462,7 +639,11 @@ function StudentProblemCard({ problem, index, isPremium, onPremiumClick, onPlayV
               <div className="flex items-center gap-3 mt-4 pt-3 border-t border-gray-100">
                 {problem.solution && problem.solution.length > 0 && (
                   <button
-                    onClick={(e) => { e.stopPropagation(); setFlipped(true); setVisibleSteps(1); onSolutionViewed(problem.id); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!isLoggedIn) { onRequireAuth(); return; }
+                      setFlipped(true); setVisibleSteps(1); onSolutionViewed(problem.id);
+                    }}
                     className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-600 text-sm font-medium rounded-lg active:bg-blue-100"
                   >
                     📖 Yechimni ko'rish
@@ -470,7 +651,11 @@ function StudentProblemCard({ problem, index, isPremium, onPremiumClick, onPlayV
                 )}
                 {problem.videoUrl && (
                   <button
-                    onClick={(e) => { e.stopPropagation(); onPlayVideo(problem.videoUrl!); }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!isLoggedIn) { onRequireAuth(); return; }
+                      onPlayVideo(problem.videoUrl!);
+                    }}
                     className="flex items-center gap-2 px-3 py-2 bg-purple-50 text-purple-600 text-sm font-medium rounded-lg active:bg-purple-100"
                   >
                     <Play size={14} /> Video yechim
@@ -531,20 +716,27 @@ function StudentProblemCard({ problem, index, isPremium, onPremiumClick, onPlayV
                   <>
                     {shown.map((stepText, idx) => (
                       <div key={idx} className="text-sm text-gray-800 mb-3 animate-fadeIn">
-                        <span className="font-bold text-blue-600">{idx + 1}-qadam:</span>
-                        <div className="mt-1.5 whitespace-pre-wrap leading-relaxed"><LatexText text={stepText} /></div>
+                        <div className="whitespace-pre-wrap leading-relaxed"><LatexText text={stepText} /></div>
                       </div>
                     ))}
                     {totalSteps > 0 && (
                       <div className="mt-4 pt-3 border-t border-blue-100 flex items-center justify-between">
                         <span className="text-xs text-gray-500">{Math.min(visibleSteps, totalSteps)} / {totalSteps} qadam</span>
                         {visibleSteps < totalSteps ? (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setVisibleSteps((v) => v + 1); }}
-                            className="px-4 py-2 bg-blue-500 text-white text-xs font-medium rounded-lg active:bg-blue-600 flex items-center gap-1"
-                          >
-                            Keyingi qadam →
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setVisibleSteps(totalSteps); }}
+                              className="px-3 py-2 bg-blue-50 text-blue-600 text-xs font-medium rounded-lg active:bg-blue-100 flex items-center gap-1"
+                            >
+                              Yechimni to'liq ochish
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setVisibleSteps((v) => v + 1); }}
+                              className="px-4 py-2 bg-blue-500 text-white text-xs font-medium rounded-lg active:bg-blue-600 flex items-center gap-1"
+                            >
+                              Keyingi qadam →
+                            </button>
+                          </div>
                         ) : (
                           totalSteps > 1 && (
                             <button
@@ -569,7 +761,11 @@ function StudentProblemCard({ problem, index, isPremium, onPremiumClick, onPlayV
             )}
             {problem.videoUrl && (
               <button
-                onClick={(e) => { e.stopPropagation(); onPlayVideo(problem.videoUrl!); }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!isLoggedIn) { onRequireAuth(); return; }
+                  onPlayVideo(problem.videoUrl!);
+                }}
                 className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 bg-purple-500 text-white text-sm font-medium rounded-lg active:bg-purple-600"
               >
                 <Play size={14} fill="white" /> Video yechimni ko'rish

@@ -22,6 +22,7 @@ import NewsItems from "./pages/NewsItems";
 import Motivations from "./pages/Motivations";
 import SocialLinks from "./pages/SocialLinks";
 import Notifications from "./pages/Notifications";
+import Testimonials from "./pages/Testimonials";
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -70,6 +71,7 @@ export default function App() {
         <Route path="settings" element={<Settings />} />
         <Route path="banners" element={<Banners />} />
         <Route path="news-items" element={<NewsItems />} />
+        <Route path="testimonials" element={<Testimonials />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

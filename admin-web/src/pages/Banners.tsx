@@ -24,6 +24,10 @@ export default function Banners() {
   const [imagePosition, setImagePosition] = useState("center");
   const [imageFit, setImageFit] = useState<"cover" | "contain">("cover");
   const [imageFullWidth, setImageFullWidth] = useState(false);
+  const [imageOpacity, setImageOpacity] = useState(70);
+  const [textColor, setTextColor] = useState("#ffffff");
+  const [textOpacity, setTextOpacity] = useState(100);
+  const [buttonPosition, setButtonPosition] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => { loadData(); }, []);
@@ -39,6 +43,8 @@ export default function Banners() {
     setEditBanner(null);
     setTitle(""); setSubtitle(""); setButtonText("Boshlash"); setCourseId(""); setBgColor("#3b82f6");
     setImageFile(null); setImagePreview(""); setImagePosition("center"); setImageFit("cover"); setImageFullWidth(false);
+    setImageOpacity(70);
+    setTextColor("#ffffff"); setTextOpacity(100); setButtonPosition("");
     setShowForm(true);
   }
 
@@ -49,6 +55,9 @@ export default function Banners() {
     setImagePreview(banner.imageUrl || ""); setImageFile(null);
     setImagePosition(banner.imagePosition || "center"); setImageFit(banner.imageFit || "cover");
     setImageFullWidth(banner.imageFullWidth || false);
+    setImageOpacity(banner.imageOpacity ?? (banner.imageFullWidth ? 70 : 50));
+    setTextColor(banner.textColor || "#ffffff"); setTextOpacity(banner.textOpacity ?? 100);
+    setButtonPosition(banner.buttonPosition || "");
     setShowForm(true);
   }
 
@@ -69,14 +78,16 @@ export default function Banners() {
         await updateBanner(editBanner.id, {
           title: title.trim(), subtitle: subtitle.trim(), buttonText: buttonText.trim(),
           courseId: courseId || undefined, bgColor, imageUrl: imageUrl || undefined,
-          imagePosition, imageFit, imageFullWidth,
+          imagePosition, imageFit, imageFullWidth, imageOpacity,
+          textColor, textOpacity, buttonPosition: buttonPosition || undefined,
         });
       } else {
         const banner: HomeBanner = {
           id: `banner-${now}`, title: title.trim(), subtitle: subtitle.trim(),
           buttonText: buttonText.trim(), courseId: courseId || undefined,
           bgColor, imageUrl: imageUrl || undefined,
-          imagePosition, imageFit, imageFullWidth,
+          imagePosition, imageFit, imageFullWidth, imageOpacity,
+          textColor, textOpacity, buttonPosition: buttonPosition || undefined,
           isActive: true, order: banners.length + 1,
           createdAt: now, updatedAt: now,
         };
@@ -144,11 +155,30 @@ export default function Banners() {
                 {courses.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
               </select>
             </div>
+            <div className="col-span-2">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-sm font-medium text-gray-700">Matn shaffofligi</label>
+                <span className="text-xs font-mono text-primary-600">{textOpacity}%</span>
+              </div>
+              <input
+                type="range" min={0} max={100} step={5}
+                value={textOpacity}
+                onChange={(e) => setTextOpacity(Number(e.target.value))}
+                className="w-full accent-primary-500 cursor-pointer"
+              />
+            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Fon rangi</label>
               <div className="flex items-center gap-2">
                 <input type="color" value={bgColor} onChange={(e) => setBgColor(e.target.value)} className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer" />
                 <input value={bgColor} onChange={(e) => setBgColor(e.target.value)} className="flex-1 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-mono" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Matn rangi</label>
+              <div className="flex items-center gap-2">
+                <input type="color" value={textColor} onChange={(e) => setTextColor(e.target.value)} className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer" />
+                <input value={textColor} onChange={(e) => setTextColor(e.target.value)} className="flex-1 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm font-mono" />
               </div>
             </div>
             <div>
@@ -181,6 +211,24 @@ export default function Banners() {
                 >
                   <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${imageFullWidth ? "translate-x-5" : ""}`} />
                 </button>
+              </div>
+
+              {/* Shaffoflik (opacity) */}
+              <div className="bg-white rounded-lg border border-gray-200 px-3 py-2.5">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-medium text-gray-700">Rasm shaffofligi (prozrachnost)</p>
+                  <span className="text-xs font-mono text-primary-600">{imageOpacity}%</span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={5}
+                  value={imageOpacity}
+                  onChange={(e) => setImageOpacity(Number(e.target.value))}
+                  className="w-full accent-primary-500 cursor-pointer"
+                />
+                <p className="text-[10px] text-gray-400 mt-1">0% — butunlay shaffof, 100% — to'liq ko'rinadigan rasm</p>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
@@ -222,19 +270,31 @@ export default function Banners() {
             </div>
           )}
 
-          {/* Preview — rasm pozitsiyasini drag qilib o'zgartirish */}
+          {/* Preview — rasm pozitsiyasini va tugma joyini drag qilib o'zgartirish */}
           <div>
-            <p className="text-xs text-gray-500 mb-2">Ko'rinishi: <span className="text-gray-400">(rasmni sichqoncha bilan sudrab joylang)</span></p>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-gray-500">Ko'rinishi: <span className="text-gray-400">(rasmni yoki tugmani sichqoncha bilan sudrab joylang)</span></p>
+              {buttonPosition && (
+                <button type="button" onClick={() => setButtonPosition("")} className="text-[11px] text-primary-500 font-medium hover:text-primary-700">
+                  ↺ Tugma joyini standartga qaytarish
+                </button>
+              )}
+            </div>
             <BannerPreviewDraggable
               title={title}
               subtitle={subtitle}
               buttonText={buttonText}
               bgColor={bgColor}
+              textColor={textColor}
+              textOpacity={textOpacity}
               imagePreview={imagePreview}
               imageFullWidth={imageFullWidth}
               imageFit={imageFit}
               imagePosition={imagePosition}
+              imageOpacity={imageOpacity}
+              buttonPosition={buttonPosition}
               onPositionChange={setImagePosition}
+              onButtonPositionChange={setButtonPosition}
             />
           </div>
 
@@ -284,16 +344,19 @@ export default function Banners() {
 }
 
 
-// ===== Drag bilan rasm pozitsiyasini o'zgartirish =====
+// ===== Drag bilan rasm pozitsiyasi, matn rangi va tugma joyini o'zgartirish =====
 function BannerPreviewDraggable({
-  title, subtitle, buttonText, bgColor, imagePreview, imageFullWidth, imageFit, imagePosition, onPositionChange,
+  title, subtitle, buttonText, bgColor, textColor, textOpacity, imagePreview, imageFullWidth, imageFit, imagePosition, imageOpacity, buttonPosition, onPositionChange, onButtonPositionChange,
 }: {
   title: string; subtitle: string; buttonText: string; bgColor: string;
+  textColor: string; textOpacity: number;
   imagePreview: string; imageFullWidth: boolean; imageFit: "cover" | "contain";
-  imagePosition: string; onPositionChange: (pos: string) => void;
+  imagePosition: string; imageOpacity: number;
+  buttonPosition: string; onPositionChange: (pos: string) => void; onButtonPositionChange: (pos: string) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [dragging, setDragging] = useState(false);
+  // Nima drag qilinayotgani: "image" | "button" | null
+  const [dragTarget, setDragTarget] = useState<"image" | "button" | null>(null);
 
   // imagePosition ni x%, y% formatga parse qilish
   function parsePosition(pos: string): { x: number; y: number } {
@@ -304,71 +367,79 @@ function BannerPreviewDraggable({
     };
     if (map[pos]) return map[pos];
     // "x% y%" formatini parse qilish
-    const match = pos.match(/(\d+)%?\s+(\d+)%?/);
-    if (match) return { x: parseInt(match[1]), y: parseInt(match[2]) };
+    const match = pos.match(/([\d.]+)%?\s+([\d.]+)%?/);
+    if (match) return { x: parseFloat(match[1]), y: parseFloat(match[2]) };
     return { x: 50, y: 50 };
   }
 
-  function handleMouseDown(e: React.MouseEvent) {
+  function startImageDrag(e: React.MouseEvent | React.TouchEvent) {
     if (!imagePreview) return;
     e.preventDefault();
-    setDragging(true);
-    updatePosition(e.clientX, e.clientY);
+    e.stopPropagation();
+    setDragTarget("image");
+    const point = "touches" in e ? e.touches[0] : e;
+    updatePosition(point.clientX, point.clientY, "image");
   }
 
-  function handleMouseMove(e: React.MouseEvent) {
-    if (!dragging) return;
-    updatePosition(e.clientX, e.clientY);
+  function startButtonDrag(e: React.MouseEvent | React.TouchEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragTarget("button");
+    const point = "touches" in e ? e.touches[0] : e;
+    updatePosition(point.clientX, point.clientY, "button");
   }
 
-  function handleMouseUp() {
-    setDragging(false);
+  function handleMove(clientX: number, clientY: number) {
+    if (!dragTarget) return;
+    updatePosition(clientX, clientY, dragTarget);
   }
 
-  function handleTouchStart(e: React.TouchEvent) {
-    if (!imagePreview) return;
-    setDragging(true);
-    const touch = e.touches[0];
-    updatePosition(touch.clientX, touch.clientY);
-  }
-
-  function handleTouchMove(e: React.TouchEvent) {
-    if (!dragging) return;
-    const touch = e.touches[0];
-    updatePosition(touch.clientX, touch.clientY);
-  }
-
-  function updatePosition(clientX: number, clientY: number) {
+  function updatePosition(clientX: number, clientY: number, target: "image" | "button") {
     const el = containerRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    const x = Math.max(0, Math.min(100, Math.round(((clientX - rect.left) / rect.width) * 100)));
-    const y = Math.max(0, Math.min(100, Math.round(((clientY - rect.top) / rect.height) * 100)));
-    onPositionChange(`${x}% ${y}%`);
+    const x = Math.max(0, Math.min(100, Math.round(((clientX - rect.left) / rect.width) * 1000) / 10));
+    const y = Math.max(0, Math.min(100, Math.round(((clientY - rect.top) / rect.height) * 1000) / 10));
+    if (target === "image") onPositionChange(`${x}% ${y}%`);
+    else onButtonPositionChange(`${x}% ${y}%`);
   }
 
   const pos = parsePosition(imagePosition);
+  const btnPos = buttonPosition ? parsePosition(buttonPosition) : null;
+  const textStyle: React.CSSProperties = { color: textColor, opacity: textOpacity / 100 };
 
   return (
     <div
       ref={containerRef}
-      className={`rounded-2xl p-5 text-white relative overflow-hidden select-none ${dragging ? "cursor-grabbing" : imagePreview ? "cursor-grab" : ""}`}
+      className="rounded-2xl p-5 relative overflow-hidden select-none min-h-[180px]"
       style={{ backgroundColor: bgColor }}
-      onMouseDown={handleMouseDown}
-      onMouseMove={handleMouseMove}
-      onMouseUp={handleMouseUp}
-      onMouseLeave={handleMouseUp}
-      onTouchStart={handleTouchStart}
-      onTouchMove={handleTouchMove}
-      onTouchEnd={() => setDragging(false)}
+      onMouseMove={(e) => handleMove(e.clientX, e.clientY)}
+      onMouseUp={() => setDragTarget(null)}
+      onMouseLeave={() => setDragTarget(null)}
+      onTouchMove={(e) => { if (dragTarget) handleMove(e.touches[0].clientX, e.touches[0].clientY); }}
+      onTouchEnd={() => setDragTarget(null)}
     >
       {imagePreview && !imageFullWidth && (
-        <img src={imagePreview} alt="" className="absolute right-0 top-0 h-full w-1/3 pointer-events-none" style={{ objectFit: imageFit, objectPosition: imagePosition, opacity: 0.6 }} />
+        <img
+          src={imagePreview} alt=""
+          className={`absolute right-0 top-0 h-full w-1/3 ${dragTarget === "image" ? "cursor-grabbing" : "cursor-grab"}`}
+          style={{ objectFit: imageFit, objectPosition: imagePosition, opacity: imageOpacity / 100 }}
+          onMouseDown={startImageDrag}
+          onTouchStart={startImageDrag}
+          draggable={false}
+        />
       )}
       {imagePreview && imageFullWidth && (
-        <img src={imagePreview} alt="" className="absolute inset-0 w-full h-full pointer-events-none" style={{ objectFit: imageFit, objectPosition: imagePosition, opacity: 0.7 }} />
+        <img
+          src={imagePreview} alt=""
+          className={`absolute inset-0 w-full h-full ${dragTarget === "image" ? "cursor-grabbing" : "cursor-grab"}`}
+          style={{ objectFit: imageFit, objectPosition: imagePosition, opacity: imageOpacity / 100 }}
+          onMouseDown={startImageDrag}
+          onTouchStart={startImageDrag}
+          draggable={false}
+        />
       )}
-      {/* Pozitsiya indikatori */}
+      {/* Rasm pozitsiya indikatori */}
       {imagePreview && (
         <div
           className="absolute w-4 h-4 bg-white rounded-full border-2 border-primary-500 shadow-lg z-20 pointer-events-none"
@@ -376,13 +447,34 @@ function BannerPreviewDraggable({
         />
       )}
       {/* Matn */}
-      <p className="text-xl font-bold relative z-10 pointer-events-none">{title || "Sarlavha"}</p>
-      {subtitle && <p className="text-sm text-white/80 mt-1 relative z-10 pointer-events-none">{subtitle}</p>}
-      <div className="mt-3 inline-block bg-gray-900 text-white text-sm font-semibold px-4 py-2 rounded-xl relative z-10 pointer-events-none">{buttonText || "Tugma"}</div>
-      {/* Pozitsiya qiymati ko'rsatish */}
-      {imagePreview && (
-        <div className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded z-20 pointer-events-none font-mono">
-          {imagePosition}
+      <p className="text-xl font-bold relative z-10 pointer-events-none" style={textStyle}>{title || "Sarlavha"}</p>
+      {subtitle && <p className="text-sm mt-1 relative z-10 pointer-events-none" style={{ ...textStyle, opacity: (textOpacity / 100) * 0.8 }}>{subtitle}</p>}
+
+      {/* Tugma — standart holatda matn ostida, buttonPosition belgilangan bo'lsa — absolute + drag qilinadigan */}
+      {btnPos ? (
+        <div
+          className={`absolute bg-gray-900 text-white text-sm font-semibold px-4 py-2 rounded-xl z-20 select-none ${dragTarget === "button" ? "cursor-grabbing ring-2 ring-primary-400" : "cursor-grab"}`}
+          style={{ left: `${btnPos.x}%`, top: `${btnPos.y}%`, transform: "translate(-50%, -50%)" }}
+          onMouseDown={startButtonDrag}
+          onTouchStart={startButtonDrag}
+        >
+          {buttonText || "Tugma"}
+        </div>
+      ) : (
+        <div
+          className={`mt-3 inline-block bg-gray-900 text-white text-sm font-semibold px-4 py-2 rounded-xl relative z-20 select-none ${dragTarget === "button" ? "cursor-grabbing ring-2 ring-primary-400" : "cursor-grab"}`}
+          onMouseDown={startButtonDrag}
+          onTouchStart={startButtonDrag}
+        >
+          {buttonText || "Tugma"}
+        </div>
+      )}
+
+      {/* Pozitsiya qiymatlarini ko'rsatish */}
+      {(imagePreview || btnPos) && (
+        <div className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded z-20 pointer-events-none font-mono space-y-0.5 text-right">
+          {imagePreview && <div>🖼 {imagePosition}</div>}
+          {btnPos && <div>🔘 {buttonPosition}</div>}
         </div>
       )}
     </div>

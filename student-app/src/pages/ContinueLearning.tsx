@@ -57,7 +57,7 @@ export default function ContinueLearning() {
           ]);
           if (!course) return null;
 
-          // Navbatdagi tugatilmagan mavzuni topish (order bo'yicha birinchi completed bo'lmagan)
+          // Navbatdagi tugatilmagan modulni topish (order bo'yicha birinchi completed bo'lmagan)
           const sortedTopics = [...topics].sort((a, b) => a.order - b.order);
           const nextTopic = sortedTopics.find((t) => !prog.completedTopics.includes(t.id)) || null;
 
@@ -110,7 +110,7 @@ export default function ContinueLearning() {
             <div>
               <h2 className="text-white text-xl font-bold">Bugungi maqsad</h2>
               <p className="text-white/70 text-sm mt-1">
-                {lastCourse.remainingTopics} ta mavzu qoldi
+                {lastCourse.remainingTopics} ta modul qoldi
               </p>
             </div>
             {/* Doiraviy progress */}
@@ -201,7 +201,7 @@ export default function ContinueLearning() {
                   {/* Progress */}
                   <div className="mt-3">
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs text-gray-500">Mavzu progressi</span>
+                      <span className="text-xs text-gray-500">Modul progressi</span>
                       <span className="text-xs font-bold text-primary-500">{topicProgress}%</span>
                     </div>
                     <div className="h-2 bg-gray-100 rounded-full">

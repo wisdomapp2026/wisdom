@@ -24,7 +24,34 @@ interface PlatformSettings {
   notifyNewStudent: boolean;
   notifyNewPayment: boolean;
   notifyNewMessage: boolean;
+  // Interfeys (tema) sozlamalari — student app ranglari
+  theme?: ThemeSettings;
 }
+
+/** Student app interfeys ranglari */
+interface ThemeSettings {
+  primaryColor: string; // Asosiy rang (tugmalar, progress bar, header)
+  bgColor: string; // Sahifa fon rangi
+  cardBgColor: string; // Kartochkalar fon rangi
+  textColor: string; // Asosiy matn rangi
+  secondaryTextColor: string; // Ikkilamchi matn rangi
+  navBgColor: string; // Bottom nav fon rangi
+  navActiveColor: string; // Nav active ikonka/matn rangi
+  buttonTextColor: string; // Tugma matni rangi
+  accentColor: string; // Qo'shimcha urg'u rangi (badge, progress)
+}
+
+const DEFAULT_THEME: ThemeSettings = {
+  primaryColor: "#2196F3",
+  bgColor: "#f9fafb",
+  cardBgColor: "#ffffff",
+  textColor: "#111827",
+  secondaryTextColor: "#6b7280",
+  navBgColor: "#ffffff",
+  navActiveColor: "#2196F3",
+  buttonTextColor: "#ffffff",
+  accentColor: "#22c55e",
+};
 
 const DEFAULT_SETTINGS: PlatformSettings = {
   monthlyPrice: 50000,
@@ -48,7 +75,7 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [activeTab, setActiveTab] = useState<"pricing" | "general" | "payments" | "notifications">("pricing");
+  const [activeTab, setActiveTab] = useState<"pricing" | "general" | "payments" | "notifications" | "theme">("pricing");
 
   useEffect(() => { loadSettings(); }, []);
 
@@ -92,6 +119,7 @@ export default function Settings() {
     { id: "general" as const, label: "Umumiy", icon: <Globe size={16} /> },
     { id: "payments" as const, label: "To'lov usullari", icon: <Shield size={16} /> },
     { id: "notifications" as const, label: "Bildirishnomalar", icon: <Bell size={16} /> },
+    { id: "theme" as const, label: "Interfeys", icon: <Palette size={16} /> },
   ];
 
   return (
@@ -332,6 +360,14 @@ export default function Settings() {
             </div>
           </div>
         )}
+
+        {activeTab === "theme" && (
+          <ThemeEditor
+            theme={settings.theme || DEFAULT_THEME}
+            onChange={(theme) => updateField("theme", theme)}
+            onReset={() => updateField("theme", DEFAULT_THEME)}
+          />
+        )}
       </div>
 
       {/* Tizim haqida */}
@@ -366,6 +402,150 @@ function ToggleRow({ icon, title, description, checked, onChange }: {
       >
         <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${checked ? "left-[22px]" : "left-0.5"}`} />
       </button>
+    </div>
+  );
+}
+
+
+// ===== Interfeys (tema) tahrirlash komponenti =====
+const THEME_FIELDS: { key: keyof ThemeSettings; label: string; description: string }[] = [
+  { key: "primaryColor", label: "Asosiy rang", description: "Tugmalar, progress bar, header elementlari" },
+  { key: "bgColor", label: "Sahifa fon rangi", description: "Asosiy sahifa fon rangi" },
+  { key: "cardBgColor", label: "Kartochka fon rangi", description: "Kurs, misol va boshqa kartochkalar" },
+  { key: "textColor", label: "Asosiy matn rangi", description: "Sarlavhalar va asosiy matnlar" },
+  { key: "secondaryTextColor", label: "Ikkilamchi matn rangi", description: "Tavsif, sana, kichik matnlar" },
+  { key: "navBgColor", label: "Navbar fon rangi", description: "Pastki navigatsiya paneli fon rangi" },
+  { key: "navActiveColor", label: "Navbar aktiv rangi", description: "Faol menyu elementi rangi" },
+  { key: "buttonTextColor", label: "Tugma matni rangi", description: "Tugma ichidagi matn/ikonka rangi" },
+  { key: "accentColor", label: "Urg'u rang", description: "Yashil badge, online indikator, muvaffaqiyat" },
+];
+
+function ThemeEditor({ theme, onChange, onReset }: {
+  theme: ThemeSettings; onChange: (theme: ThemeSettings) => void; onReset: () => void;
+}) {
+  function updateColor(key: keyof ThemeSettings, value: string) {
+    onChange({ ...theme, [key]: value });
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-1">Interfeys sozlamalari</h3>
+          <p className="text-sm text-gray-500">Student ilovaning ranglari va ko'rinishini sozlash</p>
+        </div>
+        <button
+          onClick={() => { if (confirm("Barcha ranglarni boshlang'ich holatiga qaytarishni xohlaysizmi?")) onReset(); }}
+          className="btn-outline text-sm flex items-center gap-2 text-amber-600 border-amber-200 hover:bg-amber-50"
+        >
+          ↺ Default holatiga qaytarish
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Ranglar ro'yxati */}
+        <div className="space-y-3">
+          <h4 className="text-sm font-medium text-gray-700 mb-2">Ranglarni tanlang</h4>
+          {THEME_FIELDS.map((field) => (
+            <div key={field.key} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
+              <input
+                type="color"
+                value={theme[field.key]}
+                onChange={(e) => updateColor(field.key, e.target.value)}
+                className="w-10 h-10 rounded-lg border border-gray-200 cursor-pointer shrink-0"
+              />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900">{field.label}</p>
+                <p className="text-[11px] text-gray-500">{field.description}</p>
+              </div>
+              <input
+                type="text"
+                value={theme[field.key]}
+                onChange={(e) => updateColor(field.key, e.target.value)}
+                className="w-24 px-2 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-mono text-center"
+              />
+            </div>
+          ))}
+        </div>
+
+        {/* Live Preview — telefon ko'rinishida */}
+        <div className="sticky top-6">
+          <h4 className="text-sm font-medium text-gray-700 mb-2">Ko'rinishi (Preview)</h4>
+          <div className="border-[3px] border-gray-800 rounded-[2rem] overflow-hidden shadow-2xl mx-auto" style={{ width: "280px" }}>
+            {/* Status bar */}
+            <div className="h-6 bg-gray-800 flex items-center justify-center">
+              <div className="w-16 h-3 bg-gray-700 rounded-full" />
+            </div>
+            {/* Screen */}
+            <div className="h-[500px] overflow-y-auto" style={{ backgroundColor: theme.bgColor }}>
+              {/* Header */}
+              <div className="px-4 pt-3 pb-2 flex items-center justify-between" style={{ backgroundColor: theme.cardBgColor }}>
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ backgroundColor: theme.primaryColor }}>
+                    <span className="text-xs" style={{ color: theme.buttonTextColor }}>⚡</span>
+                  </div>
+                  <span className="text-sm font-bold" style={{ color: theme.primaryColor }}>EduKids</span>
+                </div>
+                <div className="flex gap-2">
+                  <div className="w-6 h-6 rounded-full" style={{ backgroundColor: theme.bgColor }} />
+                  <div className="w-6 h-6 rounded-full" style={{ backgroundColor: theme.bgColor }} />
+                </div>
+              </div>
+
+              {/* Banner */}
+              <div className="mx-3 mt-3 rounded-xl p-4" style={{ backgroundColor: theme.primaryColor, minHeight: "90px" }}>
+                <p className="text-sm font-bold" style={{ color: theme.buttonTextColor }}>Milliy sertifikatga tayyormisiz?</p>
+                <div className="mt-2 inline-block px-3 py-1.5 rounded-lg text-xs font-medium" style={{ backgroundColor: theme.textColor, color: theme.cardBgColor }}>Boshlash</div>
+              </div>
+
+              {/* Kurs kartochkasi */}
+              <div className="mx-3 mt-3 rounded-xl p-3 border" style={{ backgroundColor: theme.cardBgColor, borderColor: theme.bgColor }}>
+                <div className="h-16 rounded-lg mb-2" style={{ backgroundColor: theme.primaryColor + "20" }} />
+                <p className="text-xs font-semibold" style={{ color: theme.textColor }}>Matematika kursi</p>
+                <p className="text-[10px] mt-0.5" style={{ color: theme.secondaryTextColor }}>📚 12 modul · 👥 45 o'quvchi</p>
+                <div className="mt-2 h-1.5 rounded-full" style={{ backgroundColor: theme.bgColor }}>
+                  <div className="h-full rounded-full w-3/5" style={{ backgroundColor: theme.primaryColor }} />
+                </div>
+              </div>
+
+              {/* Misol kartochkasi */}
+              <div className="mx-3 mt-3 rounded-xl p-3 border" style={{ backgroundColor: theme.cardBgColor, borderColor: theme.bgColor }}>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded" style={{ backgroundColor: theme.accentColor + "20", color: theme.accentColor }}>Oson</span>
+                  <span className="text-[9px]" style={{ color: theme.secondaryTextColor }}>1 · MISOL</span>
+                </div>
+                <p className="text-[11px]" style={{ color: theme.textColor }}>x² + 5x + 6 = 0 tenglamani yeching</p>
+                <div className="flex gap-2 mt-2">
+                  <span className="text-[9px] px-2 py-1 rounded" style={{ backgroundColor: theme.primaryColor + "15", color: theme.primaryColor }}>📖 Yechim</span>
+                  <span className="text-[9px] px-2 py-1 rounded" style={{ backgroundColor: "#9333ea15", color: "#9333ea" }}>▶ Video</span>
+                </div>
+              </div>
+
+              {/* Motivatsiya */}
+              <div className="mx-3 mt-3 rounded-xl p-3 text-center" style={{ backgroundColor: theme.primaryColor }}>
+                <span className="text-lg">⭐</span>
+                <p className="text-[10px] font-medium mt-1" style={{ color: theme.buttonTextColor }}>"Har kuni o'rganish — muvaffaqiyat kaliti"</p>
+              </div>
+
+              {/* Bottom spacing */}
+              <div className="h-14" />
+            </div>
+
+            {/* Bottom nav */}
+            <div className="flex items-center justify-around py-2 border-t" style={{ backgroundColor: theme.navBgColor, borderColor: theme.bgColor }}>
+              {["🏠", "▶", "📚", "📝", "👤"].map((icon, i) => (
+                <div key={i} className="flex flex-col items-center gap-0.5">
+                  <span className="text-sm" style={{ color: i === 0 ? theme.navActiveColor : theme.secondaryTextColor }}>{icon}</span>
+                  <span className="text-[7px]" style={{ color: i === 0 ? theme.navActiveColor : theme.secondaryTextColor }}>
+                    {["Bosh", "Davom", "Kurs", "Test", "Profil"][i]}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <p className="text-[10px] text-gray-400 text-center mt-2">Ranglar saqlangach, student ilovada avtomatik qo'llaniladi</p>
+        </div>
+      </div>
     </div>
   );
 }

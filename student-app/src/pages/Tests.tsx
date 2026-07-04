@@ -216,10 +216,10 @@ export default function Tests() {
         ))}
       </div>
 
-      {/* Mavzu testlari — gorizontal scroll */}
+      {/* Modul testlari — gorizontal scroll */}
       <section className="mt-6">
         <div className="flex justify-between items-center px-5 mb-3">
-          <h3 className="font-bold text-gray-900">Mavzu testlari</h3>
+          <h3 className="font-bold text-gray-900">Modul testlari</h3>
           <span className="text-sm text-primary-500 font-medium">Barchasi</span>
         </div>
         <div className="flex gap-3 overflow-x-auto px-5 pb-2 scrollbar-hide">

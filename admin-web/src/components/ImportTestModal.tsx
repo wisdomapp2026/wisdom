@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { X, Search, ChevronDown, ChevronRight, CheckSquare, Square, Eye, EyeOff, List } from "lucide-react";
-import { createTest, getAllTestLists } from "@shared/repositories";
+import { createTest, getAllTestLists, getAllTBQuestions, getAllTBFolders } from "@shared/repositories";
 import type { Test, Question as TQuestion, TestList } from "@shared/types";
 
 /** Content Library dagi savol formati */
@@ -29,6 +29,8 @@ interface Props {
   courseId: string;
   existingTestIds: string[];
   folderId?: string; // qaysi papkaga qo'shilmoqda
+  /** Qaysi modul tartib raqamidan keyin joylashsin (bo'sh bo'lsa — kurs oxiriga qo'shiladi, keyin tartibni sudrab o'zgartirish mumkin) */
+  afterTopicOrder?: number;
   onClose: () => void;
   onImported: () => void;
 }
@@ -45,7 +47,7 @@ function loadFromStorage<T>(key: string, fallback: T): T {
   }
 }
 
-export default function ImportTestModal({ open, courseId, existingTestIds, folderId, onClose, onImported }: Props) {
+export default function ImportTestModal({ open, courseId, existingTestIds, folderId, afterTopicOrder, onClose, onImported }: Props) {
   const [activeTab, setActiveTab] = useState<"library" | "testlists">("library");
 
   // Content Library
@@ -65,23 +67,49 @@ export default function ImportTestModal({ open, courseId, existingTestIds, folde
 
   useEffect(() => {
     if (open) {
-      const f = loadFromStorage<LibFolder[]>("tb_folders", []);
-      const q = loadFromStorage<LibQuestion[]>("tb_questions", []);
-      setFolders(f);
-      setQuestions(q);
+      loadLibraryData();
       setSelectedIds(new Set());
       setSelectedListIds(new Set());
       setSearchQuery("");
       setPreviewId(null);
       setTestTitle("");
       setTestTime(20);
-      setExpandedFolders(new Set(f.map((fo) => fo.id)));
       setActiveTab("library");
 
       // Test listlarni yuklash
       getAllTestLists().then(setTestLists).catch(console.error);
     }
   }, [open]);
+
+  async function loadLibraryData() {
+    try {
+      // Avval Firestore'dan yuklash (asosiy manba)
+      const [dbQuestions, dbFolders] = await Promise.all([
+        getAllTBQuestions(),
+        getAllTBFolders(),
+      ]);
+
+      if (dbQuestions.length > 0 || dbFolders.length > 0) {
+        setQuestions(dbQuestions as LibQuestion[]);
+        setFolders(dbFolders as LibFolder[]);
+        setExpandedFolders(new Set((dbFolders as LibFolder[]).map((fo) => fo.id)));
+      } else {
+        // Firestore bo'sh — localStorage'dan fallback
+        const f = loadFromStorage<LibFolder[]>("tb_folders", []);
+        const q = loadFromStorage<LibQuestion[]>("tb_questions", []);
+        setFolders(f);
+        setQuestions(q);
+        setExpandedFolders(new Set(f.map((fo) => fo.id)));
+      }
+    } catch (err) {
+      // Xato bo'lsa localStorage fallback
+      const f = loadFromStorage<LibFolder[]>("tb_folders", []);
+      const q = loadFromStorage<LibQuestion[]>("tb_questions", []);
+      setFolders(f);
+      setQuestions(q);
+      setExpandedFolders(new Set(f.map((fo) => fo.id)));
+    }
+  }
 
   if (!open) return null;
 
@@ -169,6 +197,7 @@ export default function ImportTestModal({ open, courseId, existingTestIds, folde
         id: testId,
         courseId,
         ...(folderId ? { folderId } : {}),
+        ...(afterTopicOrder != null ? { afterTopicOrder } : {}),
         title,
         description: `${selectedQuestions.length} ta savol · ${testTime} daqiqa`,
         version: "Published",
@@ -230,6 +259,7 @@ export default function ImportTestModal({ open, courseId, existingTestIds, folde
           id: testId,
           courseId,
           ...(folderId ? { folderId } : {}),
+          ...(afterTopicOrder != null ? { afterTopicOrder } : {}),
           title: list.title,
           description: `${listQuestions.length} ta savol · ${listTotalTime} daqiqa`,
           version: "Published",

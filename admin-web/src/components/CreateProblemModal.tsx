@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { X, Upload } from "lucide-react";
-import { createProblem, updateProblem, saveTestToLibrary } from "@shared/repositories";
+import { createProblem, updateProblem, saveTestToLibrary, saveTBQuestion, saveTBFolder, getAllTBFolders } from "@shared/repositories";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { storage } from "@shared/firebase";
 import type { Problem, Test, Question } from "@shared/types";
@@ -164,7 +164,7 @@ export default function CreateProblemModal({ open, courseId, topicId, existingCo
             id: `tlib-${id}`,
             courseId,
             title: content.slice(0, 60) + (content.length > 60 ? "..." : ""),
-            description: `Mavzu: ${topicId} · Misol: ${id}`,
+            description: `Modul: ${topicId} · Misol: ${id}`,
             version: "Draft v1",
             status: "draft",
             passingScore: 1,
@@ -179,39 +179,55 @@ export default function CreateProblemModal({ open, courseId, topicId, existingCo
 
           await saveTestToLibrary(testEntry);
 
-          // Test Builder (Content Library) localStorage ga ham yozish
+          // Test Builder (Content Library) — Firestore va localStorage ga saqlash
           try {
-            const tbQuestions = JSON.parse(localStorage.getItem("tb_questions") || "[]");
-            const tbFolders = JSON.parse(localStorage.getItem("tb_folders") || "[]");
             const tagList = tags.split(",").map((t) => t.trim()).filter(Boolean);
             const folderName = tagList[0] || "Umumiy";
 
-            // Papka mavjudmi tekshirish, yo'qsa yaratish
-            let folder = tbFolders.find((f: any) => f.name === folderName);
+            // Firestore'dagi papkalarni tekshirish
+            const existingFolders = await getAllTBFolders();
+            let folder = existingFolders.find((f: any) => f.name === folderName);
             if (!folder) {
               folder = { id: `folder-${Date.now()}`, name: folderName, questionIds: [] };
-              tbFolders.push(folder);
+              await saveTBFolder(folder);
             }
 
-            // Savolni qo'shish
+            // Savol obyekti
             const newQ = {
               id: testQuestion.id,
               content,
               difficulty,
               time: `${estimatedMinutes} min`,
               tags: tagList,
-              order: tbQuestions.length + 1,
+              order: Date.now(),
               folderId: folder.id,
               options: testQuestion.options,
               correctAnswer,
             };
-            tbQuestions.push(newQ);
-            folder.questionIds.push(testQuestion.id);
 
+            // Firestore'ga saqlash
+            await saveTBQuestion(newQ);
+
+            // Folder'ga questionId qo'shish (agar yo'q bo'lsa)
+            if (!folder.questionIds?.includes(testQuestion.id)) {
+              folder.questionIds = [...(folder.questionIds || []), testQuestion.id];
+              await saveTBFolder(folder);
+            }
+
+            // localStorage sync (fallback uchun)
+            const tbQuestions = JSON.parse(localStorage.getItem("tb_questions") || "[]");
+            const tbFolders = JSON.parse(localStorage.getItem("tb_folders") || "[]");
+            tbQuestions.push(newQ);
+            const localFolder = tbFolders.find((f: any) => f.id === folder.id);
+            if (localFolder) {
+              localFolder.questionIds.push(testQuestion.id);
+            } else {
+              tbFolders.push(folder);
+            }
             localStorage.setItem("tb_questions", JSON.stringify(tbQuestions));
             localStorage.setItem("tb_folders", JSON.stringify(tbFolders));
           } catch (err) {
-            console.error("LocalStorage ga yozishda xatolik:", err);
+            console.error("Test bazaga saqlashda xatolik:", err);
           }
         }
       }

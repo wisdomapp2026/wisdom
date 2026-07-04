@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Plus, Search, Users, BookOpen, Loader2, Edit, Trash2 } from "lucide-react";
-import { getAllCourses, getTopicsByCourse, getAllCategories, deleteCourse } from "@shared/repositories";
+import { Plus, Search, Users, BookOpen, Loader2, Edit, Trash2, Home } from "lucide-react";
+import { getAllCourses, getTopicsByCourse, getAllCategories, deleteCourse, updateCourse } from "@shared/repositories";
 import { getStudentCountByCourse } from "@shared/repositories";
 import type { Course, Category } from "@shared/types";
 import CreateCourseModal from "../components/CreateCourseModal";
 import LoadingButton from "../components/LoadingButton";
+
+const MAX_HOMEPAGE_COURSES = 10;
 
 interface CourseWithMeta extends Course {
   topicCount: number;
@@ -56,8 +58,20 @@ export default function Courses() {
   }
 
   async function handleDeleteCourse(course: CourseWithMeta) {
-    if (!confirm(`"${course.title}" kursini o'chirishga ishonchingiz komilmi?\n\n⚠️ Barcha mavzular, testlar, papkalar ham o'chiriladi!`)) return;
+    if (!confirm(`"${course.title}" kursini o'chirishga ishonchingiz komilmi?\n\n⚠️ Barcha modullar, testlar, papkalar ham o'chiriladi!`)) return;
     await deleteCourse(course.id);
+    await loadCourses();
+  }
+
+  const homepageCount = courses.filter((c) => c.showOnHomepage !== false).length;
+
+  async function handleToggleHomepage(course: CourseWithMeta) {
+    const currentlyShown = course.showOnHomepage !== false;
+    if (!currentlyShown && homepageCount >= MAX_HOMEPAGE_COURSES) {
+      alert(`Bosh sahifada ko'rsatiladigan kurslar soni ${MAX_HOMEPAGE_COURSES} tadan oshmasligi kerak. Avval boshqa kursni olib tashlang.`);
+      return;
+    }
+    await updateCourse(course.id, { showOnHomepage: !currentlyShown });
     await loadCourses();
   }
 
@@ -74,12 +88,26 @@ export default function Courses() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Kurslar</h1>
-          <p className="text-sm text-gray-500 mt-1">Barcha kurslarni boshqaring ({courses.length} ta)</p>
+          <p className="text-sm text-gray-500 mt-1">
+            Barcha kurslarni boshqaring ({courses.length} ta) ·{" "}
+            <span className={homepageCount >= MAX_HOMEPAGE_COURSES ? "text-amber-600 font-medium" : ""}>
+              Bosh sahifada: {homepageCount}/{MAX_HOMEPAGE_COURSES}
+            </span>
+          </p>
         </div>
         <button onClick={() => { setEditCourse(null); setShowCreateModal(true); }} className="btn-primary flex items-center gap-2">
           <Plus className="w-4 h-4" />
           Yangi kurs
         </button>
+      </div>
+
+      {/* Info banner */}
+      <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex items-start gap-2.5 text-sm text-blue-700">
+        <Home className="w-4 h-4 mt-0.5 shrink-0" />
+        <p>
+          <strong>Bosh sahifa</strong> ikonkasi belgilangan kurslar (maksimum {MAX_HOMEPAGE_COURSES} ta) student ilovaning bosh sahifasida ko'rinadi.
+          Qolgan barcha kurslar "Kurslar" sahifasida ko'rinishda davom etadi.
+        </p>
       </div>
 
       {/* Search and filters */}
@@ -124,6 +152,22 @@ export default function Courses() {
               key={course.id}
               className="bg-white rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow overflow-hidden relative group"
             >
+              {/* Bosh sahifada ko'rsatilishi belgisi — doim ko'rinadi */}
+              <div className="absolute top-2 left-2 z-10">
+                <LoadingButton
+                  onClick={() => handleToggleHomepage(course)}
+                  className={`w-8 h-8 rounded-lg flex items-center justify-center shadow-sm border transition-colors ${
+                    course.showOnHomepage !== false
+                      ? "bg-primary-500 border-primary-500 text-white"
+                      : "bg-white/90 backdrop-blur-sm border-gray-200 text-gray-400 hover:text-primary-500 hover:border-primary-300"
+                  }`}
+                  title={course.showOnHomepage !== false ? "Bosh sahifada ko'rinadi — olib tashlash" : "Bosh sahifada ko'rsatish"}
+                  iconOnly
+                >
+                  <Home className="w-4 h-4" />
+                </LoadingButton>
+              </div>
+
               {/* Edit/Delete buttons — card ustiga hover qilganda ko'rinadi */}
               <div className="absolute top-2 right-2 z-10 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
@@ -178,7 +222,7 @@ export default function Courses() {
                       {course.studentCount} o'quvchi
                     </span>
                     <span className="text-xs">
-                      📚 {course.topicCount} mavzu
+                      📚 {course.topicCount} modul
                     </span>
                   </div>
                 </div>

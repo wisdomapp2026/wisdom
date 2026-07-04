@@ -187,7 +187,7 @@ export default function Dashboard() {
           <div className="space-y-2">
             {[
               { icon: "📚", label: "Yangi kurs", to: "/courses" },
-              { icon: "📝", label: "Mavzu qo'shish", to: "/courses" },
+              { icon: "📝", label: "Modul qo'shish", to: "/courses" },
               { icon: "✅", label: "Test yaratish", to: "/tests/builder" },
               { icon: "🏷️", label: "Promo kod yaratish", to: "/promos" },
               { icon: "🎥", label: "Video yuklash", to: "/courses" },

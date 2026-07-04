@@ -70,6 +70,12 @@ export interface CourseIntroduction {
   text: string; // Kurs haqida qisqacha tushuntirish
   thumbnailUrl?: string; // Video uchun thumbnail rasm
   imageUrl?: string; // Tanishtirish rasmi (admin upload qiladi)
+  /** Videodan keyin ko'rsatiladigan qo'shimcha matn (admin yozadi, video ostida ko'rinadi) */
+  afterVideoText?: string;
+  /** Biriktirilgan fayl (PDF, Word va h.k.) — student yuklab olishi mumkin */
+  attachedFileUrl?: string;
+  /** Fayl asl nomi (yuklab olishda ko'rsatish uchun) */
+  attachedFileName?: string;
 }
 
 export interface Course {
@@ -82,6 +88,10 @@ export interface Course {
   coverFit?: "cover" | "contain"; // CSS object-fit
   isPremium: boolean;
   isHidden?: boolean; // Admin yashirgan — studentda ko'rinmaydi
+  /** Bosh sahifada ko'rsatilsinmi (admin belgilaydi). Default: true (belgilanmagan bo'lsa ko'rinadi).
+   *  Bosh sahifada faqat admin tanlagan (maksimum 10 tagacha) kurslar ko'rinadi,
+   *  qolganlari "Kurslar" sahifasida ko'rinishda davom etadi. */
+  showOnHomepage?: boolean;
   price?: number; // agar alohida sotilsa
   totalStudents: number;
   onlineNow: number;
@@ -126,6 +136,8 @@ export interface Topic {
   order: number;
   isPremium: boolean;
   isHidden?: boolean; // Admin yashirgan — studentda ko'rinmaydi
+  /** Modulni tanishtirish bo'limi — kursni tanishtirish blokiga o'xshash (video + matn + rasm) */
+  introduction?: CourseIntroduction;
   createdAt: number;
   updatedAt: number;
 }
@@ -395,10 +407,41 @@ export interface HomeBanner {
   imageFit?: "cover" | "contain";
   /** Rasmni banner bo'ylab to'liq yoyish (fon sifatida) */
   imageFullWidth?: boolean;
+  /** Rasm shaffofligi (0-100, 100 = to'liq ko'rinadigan, 0 = butunlay shaffof) */
+  imageOpacity?: number;
   /** Rasm qirqish: nechta foiz ko'rsatiladi (0-100, yuqoridan qirqish) */
   imageCropTop?: number;
   imageCropBottom?: number;
+  /** Sarlavha va kichik matn rangi (hex), masalan "#ffffff" */
+  textColor?: string;
+  /** Matn shaffofligi (0-100, 100 = to'liq ko'rinadigan) */
+  textOpacity?: number;
+  /** Tugma pozitsiyasi banner bo'ylab (CSS % formatda "x% y%"). Bo'sh bo'lsa — standart joyida (matndan pastda) turadi. */
+  buttonPosition?: string;
   isActive: boolean;
+  order: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+// ============================================================
+// TESTIMONIALS (Foydalanuvchi otzivlari — bosh sahifada ko'rsatiladi)
+// ============================================================
+export interface Testimonial {
+  id: string;
+  /** Otziv qoldirgan foydalanuvchi ismi */
+  name: string;
+  /** Foydalanuvchi rasmi (Storage URL) */
+  avatarUrl?: string;
+  /** Qo'shimcha tavsif — masalan "Matematika kursi o'quvchisi" */
+  role?: string;
+  /** Otziv matni */
+  text: string;
+  /** Reyting bali — 1 dan 5 gacha yulduzcha */
+  rating: number;
+  /** Bosh sahifada ko'rinishi uchun */
+  isActive: boolean;
+  /** Ko'rsatish tartibi */
   order: number;
   createdAt: number;
   updatedAt: number;

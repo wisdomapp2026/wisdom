@@ -17,6 +17,7 @@ import {
   Menu,
   X,
   Image,
+  MessageSquareQuote,
 } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth } from "@shared/firebase";
@@ -37,6 +38,7 @@ const sidebarItems = [
   { path: "/analytics", label: "Statistikalar", icon: BarChart3 },
   { path: "/banners", label: "Bannerlar", icon: Image },
   { path: "/news-items", label: "Yangiliklar", icon: Newspaper },
+  { path: "/testimonials", label: "Otzivlar", icon: MessageSquareQuote },
   { path: "/settings", label: "Sozlamalar", icon: Settings },
 ];
 

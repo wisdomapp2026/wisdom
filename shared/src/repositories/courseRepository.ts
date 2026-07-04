@@ -592,3 +592,34 @@ export async function updateNewsItem(itemId: string, data: Partial<NewsItem>): P
 export async function deleteNewsItem(itemId: string): Promise<void> {
   await deleteDoc(doc(db, NEWS_COL, itemId));
 }
+
+
+// ============ TESTIMONIALS (Foydalanuvchi otzivlari) ============
+
+import type { Testimonial } from "../types";
+
+const TESTIMONIALS_COL = "testimonials";
+
+export async function getAllTestimonials(): Promise<Testimonial[]> {
+  const snap = await getDocs(collection(db, TESTIMONIALS_COL));
+  const results = snap.docs.map((d) => d.data() as Testimonial);
+  return results.sort((a, b) => (a.order || 0) - (b.order || 0));
+}
+
+export async function getActiveTestimonials(): Promise<Testimonial[]> {
+  const snap = await getDocs(collection(db, TESTIMONIALS_COL));
+  const results = snap.docs.map((d) => d.data() as Testimonial);
+  return results.filter((t) => t.isActive).sort((a, b) => (a.order || 0) - (b.order || 0));
+}
+
+export async function createTestimonial(testimonial: Testimonial): Promise<void> {
+  await setDoc(doc(db, TESTIMONIALS_COL, testimonial.id), cleanData(testimonial as any));
+}
+
+export async function updateTestimonial(testimonialId: string, data: Partial<Testimonial>): Promise<void> {
+  await updateDoc(doc(db, TESTIMONIALS_COL, testimonialId), cleanUpdate({ ...data, updatedAt: Date.now() }));
+}
+
+export async function deleteTestimonial(testimonialId: string): Promise<void> {
+  await deleteDoc(doc(db, TESTIMONIALS_COL, testimonialId));
+}

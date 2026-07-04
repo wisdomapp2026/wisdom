@@ -185,7 +185,7 @@ function MotivationTab({ placement }: { placement: MotivationPlacement }) {
     );
   }
 
-  const placementLabel = placement === "home" ? "Bosh sahifada" : placement === "courses_list" ? "Kurslar ro'yxatida" : placement === "course" ? "Kurs sahifasida" : "Dars (mavzu) ichida";
+  const placementLabel = placement === "home" ? "Bosh sahifada" : placement === "courses_list" ? "Kurslar ro'yxatida" : placement === "course" ? "Kurs sahifasida" : "Dars (modul) ichida";
 
   return (
     <div className="space-y-5">

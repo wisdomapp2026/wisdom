@@ -9,6 +9,7 @@ import Profile from "./pages/Profile";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import CourseDetail from "./pages/CourseDetail";
+import FolderDetail from "./pages/FolderDetail";
 import TopicDetail from "./pages/TopicDetail";
 import TestScreen from "./pages/TestScreen";
 import TestResult from "./pages/TestResult";
@@ -30,6 +31,8 @@ import { useActivityTracker } from "./hooks/useActivityTracker";
 import { getUserById } from "@shared/repositories";
 import { syncLocalProgressToDb, hasLocalProgress } from "./hooks/useLocalProgress";
 import type { User } from "@shared/types";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@shared/firebase";
 
 export default function App() {
   const { user, loading: authLoading } = useAuth();
@@ -55,6 +58,35 @@ export default function App() {
 
   // O'quvchi faolligini kuzatish (kunlik ishlatish vaqti)
   useActivityTracker(user?.uid, userData?.name || user?.displayName || undefined);
+
+  // Interfeys temasini Firestore'dan yuklash va CSS custom properties orqali qo'llash
+  useEffect(() => {
+    loadTheme();
+  }, []);
+
+  async function loadTheme() {
+    try {
+      const snap = await getDoc(doc(db, "settings", "platform"));
+      if (snap.exists()) {
+        const data = snap.data();
+        const theme = data.theme;
+        if (theme) {
+          const root = document.documentElement;
+          root.style.setProperty("--theme-primary", theme.primaryColor || "#2196F3");
+          root.style.setProperty("--theme-bg", theme.bgColor || "#f9fafb");
+          root.style.setProperty("--theme-card-bg", theme.cardBgColor || "#ffffff");
+          root.style.setProperty("--theme-text", theme.textColor || "#111827");
+          root.style.setProperty("--theme-text-secondary", theme.secondaryTextColor || "#6b7280");
+          root.style.setProperty("--theme-nav-bg", theme.navBgColor || "#ffffff");
+          root.style.setProperty("--theme-nav-active", theme.navActiveColor || "#2196F3");
+          root.style.setProperty("--theme-button-text", theme.buttonTextColor || "#ffffff");
+          root.style.setProperty("--theme-accent", theme.accentColor || "#22c55e");
+        }
+      }
+    } catch {
+      // Xatolik bo'lsa default ranglar qoladi
+    }
+  }
 
   // Auth yuklanayotganda
   if (authLoading) {
@@ -93,6 +125,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/course/:courseId" element={<CourseDetail />} />
+        <Route path="/course/:courseId/folder/:folderId" element={<FolderDetail />} />
         <Route path="/course/:courseId/topic/:topicId" element={<TopicDetail />} />
         <Route path="/test/:testId" element={<TestScreen />} />
         <Route path="/test-result" element={<TestResult />} />

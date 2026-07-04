@@ -21,7 +21,7 @@ export default function Favorites() {
       const data = await getFavoriteTopics(user.uid);
       setFavorites(data);
     } catch (err) {
-      console.error("Tanlangan mavzularni yuklashda xatolik:", err);
+      console.error("Tanlangan modullarni yuklashda xatolik:", err);
     } finally {
       setLoading(false);
     }
@@ -44,7 +44,7 @@ export default function Favorites() {
       <header className="bg-white px-5 pt-4 pb-4 border-b border-gray-100 flex items-center gap-3">
         <Link to="/profile" className="text-gray-500"><ChevronLeft size={22} /></Link>
         <h1 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-          <Star size={20} className="text-yellow-400" fill="currentColor" /> Tanlangan mavzular
+          <Star size={20} className="text-yellow-400" fill="currentColor" /> Tanlangan modullar
         </h1>
       </header>
 
@@ -57,7 +57,7 @@ export default function Favorites() {
       {!loading && !user && (
         <div className="text-center py-20 px-5">
           <Star size={40} className="mx-auto mb-3 text-gray-300" />
-          <p className="text-sm text-gray-500">Tanlangan mavzularni ko'rish uchun tizimga kiring</p>
+          <p className="text-sm text-gray-500">Tanlangan modullarni ko'rish uchun tizimga kiring</p>
           <Link to="/login" className="inline-block mt-4 bg-primary-500 text-white font-medium px-6 py-2.5 rounded-xl text-sm">Kirish</Link>
         </div>
       )}
@@ -65,8 +65,8 @@ export default function Favorites() {
       {!loading && user && favorites.length === 0 && (
         <div className="text-center py-20 px-5">
           <Star size={40} className="mx-auto mb-3 text-gray-300" />
-          <p className="text-sm text-gray-500 font-medium">Hali tanlangan mavzu yo'q</p>
-          <p className="text-xs text-gray-400 mt-1">Mavzu ichidagi ⭐ tugmasini bosib, bu yerga qo'shishingiz mumkin</p>
+          <p className="text-sm text-gray-500 font-medium">Hali tanlangan modul yo'q</p>
+          <p className="text-xs text-gray-400 mt-1">Modul ichidagi ⭐ tugmasini bosib, bu yerga qo'shishingiz mumkin</p>
           <Link to="/courses" className="inline-block mt-4 text-primary-500 font-medium text-sm">Kurslarni ko'rish →</Link>
         </div>
       )}

@@ -1,10 +1,13 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { ChevronRight, Plus, Edit, Trash2, Play, Loader2, Lock, Unlock, Eye, EyeOff, Video } from "lucide-react";
-import { getTopicById, getProblemsByTopic, updateTopic, deleteTopic, deleteProblem, updateProblem } from "@shared/repositories";
-import type { Topic, Problem } from "@shared/types";
+import { ChevronRight, Plus, Edit, Trash2, Play, Loader2, Lock, Unlock, Eye, EyeOff, Video, FileText, GripVertical, Save } from "lucide-react";
+import { getTopicById, getProblemsByTopic, updateTopic, deleteTopic, deleteProblem, updateProblem, getTestsByCourse, updateTest, deleteTest } from "@shared/repositories";
+import type { Topic, Problem, Test } from "@shared/types";
 import CreateProblemModal from "../components/CreateProblemModal";
+import ImportTestModal from "../components/ImportTestModal";
+import LoadingButton from "../components/LoadingButton";
 import LatexText from "../components/LatexText";
+import TopicIntroSection from "../components/TopicIntroSection";
 
 const difficultyColors: Record<string, string> = {
   easy: "bg-green-100 text-green-700",
@@ -23,30 +26,116 @@ export default function TopicDetail() {
   const navigate = useNavigate();
   const [topic, setTopic] = useState<Topic | null>(null);
   const [problems, setProblems] = useState<Problem[]>([]);
+  const [tests, setTests] = useState<Test[]>([]);
   const [loading, setLoading] = useState(true);
   const [showProblemModal, setShowProblemModal] = useState(false);
+  const [showImportTestModal, setShowImportTestModal] = useState(false);
   const [editingTopic, setEditingTopic] = useState(false);
   const [editTitle, setEditTitle] = useState("");
   const [editDesc, setEditDesc] = useState("");
   const [editingProblem, setEditingProblem] = useState<Problem | null>(null);
 
+  // Drag and drop tartibini o'zgartirish
+  const [dragIdx, setDragIdx] = useState<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
+  const [orderChanged, setOrderChanged] = useState(false);
+  const [savingOrder, setSavingOrder] = useState(false);
+
+  // Misol va testlarni bitta tartibli ro'yxatga birlashtirish
+  type ListItem = { type: "problem"; data: Problem } | { type: "test"; data: Test };
+  const [combinedItems, setCombinedItems] = useState<ListItem[]>([]);
+
   useEffect(() => {
     if (courseId && topicId) loadData(courseId, topicId);
   }, [courseId, topicId]);
 
+  useEffect(() => {
+    // Misol va testlarni order bo'yicha birlashtirib tartiblaymiz
+    const items: ListItem[] = [
+      ...problems.map((p) => ({ type: "problem" as const, data: p })),
+      ...tests.map((t) => ({ type: "test" as const, data: t })),
+    ];
+    // Misol order va test order (afterTopicOrder * 1000 + idx sifatida) bo'yicha tartiblash
+    // Amalda: problems.order va testlar uchun katta raqam (misol oxirida turishi uchun — agar maxsus order yo'q bo'lsa)
+    items.sort((a, b) => {
+      const orderA = a.type === "problem" ? a.data.order : ((a.data as Test).afterTopicOrder || 0) * 1000 + 999;
+      const orderB = b.type === "problem" ? b.data.order : ((b.data as Test).afterTopicOrder || 0) * 1000 + 999;
+      return orderA - orderB;
+    });
+    setCombinedItems(items);
+  }, [problems, tests]);
+
   async function loadData(cId: string, tId: string) {
     try {
-      const [t, p] = await Promise.all([
+      const [t, p, allTests] = await Promise.all([
         getTopicById(cId, tId),
         getProblemsByTopic(cId, tId),
+        getTestsByCourse(cId),
       ]);
       setTopic(t);
       setProblems(p);
+      // Faqat shu modulga (topic.order) bog'langan testlarni ko'rsatamiz
+      setTests(t ? allTests.filter((test) => test.afterTopicOrder === t.order) : []);
       if (t) { setEditTitle(t.title); setEditDesc(t.description); }
     } catch (err) {
       console.error("Xatolik:", err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleDeleteTest(testId: string) {
+    if (!courseId) return;
+    if (!confirm("Bu testni o'chirishga ishonchingiz komilmi?")) return;
+    await deleteTest(courseId, testId);
+    await loadData(courseId, topicId!);
+  }
+
+  // ===== Drag and Drop handlers =====
+  function handleDragStart(idx: number) {
+    setDragIdx(idx);
+  }
+
+  function handleDragOver(e: React.DragEvent, idx: number) {
+    e.preventDefault();
+    if (dragIdx === null || dragIdx === idx) return;
+    setDragOverIdx(idx);
+    // Ro'yxatda tartibni vizual almashtirish
+    const newItems = [...combinedItems];
+    const [moved] = newItems.splice(dragIdx, 1);
+    newItems.splice(idx, 0, moved);
+    setCombinedItems(newItems);
+    setDragIdx(idx);
+    setOrderChanged(true);
+  }
+
+  function handleDragEnd() {
+    setDragIdx(null);
+    setDragOverIdx(null);
+  }
+
+  async function handleSaveOrder() {
+    if (!courseId || !topicId) return;
+    setSavingOrder(true);
+    try {
+      // Har bir element uchun yangi order belgilash
+      for (let i = 0; i < combinedItems.length; i++) {
+        const item = combinedItems[i];
+        const newOrder = i + 1;
+        if (item.type === "problem") {
+          await updateProblem(courseId, topicId, item.data.id, { order: newOrder });
+        } else {
+          // Test uchun — afterTopicOrder ni topic.order ga o'xshash qilib, lekin tartibni saqlab qo'yamiz
+          // TestBuilder logikasiga mos: test.afterTopicOrder shu modul order'i, lekin biz uning ichki tartibini boshqaramiz
+          await updateTest(courseId, item.data.id, { afterTopicOrder: topic!.order } as any);
+        }
+      }
+      setOrderChanged(false);
+      await loadData(courseId, topicId);
+    } catch (err) {
+      console.error("Tartib saqlashda xatolik:", err);
+    } finally {
+      setSavingOrder(false);
     }
   }
 
@@ -59,7 +148,7 @@ export default function TopicDetail() {
 
   async function handleDeleteTopic() {
     if (!courseId || !topicId) return;
-    if (!confirm(`"${topic?.title}" mavzusini o'chirishga ishonchingiz komilmi? Ichidagi barcha misollar ham o'chiriladi.`)) return;
+    if (!confirm(`"${topic?.title}" modulini o'chirishga ishonchingiz komilmi? Ichidagi barcha misollar ham o'chiriladi.`)) return;
     await deleteTopic(courseId, topicId);
     navigate(`/courses/${courseId}`);
   }
@@ -87,7 +176,7 @@ export default function TopicDetail() {
   }
 
   if (!topic) {
-    return <div className="text-center py-20 text-gray-500">Mavzu topilmadi</div>;
+    return <div className="text-center py-20 text-gray-500">Modul topilmadi</div>;
   }
 
   return (
@@ -162,37 +251,107 @@ export default function TopicDetail() {
         )}
       </div>
 
-      {/* Add problem */}
-      <button onClick={() => setShowProblemModal(true)} className="btn-primary flex items-center gap-2 text-sm">
-        <Plus className="w-4 h-4" />
-        Yangi misol qo'shish
-      </button>
+      {/* Modulni tanishtirish bo'limi — kursni tanishtirish blokiga o'xshash */}
+      <TopicIntroSection
+        courseId={courseId!}
+        topic={topic}
+        onUpdate={(updated) => setTopic(updated)}
+      />
 
-      {/* Problems list */}
+      {/* Add problem / Add test */}
+      <div className="flex items-center gap-3">
+        <button onClick={() => setShowProblemModal(true)} className="btn-primary flex items-center gap-2 text-sm">
+          <Plus className="w-4 h-4" />
+          Yangi misol qo'shish
+        </button>
+        <button onClick={() => setShowImportTestModal(true)} className="btn-outline flex items-center gap-2 text-sm">
+          <Plus className="w-4 h-4" />
+          Test qo'shish
+        </button>
+        {orderChanged && (
+          <LoadingButton
+            onClick={handleSaveOrder}
+            loading={savingOrder}
+            className="btn-primary flex items-center gap-2 text-sm ml-auto bg-green-600 hover:bg-green-700"
+          >
+            <Save className="w-4 h-4" /> Tartibni saqlash
+          </LoadingButton>
+        )}
+      </div>
+      {orderChanged && (
+        <p className="text-xs text-amber-600 -mt-3">Tartib o'zgartirildi — saqlash uchun "Tartibni saqlash" tugmasini bosing</p>
+      )}
+
+      {/* Birlashtirilgan misol va testlar ro'yxati — drag-and-drop bilan tartib o'zgartirish */}
       <div className="space-y-4">
-        {problems.map((problem, index) => (
-          <ProblemCard
-            key={problem.id}
-            problem={problem}
-            index={index}
-            courseId={courseId!}
-            topicId={topicId!}
-            onStartEdit={(p) => setEditingProblem(p)}
-            onDelete={handleDeleteProblem}
-            onUpdate={() => loadData(courseId!, topicId!)}
-          />
-        ))}
-
-        {problems.length === 0 && (
+        {combinedItems.length === 0 && (
           <div className="text-center py-12 bg-white rounded-xl border border-gray-100">
             <p className="text-4xl mb-3">📝</p>
-            <p className="text-gray-500">Bu mavzuda hali misollar yo'q</p>
+            <p className="text-gray-500">Bu modulda hali misollar yoki testlar yo'q</p>
             <button onClick={() => setShowProblemModal(true)} className="btn-primary mt-4 text-sm">
               <Plus className="w-4 h-4 inline mr-2" />
               Birinchi misolni qo'shing
             </button>
           </div>
         )}
+
+        {combinedItems.map((item, idx) => (
+          <div
+            key={`${item.type}-${item.data.id}`}
+            draggable
+            onDragStart={() => handleDragStart(idx)}
+            onDragOver={(e) => handleDragOver(e, idx)}
+            onDragEnd={handleDragEnd}
+            className={`transition-all ${dragIdx === idx ? "opacity-50 scale-[0.98]" : ""} ${dragOverIdx === idx ? "ring-2 ring-primary-300" : ""}`}
+          >
+            {item.type === "problem" ? (
+              <ProblemCard
+                problem={item.data as Problem}
+                index={idx}
+                courseId={courseId!}
+                topicId={topicId!}
+                onStartEdit={(p) => setEditingProblem(p)}
+                onDelete={handleDeleteProblem}
+                onUpdate={() => loadData(courseId!, topicId!)}
+              />
+            ) : (
+              <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-orange-100 shadow-sm">
+                <div className="flex items-center gap-4 flex-1 min-w-0">
+                  <GripVertical className="w-4 h-4 text-gray-300 cursor-grab shrink-0" />
+                  <div className="w-10 h-10 bg-orange-50 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <FileText className="w-5 h-5 text-orange-500" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h4 className="font-medium text-gray-900">{(item.data as Test).title}</h4>
+                    <p className="text-sm text-gray-500">{(item.data as Test).questions?.length || 0} savol · {(item.data as Test).totalTime} daqiqa</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 ml-2 shrink-0">
+                  <LoadingButton
+                    onClick={async () => {
+                      const test = item.data as Test;
+                      const isPremium = !test.isPremium;
+                      await updateTest(courseId!, test.id, { isPremium } as any);
+                      await loadData(courseId!, topicId!);
+                    }}
+                    className={`text-[10px] font-medium px-2 py-1 rounded border ${(item.data as Test).isPremium ? "border-yellow-200 text-yellow-600 bg-yellow-50 hover:bg-yellow-100" : "border-green-200 text-green-600 bg-green-50 hover:bg-green-100"}`}
+                  >
+                    {(item.data as Test).isPremium ? "Premium" : "Free"}
+                  </LoadingButton>
+                  <span className={`text-[10px] px-2 py-1 rounded-full font-medium ${(item.data as Test).status === "published" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>
+                    {(item.data as Test).status === "published" ? "Chop etilgan" : "Qoralama"}
+                  </span>
+                  <Link to={`/courses/${courseId}/tests/${(item.data as Test).id}/preview`} className="p-1.5 text-gray-400 hover:text-primary-500 hover:bg-primary-50 rounded" title="Ko'rish / Tahrirlash">
+                    <Edit className="w-4 h-4" />
+                  </Link>
+                  <LoadingButton onClick={() => handleDeleteTest((item.data as Test).id)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded" title="O'chirish" iconOnly>
+                    <Trash2 className="w-4 h-4" />
+                  </LoadingButton>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
       </div>
 
       {/* Create problem modal */}
@@ -214,6 +373,17 @@ export default function TopicDetail() {
         editData={editingProblem}
         onClose={() => setEditingProblem(null)}
         onCreated={() => { setEditingProblem(null); loadData(courseId!, topicId!); }}
+      />
+
+      {/* Import test modal — testni shu modulga (topic.order) bog'lab qo'shish */}
+      <ImportTestModal
+        open={showImportTestModal}
+        courseId={courseId!}
+        existingTestIds={tests.map((t) => t.id)}
+        folderId={topic.folderId}
+        afterTopicOrder={topic.order}
+        onClose={() => setShowImportTestModal(false)}
+        onImported={() => loadData(courseId!, topicId!)}
       />
     </div>
   );

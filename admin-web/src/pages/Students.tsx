@@ -409,7 +409,7 @@ function StudentDetailModal({ student, onClose, onUpdated }: { student: User; on
                   <div>
                     <p className="font-medium text-gray-900 text-sm">Kurs: {p.courseId}</p>
                     <p className="text-xs text-gray-500 mt-0.5">
-                      {p.completedTopics.length} mavzu · {p.completedProblems.length} misol · {p.totalXP} XP
+                      {p.completedTopics.length} modul · {p.completedProblems.length} misol · {p.totalXP} XP
                     </p>
                   </div>
                   <div className="text-right">

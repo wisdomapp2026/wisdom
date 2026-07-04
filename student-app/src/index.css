@@ -3,12 +3,26 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --theme-primary: #2196F3;
+    --theme-bg: #f9fafb;
+    --theme-card-bg: #ffffff;
+    --theme-text: #111827;
+    --theme-text-secondary: #6b7280;
+    --theme-nav-bg: #ffffff;
+    --theme-nav-active: #2196F3;
+    --theme-button-text: #ffffff;
+    --theme-accent: #22c55e;
+  }
+
   * {
     -webkit-tap-highlight-color: transparent;
   }
   body {
-    @apply text-gray-900 antialiased bg-gray-50;
+    @apply antialiased;
     font-family: "Inter", system-ui, sans-serif;
+    background-color: var(--theme-bg);
+    color: var(--theme-text);
   }
 
   /* Dark mode — Tailwind class strategy bilan */
@@ -49,17 +63,40 @@
 
 @layer components {
   .bottom-nav {
-    @apply fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-mobile bg-white border-t border-gray-100 flex items-center justify-around py-2 pb-3 z-50;
+    @apply fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-mobile border-t flex items-stretch justify-around py-2 pb-3 z-50;
+    background-color: var(--theme-nav-bg);
+    border-color: #f3f4f6;
     transition: background-color 0.2s, border-color 0.2s;
   }
   .nav-item {
-    @apply flex flex-col items-center gap-0.5 text-gray-400 text-xs font-medium py-1 px-3;
+    @apply flex flex-col items-center text-xs font-medium py-1 px-2;
     min-height: 44px;
     min-width: 44px;
-    justify-content: center;
+    justify-content: flex-start;
+    gap: 2px;
+    color: var(--theme-text-secondary);
+  }
+  .nav-item svg {
+    flex-shrink: 0;
+  }
+  .nav-item span {
+    @apply text-center leading-tight;
   }
   .nav-item.active {
-    @apply text-primary-500;
+    color: var(--theme-nav-active);
+  }
+
+  /* Kichik ekranlarda (masalan iPhone SE, ~360px va undan tor) matnni yashirish,
+     faqat ikonka qoldirish — nav elementlari torlashib matn qisilib qolmasligi uchun */
+  @media (max-width: 360px) {
+    .nav-item {
+      @apply px-1;
+      justify-content: center;
+      gap: 0;
+    }
+    .nav-item span {
+      @apply sr-only;
+    }
   }
   .page-content {
     @apply pb-20 min-h-screen;
@@ -164,3 +201,38 @@
 .img-placeholder {
   @apply bg-gradient-to-br from-gray-200 to-gray-100 animate-pulse;
 }
+
+/* ===== THEME OVERRIDES — Admin tanlagan ranglarni CSS variable orqali qo'llash ===== */
+/* Bu qoidalar Tailwind utility class'larni override qiladi (admin Interfeys sozlamasidan) */
+
+/* Primary rang (bg-primary-500, text-primary-500, border-primary-500 va h.k.) */
+.bg-primary-500 { background-color: var(--theme-primary) !important; }
+.bg-primary-50 { background-color: color-mix(in srgb, var(--theme-primary) 8%, white) !important; }
+.bg-primary-100 { background-color: color-mix(in srgb, var(--theme-primary) 15%, white) !important; }
+.bg-primary-400 { background-color: color-mix(in srgb, var(--theme-primary) 80%, white) !important; }
+.bg-primary-600 { background-color: color-mix(in srgb, var(--theme-primary) 85%, black) !important; }
+.text-primary-500 { color: var(--theme-primary) !important; }
+.text-primary-600 { color: color-mix(in srgb, var(--theme-primary) 85%, black) !important; }
+.text-primary-700 { color: color-mix(in srgb, var(--theme-primary) 70%, black) !important; }
+.border-primary-500 { border-color: var(--theme-primary) !important; }
+.border-primary-200 { border-color: color-mix(in srgb, var(--theme-primary) 25%, white) !important; }
+.ring-primary-500 { --tw-ring-color: var(--theme-primary) !important; }
+
+/* Fon rangi — butun sahifa foni (body va page-content) */
+body { background-color: var(--theme-bg) !important; }
+.page-content { background-color: var(--theme-bg) !important; }
+
+/* Kartochka fon rangi */
+#root { background-color: var(--theme-card-bg); }
+.bg-white { background-color: var(--theme-card-bg) !important; }
+
+/* Matn ranglari */
+.text-gray-900 { color: var(--theme-text) !important; }
+.text-gray-700 { color: color-mix(in srgb, var(--theme-text) 80%, var(--theme-text-secondary)) !important; }
+.text-gray-500 { color: var(--theme-text-secondary) !important; }
+.text-gray-400 { color: color-mix(in srgb, var(--theme-text-secondary) 70%, transparent) !important; }
+
+/* Accent (success) rang */
+.bg-green-500 { background-color: var(--theme-accent) !important; }
+.text-green-600 { color: var(--theme-accent) !important; }
+.text-green-500 { color: var(--theme-accent) !important; }

@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { getTestById, saveTestResult, getAllCourses, getTestsByCourse } from "@shared/repositories";
-import type { Test, Question, TestResult } from "@shared/types";
+import { getTestById, saveTestResult, getAllCourses, getTestsByCourse, getUserProgress, setUserProgress } from "@shared/repositories";
+import type { Test, Question, TestResult, UserProgress } from "@shared/types";
 import LatexText from "../components/LatexText";
 import { useAuth } from "../hooks/useAuth";
-import { cachedFetch } from "../hooks/useCache";
+import { cachedFetch, invalidateCache } from "../hooks/useCache";
+import { getLocalCourseProgress, setLocalCourseProgress } from "../hooks/useLocalProgress";
 
 const LOCAL_TEST_RESULTS_KEY = "edukids_local_test_results";
 
@@ -130,6 +131,13 @@ export default function TestScreen() {
       completedAt: Date.now(),
     };
 
+    // Reyting (XP) faqat to'g'ri javob berilgan savollar bo'yicha hisoblanadi —
+    // har bir savolning o'ziga tegishli "points" qiymati XP sifatida qo'shiladi.
+    const xpEarned = questions.reduce(
+      (sum, qq) => (answers[qq.id] === qq.correctAnswer ? sum + (qq.points || 0) : sum),
+      0
+    );
+
     if (user) {
       // Login qilgan — DB ga saqlash
       const result: TestResult = {
@@ -144,6 +152,14 @@ export default function TestScreen() {
         // DB ga saqlanmasa — local ga ham saqlash (zaxira)
         saveTestResultLocally(result);
       }
+
+      // Test natijasiga qarab reytingni (UserProgress.totalXP) yangilash
+      try {
+        await awardTestXp(user.uid, courseId, xpEarned);
+        invalidateCache(`progress-${user.uid}`);
+      } catch (err) {
+        console.error("XP yangilashda xatolik:", err);
+      }
     } else {
       // Guest — localStorage ga saqlash
       const result: TestResult = {
@@ -152,6 +168,7 @@ export default function TestScreen() {
         userId: "guest",
       };
       saveTestResultLocally(result);
+      awardTestXpLocal(courseId, xpEarned);
     }
 
     navigate(`/test-result?score=${score}&correct=${correct}&total=${questions.length}&time=${timeTaken}&resultId=${resultData.testId}`);
@@ -263,6 +280,64 @@ export default function TestScreen() {
       </div>
     </div>
   );
+}
+
+/**
+ * Login qilgan foydalanuvchi uchun — test natijasiga qarab UserProgress.totalXP ni oshirish.
+ * Bu reytingning YAGONA manbai: modul/misolni ko'rish XP bermaydi, faqat to'g'ri ishlangan test savollari beradi.
+ */
+async function awardTestXp(userId: string, courseId: string, xpEarned: number): Promise<void> {
+  if (!courseId || xpEarned <= 0) return;
+  const progressId = `${userId}_${courseId}`;
+  const existing = await getUserProgress(userId, courseId);
+
+  if (existing) {
+    await setUserProgress({
+      ...existing,
+      totalXP: (existing.totalXP || 0) + xpEarned,
+      lastAccessedAt: Date.now(),
+    });
+  } else {
+    const progress: UserProgress = {
+      id: progressId,
+      userId,
+      courseId,
+      completedTopics: [],
+      completedProblems: [],
+      progressPercent: 0,
+      totalXP: xpEarned,
+      streak: 1,
+      weeklyMinutes: [0, 0, 0, 0, 0, 0, 0],
+      lastAccessedAt: Date.now(),
+    };
+    await setUserProgress(progress);
+  }
+}
+
+/** Guest (login qilmagan) foydalanuvchi uchun — local progress ga XP qo'shish */
+function awardTestXpLocal(courseId: string, xpEarned: number): void {
+  if (!courseId || xpEarned <= 0) return;
+  const existing = getLocalCourseProgress(courseId);
+  if (existing) {
+    setLocalCourseProgress(courseId, {
+      ...existing,
+      totalXP: (existing.totalXP || 0) + xpEarned,
+      lastAccessedAt: Date.now(),
+    });
+  } else {
+    setLocalCourseProgress(courseId, {
+      id: `local_${courseId}`,
+      userId: "local",
+      courseId,
+      completedTopics: [],
+      completedProblems: [],
+      progressPercent: 0,
+      totalXP: xpEarned,
+      streak: 1,
+      weeklyMinutes: [0, 0, 0, 0, 0, 0, 0],
+      lastAccessedAt: Date.now(),
+    });
+  }
 }
 
 /** Guest test natijasini localStorage ga saqlash */

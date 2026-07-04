@@ -155,7 +155,7 @@ export default function Subscription() {
           <p className="text-xs text-gray-500 uppercase font-semibold mb-3">Siz nimalarga ega bo'lasiz:</p>
           <div className="space-y-2.5">
             {[
-              "Barcha premium darslar va mavzular",
+              "Barcha premium darslar va modullar",
               "500+ interaktiv testlar",
               "Video yechimlar — har bir misol uchun",
               "Shaxsiy progress tahlili",

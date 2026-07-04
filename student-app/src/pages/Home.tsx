@@ -1,11 +1,12 @@
-import { Search, Bell, ChevronRight, Play, Clock, X, FileText } from "lucide-react";
+import { Search, Bell, ChevronRight, Play, Clock, X, FileText, Moon, Sun, Star } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
-import { getAllCourses, getTopicsByCourse, getMotivationPhrases, getMotivationSettings, getAllProgressByUser, getCourseById, getTopicById, getAllSocialLinks, getUserById, getActiveBanners, getActiveNewsItems, getUserProgress } from "@shared/repositories";
+import { getAllCourses, getTopicsByCourse, getMotivationPhrases, getMotivationSettings, getAllProgressByUser, getCourseById, getTopicById, getAllSocialLinks, getUserById, getActiveBanners, getActiveNewsItems, getUserProgress, getActiveTestimonials } from "@shared/repositories";
 import { getStudentCountByCourse } from "@shared/repositories";
 import NotificationBell from "../components/NotificationBell";
-import type { Course, UserProgress, Topic, SocialLink, HomeBanner, NewsItem } from "@shared/types";
+import type { Course, UserProgress, Topic, SocialLink, HomeBanner, NewsItem, Testimonial } from "@shared/types";
 import { useAuth } from "../hooks/useAuth";
+import { useDarkMode } from "../hooks/useDarkMode";
 import { HomeLoader } from "../components/PageLoader";
 import { cachedFetch } from "../hooks/useCache";
 import { getLocalProgress } from "../hooks/useLocalProgress";
@@ -30,8 +31,10 @@ function getYouTubeThumbnail(url: string): string {
 
 export default function Home() {
   const { user, loading: authLoading } = useAuth();
+  const { isDark, toggle: toggleDark } = useDarkMode();
   const navigate = useNavigate();
   const [courses, setCourses] = useState<CourseWithMeta[]>([]);
+  const [allCoursesForSearch, setAllCoursesForSearch] = useState<Course[]>([]);
   const [motivationPhrase, setMotivationPhrase] = useState("Bugungi kichik harakat — ertangi katta natija 🔥");
   const [continueItems, setContinueItems] = useState<ContinueItem[]>([]);
   const [socialLinks, setSocialLinks] = useState<SocialLink[]>([]);
@@ -39,6 +42,7 @@ export default function Home() {
   const [bannerIdx, setBannerIdx] = useState(0);
   const [newsItems, setNewsItems] = useState<NewsItem[]>([]);
   const [selectedNews, setSelectedNews] = useState<NewsItem | null>(null);
+  const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [loading, setLoading] = useState(true);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -70,6 +74,7 @@ export default function Home() {
         loadSocialLinks(),
         loadBanners(),
         loadNewsItems(),
+        loadTestimonials(),
       ]);
     } finally {
       setLoading(false);
@@ -78,6 +83,14 @@ export default function Home() {
 
   async function loadCourses() {
     const data = await cachedFetch("all-courses", getAllCourses);
+    // Qidiruv barcha (yashirilmagan) kurslar bo'yicha ishlashi uchun to'liq ro'yxatni saqlaymiz
+    setAllCoursesForSearch(data.filter((c) => !c.isHidden));
+
+    // Bosh sahifada faqat admin belgilagan kurslar ko'rinadi (showOnHomepage !== false),
+    // yashiringan kurslar ham chiqarib tashlanadi. Maksimum 10 tagacha.
+    const homepageCourses = data
+      .filter((c) => !c.isHidden && c.showOnHomepage !== false)
+      .slice(0, 10);
 
     // Progress olish — login yoki guest
     let progressMap: Record<string, number> = {};
@@ -94,7 +107,7 @@ export default function Home() {
     }
 
     const withMeta = await Promise.all(
-      data.map(async (c) => {
+      homepageCourses.map(async (c) => {
         const [topics, students] = await Promise.all([
           cachedFetch(`topics-${c.id}`, () => getTopicsByCourse(c.id)),
           cachedFetch(`students-${c.id}`, () => getStudentCountByCourse(c.id)),
@@ -126,6 +139,17 @@ export default function Home() {
       const data = await getActiveNewsItems();
       setNewsItems(data);
     } catch {}
+  }
+
+  async function loadTestimonials() {
+    try {
+      // Otzivlar tez-tez o'zgarishi mumkin (admin yangi qo'shadi) — har safar to'g'ridan-to'g'ri
+      // Firestore'dan olamiz, eski (bo'sh) keshda qolib ketmasligi uchun cache ishlatmaymiz.
+      const data = await getActiveTestimonials();
+      setTestimonials(data);
+    } catch (err) {
+      console.error("Otzivlarni yuklashda xatolik:", err);
+    }
   }
 
   async function loadContinueItems() {
@@ -193,6 +217,9 @@ export default function Home() {
         </div>
         <div className="flex items-center gap-1 shrink-0">
           <button onClick={() => setShowSearch(true)} className="w-10 h-10 flex items-center justify-center text-gray-500 rounded-xl active:bg-gray-100 transition-colors" aria-label="Qidirish"><Search size={20} /></button>
+          <button onClick={toggleDark} className="w-10 h-10 flex items-center justify-center text-gray-500 dark:text-yellow-400 rounded-xl active:bg-gray-100 dark:active:bg-gray-700 transition-colors" aria-label="Tun rejimi">
+            {isDark ? <Sun size={20} /> : <Moon size={20} />}
+          </button>
           <NotificationBell />
           <button onClick={() => navigate(user ? "/profile" : "/login")} className="w-8 h-8 bg-gray-200 rounded-full overflow-hidden">
             {userData?.avatar ? (
@@ -234,7 +261,7 @@ export default function Home() {
           {/* Tezkor natijalar */}
           {searchQuery.trim() && (
             <div className="mt-2 space-y-1">
-              {courses
+              {allCoursesForSearch
                 .filter((c) => c.title.toLowerCase().includes(searchQuery.toLowerCase()))
                 .slice(0, 4)
                 .map((c) => (
@@ -249,7 +276,7 @@ export default function Home() {
                     <span className="text-sm text-gray-700 truncate">{c.title}</span>
                   </button>
                 ))}
-              {courses.filter((c) => c.title.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
+              {allCoursesForSearch.filter((c) => c.title.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
                 <p className="text-sm text-gray-400 px-3 py-2">Natija topilmadi</p>
               )}
             </div>
@@ -301,22 +328,48 @@ export default function Home() {
               <div
                 key={banner.id}
                 className="snap-center shrink-0 w-full rounded-2xl p-5 relative overflow-hidden"
-                style={{ backgroundColor: banner.bgColor, minWidth: "calc(100% - 0px)" }}
+                style={{ backgroundColor: banner.bgColor, minWidth: "calc(100% - 0px)", minHeight: "180px" }}
               >
                 {banner.imageUrl && !banner.imageFullWidth && (
-                  <img src={banner.imageUrl} alt="" className="absolute right-0 top-0 h-full w-1/3 opacity-50" style={{ objectFit: banner.imageFit || "cover", objectPosition: banner.imagePosition || "center" }} />
+                  <img src={banner.imageUrl} alt="" className="absolute right-0 top-0 h-full w-1/3" style={{ objectFit: banner.imageFit || "cover", objectPosition: banner.imagePosition || "center", opacity: (banner.imageOpacity ?? 50) / 100 }} />
                 )}
                 {banner.imageUrl && banner.imageFullWidth && (
-                  <img src={banner.imageUrl} alt="" className="absolute inset-0 w-full h-full opacity-70" style={{ objectFit: banner.imageFit || "cover", objectPosition: banner.imagePosition || "center" }} />
+                  <img src={banner.imageUrl} alt="" className="absolute inset-0 w-full h-full" style={{ objectFit: banner.imageFit || "cover", objectPosition: banner.imagePosition || "center", opacity: (banner.imageOpacity ?? 70) / 100 }} />
                 )}
-                <h2 className="text-white text-lg font-bold leading-tight relative z-10">{banner.title}</h2>
-                {banner.subtitle && <p className="text-white/80 text-sm mt-1 relative z-10">{banner.subtitle}</p>}
+                <h2
+                  className="text-lg font-bold leading-tight relative z-10"
+                  style={{ color: banner.textColor || "#ffffff", opacity: (banner.textOpacity ?? 100) / 100 }}
+                >
+                  {banner.title}
+                </h2>
+                {banner.subtitle && (
+                  <p
+                    className="text-sm mt-1 relative z-10"
+                    style={{ color: banner.textColor || "#ffffff", opacity: ((banner.textOpacity ?? 100) / 100) * 0.8 }}
+                  >
+                    {banner.subtitle}
+                  </p>
+                )}
                 <button
                   onClick={() => {
                     if (banner.courseId) navigate(`/course/${banner.courseId}`);
                     else if (banner.linkUrl) window.open(banner.linkUrl, "_blank");
                   }}
-                  className="mt-3 bg-gray-900 text-white text-sm font-medium px-4 py-2 rounded-lg relative z-10 active:bg-gray-800"
+                  className={
+                    banner.buttonPosition
+                      ? "absolute bg-gray-900 text-white text-sm font-medium px-4 py-2 rounded-lg z-10 active:bg-gray-800"
+                      : "mt-3 bg-gray-900 text-white text-sm font-medium px-4 py-2 rounded-lg relative z-10 active:bg-gray-800"
+                  }
+                  style={
+                    banner.buttonPosition
+                      ? (() => {
+                          const m = banner.buttonPosition!.match(/([\d.]+)%?\s+([\d.]+)%?/);
+                          const x = m ? parseFloat(m[1]) : 50;
+                          const y = m ? parseFloat(m[2]) : 50;
+                          return { left: `${x}%`, top: `${y}%`, transform: "translate(-50%, -50%)" };
+                        })()
+                      : undefined
+                  }
                 >
                   {banner.buttonText}
                 </button>
@@ -342,7 +395,7 @@ export default function Home() {
             <button onClick={() => navigate("/news")} className="text-sm text-primary-500 font-medium">Barchasi</button>
           </div>
           <div
-            className="flex gap-3 overflow-x-auto pb-2 px-5 scrollbar-hide"
+            className="flex items-start gap-3 overflow-x-auto pb-2 px-5 scrollbar-hide"
             style={{ cursor: "grab" }}
             onMouseDown={(e) => {
               const el = e.currentTarget;
@@ -372,9 +425,9 @@ export default function Home() {
                     setSelectedNews(item);
                   }
                 }}
-                className="shrink-0 w-40 text-left"
+                className="shrink-0 w-32 flex flex-col text-left"
               >
-                <div className="w-full h-28 bg-gray-800 rounded-xl flex items-center justify-center relative overflow-hidden">
+                <div className="w-full h-44 bg-gray-800 rounded-xl flex items-center justify-center relative overflow-hidden shrink-0">
                   {(() => {
                     const thumb = item.imageUrl || (item.type === "video" && item.videoUrl ? getYouTubeThumbnail(item.videoUrl) : "");
                     return thumb ? (
@@ -392,7 +445,7 @@ export default function Home() {
                   )}
                   {item.duration && <span className="absolute bottom-1.5 right-2 text-[10px] text-white bg-black/60 px-1.5 py-0.5 rounded">{item.duration}</span>}
                 </div>
-                <p className="text-xs text-gray-700 font-medium mt-1.5 line-clamp-2">{item.title}</p>
+                <p className="text-xs text-gray-700 font-medium mt-1.5 break-words [overflow-wrap:anywhere] whitespace-normal">{item.title}</p>
               </button>
             ))}
           </div>
@@ -412,7 +465,7 @@ export default function Home() {
         </div>
         {courses.length > 0 ? (
         <div className="grid grid-cols-2 gap-3">
-          {courses.slice(0, 4).map((c: any, i: number) => (
+          {courses.map((c: any, i: number) => (
             <Link to={`/course/${c.id}`} key={i} className="border border-gray-100 rounded-xl overflow-hidden hover:shadow-sm transition-shadow">
               {/* Muqova */}
               {c.coverImage ? (
@@ -433,8 +486,18 @@ export default function Home() {
                 </div>
               )}
               <div className="p-3">
-                <p className="text-sm font-semibold text-gray-900 line-clamp-1">{c.title}</p>
-                <p className="text-[11px] text-gray-500 mt-1">📚 {c.topicCount} mavzu · 👥 {c.studentCount} o'quvchi</p>
+                <p className="text-sm font-semibold text-gray-900">{c.title}</p>
+                {c.description && (
+                  <p className="text-[11px] text-gray-500 mt-1 line-clamp-2">{c.description}</p>
+                )}
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1.5 text-[11px] text-gray-500">
+                  <span>📚 {c.topicCount} modul</span>
+                  <span>👥 {c.studentCount} o'quvchi</span>
+                  <span className="flex items-center gap-1 text-green-600">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                    {c.onlineNow || 0} online
+                  </span>
+                </div>
                 <div className="flex items-center justify-between mt-2 text-[10px]">
                   <span className="text-gray-400">Progress:</span>
                   <span className="text-primary-500 font-semibold">{Math.min(100, c.progress || 0)}%</span>
@@ -496,6 +559,73 @@ export default function Home() {
         <p className="text-white font-bold mt-2">"{motivationPhrase}"</p>
         <p className="text-white/60 text-xs mt-2">— Muvaffaqiyat formulasi</p>
       </div>
+
+      {/* Foydalanuvchi otzivlari */}
+      {testimonials.length > 0 && (
+        <section className="mt-6">
+          <div className="flex justify-between items-center mb-3 px-5">
+            <h3 className="text-base font-bold text-gray-900">O'quvchilar fikri</h3>
+            <div className="flex items-center gap-1 text-[11px] text-gray-400">
+              <Star size={12} className="text-yellow-400 fill-yellow-400" />
+              <span className="font-semibold text-gray-600">
+                {(testimonials.reduce((s, t) => s + t.rating, 0) / testimonials.length).toFixed(1)}
+              </span>
+              <span>({testimonials.length})</span>
+            </div>
+          </div>
+          <div
+            className="flex items-stretch gap-3 overflow-x-auto pb-2 px-5 scrollbar-hide"
+            style={{ cursor: "grab" }}
+            onMouseDown={(e) => {
+              const el = e.currentTarget;
+              el.dataset.dragging = "true";
+              el.dataset.startX = String(e.pageX - el.offsetLeft);
+              el.dataset.scrollLeft = String(el.scrollLeft);
+              el.style.cursor = "grabbing";
+            }}
+            onMouseMove={(e) => {
+              const el = e.currentTarget;
+              if (el.dataset.dragging !== "true") return;
+              e.preventDefault();
+              const x = e.pageX - el.offsetLeft;
+              const walk = (x - Number(el.dataset.startX)) * 1.5;
+              el.scrollLeft = Number(el.dataset.scrollLeft) - walk;
+            }}
+            onMouseUp={(e) => { e.currentTarget.dataset.dragging = "false"; e.currentTarget.style.cursor = "grab"; }}
+            onMouseLeave={(e) => { e.currentTarget.dataset.dragging = "false"; e.currentTarget.style.cursor = "grab"; }}
+          >
+            {testimonials.map((t) => (
+              <div
+                key={t.id}
+                className="shrink-0 w-64 bg-gradient-to-br from-primary-50 to-white border border-primary-100 rounded-2xl p-4 relative overflow-hidden flex flex-col"
+              >
+                <svg className="absolute top-3 right-3 w-7 h-7 text-primary-100" viewBox="0 0 24 24" fill="currentColor"><path d="M9.983 3v7.391c0 5.704-3.731 9.57-8.983 10.609l-.995-2.151c2.432-.917 3.995-3.638 3.995-5.849h-4v-10h9.983zm14.017 0v7.391c0 5.704-3.748 9.571-9 10.609l-.996-2.151c2.433-.917 3.996-3.638 3.996-5.849h-3.983v-10h9.983z"/></svg>
+                <div className="flex items-center gap-0.5 mb-2">
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <Star key={s} size={13} className={s <= t.rating ? "text-yellow-400 fill-yellow-400" : "text-gray-200 fill-gray-200"} />
+                  ))}
+                </div>
+                <p className="text-[13px] text-gray-700 leading-relaxed flex-1 line-clamp-4 relative z-10">"{t.text}"</p>
+                <div className="flex items-center gap-2.5 mt-3 pt-3 border-t border-primary-100/70">
+                  <div className="w-9 h-9 rounded-full overflow-hidden bg-gray-200 border-2 border-white shadow shrink-0">
+                    {t.avatarUrl ? (
+                      <img src={t.avatarUrl} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-primary-500 text-white text-xs font-bold">
+                        {t.name.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-gray-900 truncate">{t.name}</p>
+                    {t.role && <p className="text-[10px] text-gray-500 truncate">{t.role}</p>}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Ijtimoiy tarmoqlar */}
       {socialLinks.length > 0 && (
@@ -577,6 +707,15 @@ function SocialIcon({ platform, iconUrl }: { platform: string; iconUrl?: string 
 
 // ===== Yangilik detail modal =====
 function NewsDetailModal({ item, onClose }: { item: NewsItem; onClose: () => void }) {
+  // Modal ochilganda orqadagi sahifa scroll bo'lmasligi uchun body scroll ni bloklaymiz
+  useEffect(() => {
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = originalOverflow;
+    };
+  }, []);
+
   function getEmbedUrl(url: string): string {
     const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/);
     return match ? `https://www.youtube.com/embed/${match[1]}?autoplay=1` : url;

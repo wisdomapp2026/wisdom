@@ -203,7 +203,7 @@ export default function Profile() {
                     {item.course.title}: {item.topic?.title || ""}
                   </p>
                   <p className="text-[10px] text-gray-500 mt-0.5 truncate">
-                    Mavzu: davom etishda
+                    Modul: davom etishda
                   </p>
                   <div className="flex items-center justify-between mt-3">
                     <span className="text-[10px] text-gray-400">Progress</span>
@@ -295,7 +295,7 @@ export default function Profile() {
           </button>
 
           {[
-            { icon: <Star size={18} className="text-yellow-500" />, label: "Tanlangan mavzular", to: "/profile/favorites" },
+            { icon: <Star size={18} className="text-yellow-500" />, label: "Tanlangan modullar", to: "/profile/favorites" },
             { icon: <CreditCard size={18} className="text-green-500" />, label: "To'lovlarim", to: "/profile/payments" },
             { icon: <Settings size={18} className="text-gray-500" />, label: "Shaxsiy ma'lumotlar", to: "/profile/edit" },
             { icon: <Shield size={18} className="text-gray-500" />, label: "Promokodlarim", to: "/profile/promo" },

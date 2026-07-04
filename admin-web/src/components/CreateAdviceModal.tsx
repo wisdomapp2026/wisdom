@@ -88,7 +88,7 @@ export default function CreateAdviceModal({ open, courseId, topics, folderId, on
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Qaysi mavzudan keyin joylashsin?</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Qaysi moduldan keyin joylashsin?</label>
             <select
               value={afterTopicOrder}
               onChange={(e) => setAfterTopicOrder(Number(e.target.value))}
@@ -100,7 +100,7 @@ export default function CreateAdviceModal({ open, courseId, topics, folderId, on
                 </option>
               ))}
             </select>
-            <p className="text-xs text-gray-400 mt-1">Tanlangan mavzudan keyin maslahat bloki ko'rinadi</p>
+            <p className="text-xs text-gray-400 mt-1">Tanlangan moduldan keyin maslahat bloki ko'rinadi</p>
           </div>
 
           <div className="flex gap-3 pt-4 border-t border-gray-100">

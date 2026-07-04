@@ -20,9 +20,9 @@ export default function Help() {
             title="Kurslar bilan ishlash"
             items={[
               "Bosh sahifadagi 'Kurslar' bo'limidan kurslarni tanlang",
-              "Kurs ichiga kirib mavzularni ketma-ket o'rganing",
-              "Har bir mavzuda misollar va video yechimlar mavjud",
-              "Premium mavzular uchun obuna talab etiladi",
+              "Kurs ichiga kirib modullarni ketma-ket o'rganing",
+              "Har bir modulda misollar va video yechimlar mavjud",
+              "Premium modullar uchun obuna talab etiladi",
             ]}
           />
 
@@ -31,7 +31,7 @@ export default function Help() {
             title="Davom etish"
             items={[
               "Pastki menyudagi 'Davom etish' tugmasini bosing",
-              "Oxirgi o'qigan mavzuingizdan davom etasiz",
+              "Oxirgi o'qigan modulingizdan davom etasiz",
               "Progressingiz avtomatik saqlanadi",
             ]}
           />
@@ -40,7 +40,7 @@ export default function Help() {
             icon={<FileText size={20} className="text-orange-500" />}
             title="Test ishlash"
             items={[
-              "'Testlar' sahifasidan mavzu testlarini tanlang",
+              "'Testlar' sahifasidan modul testlarini tanlang",
               "Savollarga javob berib 'Keyingi savol' bosing",
               "Testni istalgan vaqtda 'Yakunlash' tugmasi bilan tugatishingiz mumkin",
               "Natijalar savollar jadvali bilan ko'rsatiladi",
@@ -51,7 +51,7 @@ export default function Help() {
             icon={<Star size={20} className="text-yellow-500" />}
             title="Progress va reyting"
             items={[
-              "Har bir mavzuni ochganingizda progress saqlanadi",
+              "Har bir modulni ochganingizda progress saqlanadi",
               "XP ballar yig'ib reytingda yuqoriga ko'tailing",
               "Kurs ichidagi o'rningizni progress kartada ko'ring",
             ]}
