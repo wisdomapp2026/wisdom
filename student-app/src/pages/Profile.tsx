@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Settings, Bell, ChevronRight, Shield, HelpCircle, LogOut, CreditCard, BookOpen, Play, Moon, Star } from "lucide-react";
+import { ChevronRight, CreditCard, BookOpen, Play } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
-import { useDarkMode } from "../hooks/useDarkMode";
 import { ProfileLoader } from "../components/PageLoader";
 import { getUserById, getAllProgressByUser, getTestResultsByUser, getUserSubscription, getAllCourses, getTopicsByCourse, getTopicById, getCourseById, getPaymentsByUser } from "@shared/repositories";
 import type { User, UserProgress, TestResult, Subscription, Course, Topic, Payment } from "@shared/types";
@@ -20,8 +19,7 @@ interface PaymentItem {
 }
 
 export default function Profile() {
-  const { user, isLoggedIn, logout } = useAuth();
-  const { isDark, toggle: toggleDark } = useDarkMode();
+  const { user, isLoggedIn } = useAuth();
   const navigate = useNavigate();
 
   const [userData, setUserData] = useState<User | null>(null);
@@ -95,11 +93,6 @@ export default function Profile() {
     }
   }
 
-  async function handleLogout() {
-    await logout();
-    navigate("/");
-  }
-
   if (!isLoggedIn) {
     return (
       <div className="page-content">
@@ -127,18 +120,6 @@ export default function Profile() {
 
   return (
     <div className="page-content pb-24">
-      {/* Header */}
-      <header className="px-5 pt-4 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Profil</h1>
-        <div className="flex gap-2">
-          <Link to="/notifications" className="w-9 h-9 bg-gray-50 rounded-full flex items-center justify-center border border-gray-100 relative">
-            <Bell size={18} className="text-gray-500" />
-          </Link>
-          <Link to="/profile/edit" className="w-9 h-9 bg-gray-50 rounded-full flex items-center justify-center border border-gray-100">
-            <Settings size={18} className="text-gray-500" />
-          </Link>
-        </div>
-      </header>
 
       {/* Avatar & Info */}
       <div className="flex flex-col items-center mt-5">
@@ -279,46 +260,23 @@ export default function Profile() {
         )}
       </section>
 
-      {/* Sozlamalar */}
-      <section className="px-5 mt-7">
-        <h3 className="font-bold text-gray-900 mb-3">Sozlamalar</h3>
-        <div className="bg-white border border-gray-100 rounded-xl overflow-hidden">
-          {/* Tungi rejim toggle */}
-          <button onClick={toggleDark} className="flex items-center w-full px-4 py-3.5 border-b border-gray-50 active:bg-gray-50">
-            <div className="w-8 h-8 bg-gray-50 rounded-lg flex items-center justify-center mr-3">
-              <Moon size={18} className="text-gray-500" />
-            </div>
-            <span className="flex-1 text-left text-sm text-gray-900">Tungi rejim</span>
-            <div className={`w-11 h-6 rounded-full relative transition-colors ${isDark ? "bg-primary-500" : "bg-gray-300"}`}>
-              <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${isDark ? "translate-x-5.5 left-[22px]" : "left-0.5"}`} />
-            </div>
-          </button>
-
-          {[
-            { icon: <Star size={18} className="text-yellow-500" />, label: "Tanlangan modullar", to: "/profile/favorites" },
-            { icon: <CreditCard size={18} className="text-green-500" />, label: "To'lovlarim", to: "/profile/payments" },
-            { icon: <Settings size={18} className="text-gray-500" />, label: "Shaxsiy ma'lumotlar", to: "/profile/edit" },
-            { icon: <Shield size={18} className="text-gray-500" />, label: "Promokodlarim", to: "/profile/promo" },
-            { icon: <Bell size={18} className="text-gray-500" />, label: "Bildirishnomalar", to: "/notifications" },
-            { icon: <HelpCircle size={18} className="text-gray-500" />, label: "Yordam", to: "/profile/help" },
-            { icon: <ChevronRight size={18} className="text-gray-500" />, label: "Bog'lanish", to: "/messages" },
-          ].map((item, i) => (
-            <Link key={i} to={item.to || "#"} className="flex items-center w-full px-4 py-3.5 border-b border-gray-50 last:border-b-0 active:bg-gray-50">
-              <div className="w-8 h-8 bg-gray-50 rounded-lg flex items-center justify-center mr-3">
-                {item.icon}
-              </div>
-              <span className="flex-1 text-left text-sm text-gray-900">{item.label}</span>
-              <ChevronRight size={16} className="text-gray-300" />
-            </Link>
-          ))}
-          <button onClick={handleLogout} className="flex items-center w-full px-4 py-3.5 active:bg-red-50">
-            <div className="w-8 h-8 bg-red-50 rounded-lg flex items-center justify-center mr-3">
-              <LogOut size={18} className="text-red-500" />
-            </div>
-            <span className="flex-1 text-left text-sm text-red-500 font-medium">Chiqish</span>
-          </button>
-        </div>
+      {/* Akkauntdan chiqish */}
+      <section className="px-5 mt-7 pb-6">
+        <button
+          onClick={async () => {
+            if (confirm("Akkauntdan chiqishni xohlaysizmi?")) {
+              const { signOut } = await import("firebase/auth");
+              const { auth } = await import("@shared/firebase");
+              await signOut(auth);
+              navigate("/");
+            }
+          }}
+          className="w-full flex items-center justify-center gap-2 py-3.5 bg-red-50 border border-red-100 rounded-xl text-red-500 font-semibold text-sm active:bg-red-100"
+        >
+          Akkauntdan chiqish
+        </button>
       </section>
+
     </div>
   );
 }

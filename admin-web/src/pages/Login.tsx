@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from "firebase/auth";
+import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@shared/firebase";
 
 interface LoginProps {
@@ -7,11 +7,10 @@ interface LoginProps {
 }
 
 export default function Login({ onLogin }: LoginProps) {
-  const [email, setEmail] = useState("admin@edukids.uz");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [isRegister, setIsRegister] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -19,22 +18,16 @@ export default function Login({ onLogin }: LoginProps) {
     setLoading(true);
 
     try {
-      if (isRegister) {
-        await createUserWithEmailAndPassword(auth, email, password);
-      } else {
-        await signInWithEmailAndPassword(auth, email, password);
-      }
+      await signInWithEmailAndPassword(auth, email, password);
       onLogin();
     } catch (err: any) {
       const code = err.code;
       if (code === "auth/invalid-credential" || code === "auth/wrong-password" || code === "auth/user-not-found") {
-        setError("Email yoki parol noto'g'ri. Agar birinchi marta bo'lsa, 'Ro'yxatdan o'tish' ni bosing.");
-      } else if (code === "auth/email-already-in-use") {
-        setError("Bu email allaqachon ro'yxatdan o'tgan. 'Kirish' ni bosing.");
-      } else if (code === "auth/weak-password") {
-        setError("Parol kamida 6 ta belgidan iborat bo'lishi kerak.");
+        setError("Email yoki parol noto'g'ri.");
+      } else if (code === "auth/too-many-requests") {
+        setError("Juda ko'p urinish. Biroz kutib qayta urinib ko'ring.");
       } else {
-        setError(err.message);
+        setError("Kirish xatosi yuz berdi. Qayta urinib ko'ring.");
       }
     } finally {
       setLoading(false);
@@ -76,7 +69,7 @@ export default function Login({ onLogin }: LoginProps) {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                placeholder="Kamida 6 ta belgi"
+                placeholder="Parolni kiriting"
                 required
                 minLength={6}
               />
@@ -93,19 +86,7 @@ export default function Login({ onLogin }: LoginProps) {
               disabled={loading}
               className="w-full btn-primary py-3 text-base disabled:opacity-50"
             >
-              {loading ? "Kuting..." : isRegister ? "Ro'yxatdan o'tish →" : "Kirish →"}
-            </button>
-          </div>
-
-          <div className="mt-4 text-center">
-            <button
-              type="button"
-              onClick={() => { setIsRegister(!isRegister); setError(""); }}
-              className="text-sm text-primary-500 hover:underline"
-            >
-              {isRegister
-                ? "Akkauntingiz bormi? Kirish"
-                : "Birinchi marta? Ro'yxatdan o'ting"}
+              {loading ? "Tekshirilmoqda..." : "Kirish →"}
             </button>
           </div>
         </form>

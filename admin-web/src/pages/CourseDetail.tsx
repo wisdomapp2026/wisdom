@@ -1100,12 +1100,12 @@ function FolderSection({
 
   return (
     <div
-      className={`bg-white rounded-xl border shadow-sm overflow-hidden transition-colors ${isDropZoneActive ? "border-primary-400 ring-2 ring-primary-200" : "border-gray-200"}`}
+      className="relative"
       onDragOver={(e) => dnd.onZoneDragOver(e, folder.id)}
       onDrop={() => dnd.onDrop(folder.id)}
     >
-      {/* Papka sarlavhasi */}
-      <div className="flex items-center gap-3 p-4 bg-gradient-to-r from-primary-50 to-transparent border-b border-gray-100">
+      {/* Papka sarlavhasi — sticky */}
+      <div className={`flex items-center gap-3 p-4 bg-gradient-to-r from-primary-50 to-white border border-gray-200 rounded-xl sticky top-0 z-20 shadow-sm transition-colors ${isDropZoneActive ? "border-primary-400 ring-2 ring-primary-200" : ""}`}>
         <button onClick={() => setExpanded(!expanded)} className="text-gray-400 hover:text-gray-600">
           {expanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
         </button>
@@ -1176,7 +1176,7 @@ function FolderSection({
 
       {/* Papka ichidagi elementlar */}
       {expanded && (
-        <div className="divide-y divide-gray-50 min-h-[50px]">
+        <div className="bg-white rounded-b-xl border border-t-0 border-gray-200 divide-y divide-gray-50 min-h-[50px] -mt-2 pt-2">
           {folderItems.length === 0 ? (
             <div className="text-center py-8 text-gray-400 text-sm">
               <p>Bu papka bo'sh</p>

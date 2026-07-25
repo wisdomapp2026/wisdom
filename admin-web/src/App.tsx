@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { auth } from "@shared/firebase";
+import ErrorBoundary from "./components/ErrorBoundary";
 import AdminLayout from "./layouts/AdminLayout";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -27,10 +28,12 @@ import Testimonials from "./pages/Testimonials";
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [checking, setChecking] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
       setUser(u);
+      setIsAdmin(!!u);
       setChecking(false);
     });
     return unsub;
@@ -44,36 +47,38 @@ export default function App() {
     );
   }
 
-  if (!user) {
+  if (!user || !isAdmin) {
     return <Login onLogin={() => {}} />;
   }
 
   return (
-    <Routes>
-      <Route path="/" element={<AdminLayout />}>
-        <Route index element={<Navigate to="/dashboard" replace />} />
-        <Route path="dashboard" element={<Dashboard />} />
-        <Route path="courses" element={<Courses />} />
-        <Route path="courses/:courseId" element={<CourseDetail />} />
-        <Route path="courses/:courseId/topics/:topicId" element={<TopicDetail />} />
-        <Route path="courses/:courseId/tests/builder" element={<TestBuilder />} />
-        <Route path="courses/:courseId/tests/:testId/preview" element={<TestPreview />} />
-        <Route path="students" element={<Students />} />
-        <Route path="tests" element={<Tests />} />
-        <Route path="tests/builder" element={<TestBuilder />} />
-        <Route path="motivations" element={<Motivations />} />
-        <Route path="social-links" element={<SocialLinks />} />
-        <Route path="notifications" element={<Notifications />} />
-        <Route path="news" element={<News />} />
-        <Route path="payments" element={<Payments />} />
-        <Route path="promos" element={<Promos />} />
-        <Route path="analytics" element={<Analytics />} />
-        <Route path="settings" element={<Settings />} />
-        <Route path="banners" element={<Banners />} />
-        <Route path="news-items" element={<NewsItems />} />
-        <Route path="testimonials" element={<Testimonials />} />
-      </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <ErrorBoundary>
+      <Routes>
+        <Route path="/" element={<AdminLayout />}>
+          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="courses" element={<Courses />} />
+          <Route path="courses/:courseId" element={<CourseDetail />} />
+          <Route path="courses/:courseId/topics/:topicId" element={<TopicDetail />} />
+          <Route path="courses/:courseId/tests/builder" element={<TestBuilder />} />
+          <Route path="courses/:courseId/tests/:testId/preview" element={<TestPreview />} />
+          <Route path="students" element={<Students />} />
+          <Route path="tests" element={<Tests />} />
+          <Route path="tests/builder" element={<TestBuilder />} />
+          <Route path="motivations" element={<Motivations />} />
+          <Route path="social-links" element={<SocialLinks />} />
+          <Route path="notifications" element={<Notifications />} />
+          <Route path="news" element={<News />} />
+          <Route path="payments" element={<Payments />} />
+          <Route path="promos" element={<Promos />} />
+          <Route path="analytics" element={<Analytics />} />
+          <Route path="settings" element={<Settings />} />
+          <Route path="banners" element={<Banners />} />
+          <Route path="news-items" element={<NewsItems />} />
+          <Route path="testimonials" element={<Testimonials />} />
+        </Route>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </ErrorBoundary>
   );
 }

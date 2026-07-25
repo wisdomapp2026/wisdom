@@ -6,7 +6,6 @@ import { getStudentCountByCourse } from "@shared/repositories";
 import NotificationBell from "../components/NotificationBell";
 import type { Course, UserProgress, Topic, SocialLink, HomeBanner, NewsItem, Testimonial } from "@shared/types";
 import { useAuth } from "../hooks/useAuth";
-import { useDarkMode } from "../hooks/useDarkMode";
 import { HomeLoader } from "../components/PageLoader";
 import { cachedFetch } from "../hooks/useCache";
 import { getLocalProgress } from "../hooks/useLocalProgress";
@@ -31,7 +30,6 @@ function getYouTubeThumbnail(url: string): string {
 
 export default function Home() {
   const { user, loading: authLoading } = useAuth();
-  const { isDark, toggle: toggleDark } = useDarkMode();
   const navigate = useNavigate();
   const [courses, setCourses] = useState<CourseWithMeta[]>([]);
   const [allCoursesForSearch, setAllCoursesForSearch] = useState<Course[]>([]);
@@ -207,33 +205,6 @@ export default function Home() {
 
   return (
     <div className="page-content">
-      {/* Header */}
-      <header className="flex items-center justify-between px-5 pt-4 pb-2">
-        <div className="flex items-center gap-2">
-          <div className="w-9 h-9 bg-primary-500 rounded-xl flex items-center justify-center">
-            <span className="text-white text-lg">⚡</span>
-          </div>
-          <span className="text-lg font-bold text-primary-500">EduKids</span>
-        </div>
-        <div className="flex items-center gap-1 shrink-0">
-          <button onClick={() => setShowSearch(true)} className="w-10 h-10 flex items-center justify-center text-gray-500 rounded-xl active:bg-gray-100 transition-colors" aria-label="Qidirish"><Search size={20} /></button>
-          <button onClick={toggleDark} className="w-10 h-10 flex items-center justify-center text-gray-500 dark:text-yellow-400 rounded-xl active:bg-gray-100 dark:active:bg-gray-700 transition-colors" aria-label="Tun rejimi">
-            {isDark ? <Sun size={20} /> : <Moon size={20} />}
-          </button>
-          <NotificationBell />
-          <button onClick={() => navigate(user ? "/profile" : "/login")} className="w-8 h-8 bg-gray-200 rounded-full overflow-hidden">
-            {userData?.avatar ? (
-              <img src={userData.avatar} alt="" className="w-full h-full object-cover" />
-            ) : user ? (
-              <div className="w-full h-full flex items-center justify-center bg-primary-100 text-primary-600 text-sm font-bold">
-                {(userData?.name || user.email || "U").charAt(0).toUpperCase()}
-              </div>
-            ) : (
-              <div className="w-full h-full flex items-center justify-center bg-gray-200 text-gray-400 text-sm font-bold">?</div>
-            )}
-          </button>
-        </div>
-      </header>
 
       {/* Qidiruv paneli */}
       {showSearch && (
@@ -464,12 +435,12 @@ export default function Home() {
           <Link to="/courses" className="text-sm text-primary-500 font-medium">Barchasi</Link>
         </div>
         {courses.length > 0 ? (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-4">
           {courses.map((c: any, i: number) => (
-            <Link to={`/course/${c.id}`} key={i} className="border border-gray-100 rounded-xl overflow-hidden hover:shadow-sm transition-shadow">
-              {/* Muqova */}
+            <Link to={`/course/${c.id}`} key={i} className="block border border-gray-100 rounded-2xl overflow-hidden hover:shadow-md transition-shadow bg-white">
+              {/* Muqova rasmi */}
               {c.coverImage ? (
-                <div className="h-24 overflow-hidden">
+                <div className="h-40 overflow-hidden">
                   <img
                     src={c.coverImage}
                     alt={c.title}
@@ -479,31 +450,63 @@ export default function Home() {
                   />
                 </div>
               ) : (
-                <div className="h-20 bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
-                  <svg className="w-8 h-8 text-white/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <div className="h-32 bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
+                  <svg className="w-10 h-10 text-white/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                     <path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                   </svg>
                 </div>
               )}
-              <div className="p-3">
-                <p className="text-sm font-semibold text-gray-900">{c.title}</p>
+
+              <div className="p-4">
+                {/* Statistika */}
+                <div className="flex items-start justify-between mb-3">
+                  <div className="w-12 h-12 bg-primary-500 rounded-xl flex items-center justify-center shadow-sm">
+                    <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M9 12l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
+                      <circle cx="12" cy="12" r="9" />
+                    </svg>
+                  </div>
+                  <div className="text-right space-y-0.5">
+                    <p className="text-xs text-gray-500 flex items-center justify-end gap-1">
+                      👥 Kursdagi o'quvchilar: <span className="font-semibold text-gray-700">{c.studentCount || 0}</span>
+                    </p>
+                    <p className="text-xs flex items-center justify-end gap-1">
+                      <span className="w-2 h-2 bg-green-500 rounded-full inline-block" />
+                      <span className="text-green-600 font-medium">Hozir onlayn: {c.onlineNow || 0}</span>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Kurs nomi va kategoriya */}
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <h3 className="text-lg font-bold text-gray-900 leading-tight">{c.title}</h3>
+                  {c.category && (
+                    <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 shrink-0">
+                      {c.category}
+                    </span>
+                  )}
+                </div>
+
+                {/* Tavsif */}
                 {c.description && (
-                  <p className="text-[11px] text-gray-500 mt-1 line-clamp-2">{c.description}</p>
+                  <p className="text-sm text-gray-500 leading-relaxed line-clamp-2 mb-3">{c.description}</p>
                 )}
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-1.5 text-[11px] text-gray-500">
-                  <span>📚 {c.topicCount} modul</span>
-                  <span>👥 {c.studentCount} o'quvchi</span>
-                  <span className="flex items-center gap-1 text-green-600">
-                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                    {c.onlineNow || 0} online
-                  </span>
-                </div>
-                <div className="flex items-center justify-between mt-2 text-[10px]">
-                  <span className="text-gray-400">Progress:</span>
-                  <span className="text-primary-500 font-semibold">{Math.min(100, c.progress || 0)}%</span>
-                </div>
-                <div className="h-1 bg-gray-100 rounded-full mt-1">
-                  <div className="h-full bg-primary-500 rounded-full" style={{ width: `${Math.min(100, c.progress || 0)}%` }} />
+
+                {/* Progress */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs text-gray-500 flex items-center gap-1">
+                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="M12 6v6l4 2" />
+                      </svg>
+                      {(c.progress || 0) > 0 ? "Jarayonda" : "Boshlang"}
+                    </span>
+                    <span className="text-sm font-bold text-primary-500">{Math.min(100, c.progress || 0)}%</span>
+                  </div>
+                  <div className="h-2 bg-gray-100 rounded-full">
+                    <div className="h-full bg-primary-500 rounded-full transition-all" style={{ width: `${Math.min(100, c.progress || 0)}%` }} />
+                  </div>
                 </div>
               </div>
             </Link>
@@ -597,7 +600,8 @@ export default function Home() {
             {testimonials.map((t) => (
               <div
                 key={t.id}
-                className="shrink-0 w-64 bg-gradient-to-br from-primary-50 to-white border border-primary-100 rounded-2xl p-4 relative overflow-hidden flex flex-col"
+                className="shrink-0 w-64 border border-gray-200 rounded-2xl p-4 relative overflow-hidden flex flex-col"
+                style={{ backgroundColor: 'var(--theme-card-bg)' }}
               >
                 <svg className="absolute top-3 right-3 w-7 h-7 text-primary-100" viewBox="0 0 24 24" fill="currentColor"><path d="M9.983 3v7.391c0 5.704-3.731 9.57-8.983 10.609l-.995-2.151c2.432-.917 3.995-3.638 3.995-5.849h-4v-10h9.983zm14.017 0v7.391c0 5.704-3.748 9.571-9 10.609l-.996-2.151c2.433-.917 3.996-3.638 3.996-5.849h-3.983v-10h9.983z"/></svg>
                 <div className="flex items-center gap-0.5 mb-2">
@@ -606,7 +610,7 @@ export default function Home() {
                   ))}
                 </div>
                 <p className="text-[13px] text-gray-700 leading-relaxed flex-1 line-clamp-4 relative z-10">"{t.text}"</p>
-                <div className="flex items-center gap-2.5 mt-3 pt-3 border-t border-primary-100/70">
+                <div className="flex items-center gap-2.5 mt-3 pt-3 border-t border-gray-200">
                   <div className="w-9 h-9 rounded-full overflow-hidden bg-gray-200 border-2 border-white shadow shrink-0">
                     {t.avatarUrl ? (
                       <img src={t.avatarUrl} alt="" className="w-full h-full object-cover" />
@@ -631,22 +635,24 @@ export default function Home() {
       {socialLinks.length > 0 && (
         <section className="mt-6 px-5 pb-6">
           <h3 className="text-base font-bold text-gray-900 mb-3">Ijtimoiy tarmoqlar</h3>
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap justify-center gap-3">
             {socialLinks.map((link) => (
               <a
                 key={link.id}
                 href={link.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex items-center gap-2.5 px-4 py-3 bg-white border border-gray-100 rounded-2xl hover:shadow-md active:bg-gray-50 transition-all"
+                title={link.label}
+                className="w-11 h-11 flex items-center justify-center bg-white border border-gray-100 rounded-full hover:shadow-md active:bg-gray-50 transition-all"
               >
                 <SocialIcon platform={link.platform} iconUrl={link.iconUrl} />
-                <span className="text-sm font-medium text-gray-700">{link.label}</span>
               </a>
             ))}
           </div>
         </section>
       )}
+
+      {/* Author Modal */}
     </div>
   );
 }

@@ -15,6 +15,15 @@
     --theme-accent: #22c55e;
   }
 
+  /* Dark mode — CSS variablelarni override qilish */
+  .dark {
+    --theme-bg: #0f172a;
+    --theme-card-bg: #1e293b;
+    --theme-text: #f1f5f9;
+    --theme-text-secondary: #94a3b8;
+    --theme-nav-bg: #1e293b;
+  }
+
   * {
     -webkit-tap-highlight-color: transparent;
   }
@@ -25,24 +34,19 @@
     color: var(--theme-text);
   }
 
-  /* Dark mode — Tailwind class strategy bilan */
-  .dark body,
-  .dark #root {
-    @apply bg-gray-900 text-gray-100;
-  }
-  .dark .bg-white { background-color: #1f2937; }
-  .dark .bg-gray-50 { background-color: #111827; }
-  .dark .border-gray-100, .dark .border-gray-200 { border-color: #374151; }
-  .dark .text-gray-900 { color: #f3f4f6; }
-  .dark .text-gray-700 { color: #d1d5db; }
-  .dark .text-gray-600 { color: #9ca3af; }
-  .dark .text-gray-500 { color: #9ca3af; }
-  .dark .bottom-nav { background-color: #1f2937; border-color: #374151; }
-  .dark .page-content { background-color: #111827; }
+  /* Dark mode additional overrides */
+  .dark .border-gray-100, .dark .border-gray-200 { border-color: #334155 !important; }
+  .dark .border-gray-50 { border-color: #1e293b !important; }
+  .dark .bg-gray-50 { background-color: #0f172a !important; }
+  .dark .bg-gray-100 { background-color: #1e293b !important; }
+  .dark .bg-gray-200 { background-color: #334155 !important; }
+  .dark .text-gray-600 { color: #cbd5e1 !important; }
+  .dark .bottom-nav { background-color: var(--theme-nav-bg); border-color: #334155 !important; }
 
   /* Mobile frame */
   #root {
-    @apply max-w-mobile mx-auto min-h-screen bg-white relative shadow-xl;
+    @apply max-w-mobile mx-auto min-h-screen relative shadow-xl;
+    background-color: var(--theme-card-bg);
   }
 
   /* Minimal touch target — barcha interaktiv elementlar uchun */

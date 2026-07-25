@@ -31,17 +31,22 @@ export default function TestScreen() {
 
   async function findAndLoadTest(tId: string) {
     try {
-      // cachedFetch orqali kurslarni tez olish
+      // Avval kurslarni olish, keyin ulardan faqat to'g'ri kurs testini yuklash
       const courses = await cachedFetch("all-courses", getAllCourses);
-      for (const course of courses) {
-        const tests = await cachedFetch(`tests-${course.id}`, () => getTestsByCourse(course.id));
-        const found = tests.find((t) => t.id === tId);
-        if (found) {
-          setTest(found);
-          setCourseId(course.id);
-          setTimeLeft(found.totalTime * 60);
-          break;
-        }
+      // Parallel — barcha kurslardan testlarni yuklash o'rniga,
+      // har bir kursning testlarini parallel tekshiramiz
+      const results = await Promise.all(
+        courses.map(async (course) => {
+          const tests = await cachedFetch(`tests-${course.id}`, () => getTestsByCourse(course.id));
+          const found = tests.find((t) => t.id === tId);
+          return found ? { test: found, courseId: course.id } : null;
+        })
+      );
+      const match = results.find((r) => r !== null);
+      if (match) {
+        setTest(match.test);
+        setCourseId(match.courseId);
+        setTimeLeft(match.test.totalTime * 60);
       }
     } catch (err) {
       console.error(err);

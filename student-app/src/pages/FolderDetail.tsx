@@ -137,10 +137,9 @@ export default function FolderDetail() {
   const completedProblems = userProgress?.completedProblems || [];
 
   function isTopicCompleted(topicId: string): boolean {
-    const totalP = topicProblemCounts[topicId] || 0;
-    if (totalP === 0) return completedTopics.includes(topicId);
-    const doneP = completedProblems.filter((pid) => pid.startsWith(`p-${topicId.replace("topic-", "")}`)).length;
-    return doneP >= totalP;
+    // Topic "tugatilgan" = o'quvchi shu topikka kirgan (completedTopics da bor)
+    // TopicDetail.saveProgress() topikka har kirganda uni completedTopics ga qo'shadi.
+    return completedTopics.includes(topicId);
   }
 
   const totalTopics = items.filter((it) => it.type === "topic").length;

@@ -549,3 +549,36 @@ export interface AdminNotification {
   data?: Record<string, string>; // qo'shimcha ma'lumot (userId, paymentId va h.k.)
   createdAt: number;
 }
+
+// ============================================================
+// AUTHOR INFO (Muallif ma'lumotlari — admin sozlamalardan boshqaradi)
+// ============================================================
+export interface AuthorInfo {
+  name: string;
+  title?: string; // "Samarqand davlat chet tillari instituti" kabi
+  bio: string; // muallif haqida matn
+  avatarUrl?: string; // muallif rasmi
+  socialLinks: AuthorSocialLink[];
+}
+
+export interface AuthorSocialLink {
+  platform: SocialPlatform;
+  url: string;
+}
+
+// ============================================================
+// CERTIFICATES (Sertifikatlar — kurs 85%+ tamomlanganda beriladi)
+// ============================================================
+export interface Certificate {
+  id: string; // `cert-${userId}-${courseId}`
+  userId: string;
+  userName: string;
+  courseId: string;
+  courseTitle: string;
+  /** Tamomlash foizi (85-100) */
+  completionPercent: number;
+  /** Sertifikat berilgan sana */
+  issuedAt: number;
+  /** Unikal QR tekshiruv kodi */
+  verificationCode: string;
+}

@@ -119,11 +119,13 @@ export default function AdminLayout() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 bg-primary-100 rounded-full flex items-center justify-center">
-                <span className="text-sm font-semibold text-primary-600">JT</span>
+                <span className="text-sm font-semibold text-primary-600">
+                  {auth.currentUser?.displayName?.charAt(0)?.toUpperCase() || "A"}
+                </span>
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-900">Javohir Toshpulatov</p>
-                <p className="text-xs text-gray-500">Bosh administrator</p>
+                <p className="text-sm font-medium text-gray-900">{auth.currentUser?.displayName || "Admin"}</p>
+                <p className="text-xs text-gray-500">{auth.currentUser?.email || ""}</p>
               </div>
             </div>
             <button onClick={handleLogout} className="p-2 text-gray-400 hover:text-danger" title="Chiqish">

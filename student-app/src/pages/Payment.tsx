@@ -2,7 +2,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ChevronLeft, Copy, Check, Shield, Upload, Image } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth } from "../hooks/useAuth";
-import { getPromoByCode, updatePromoCode, createPayment, getUserById, createAdminNotification } from "@shared/repositories";
+import { getPromoByCode, updatePromoCode, usePromoCodeAtomic, createPayment, getUserById, createAdminNotification } from "@shared/repositories";
 import { doc, getDoc } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "@shared/firebase";
@@ -61,9 +61,13 @@ export default function Payment() {
       if (!promoData) { setPromoError("Promokod topilmadi"); return; }
       if (!promoData.isActive) { setPromoError("Promokod faol emas"); return; }
       if (promoData.maxUses > 0 && promoData.usedCount >= promoData.maxUses) { setPromoError("Limiti tugagan"); return; }
+
+      // Atomik increment — race condition oldini olish
+      const success = await usePromoCodeAtomic(promoData.id);
+      if (!success) { setPromoError("Promokod limiti tugagan yoki faol emas"); return; }
+
       setDiscount(promoData.discountPercent);
       setPromoApplied(true);
-      await updatePromoCode(promoData.id, { usedCount: promoData.usedCount + 1 });
     } catch { setPromoError("Xatolik"); }
   }
 
@@ -271,6 +275,11 @@ export default function Payment() {
               onChange={(e) => {
                 const file = e.target.files?.[0];
                 if (file) {
+                  // Fayl hajmini tekshirish — max 5MB
+                  if (file.size > 5 * 1024 * 1024) {
+                    alert("Fayl juda katta! Maksimal 5MB ruxsat berilgan.");
+                    return;
+                  }
                   setScreenshotFile(file);
                   setScreenshotPreview(URL.createObjectURL(file));
                 }

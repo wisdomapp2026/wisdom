@@ -19,6 +19,7 @@ export default function Subscription() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [plans, setPlans] = useState<PricingPlan[]>([]);
+  const [benefits, setBenefits] = useState<string[]>([]);
   const [selectedPlan, setSelectedPlan] = useState<string>("quarterly");
   const [loading, setLoading] = useState(true);
 
@@ -31,6 +32,20 @@ export default function Subscription() {
       const monthly = data.monthlyPrice || 50000;
       const quarterly = data.quarterlyPrice || 120000;
       const yearly = data.yearlyPrice || 400000;
+
+      // Premium foydalari
+      if (data.premiumBenefits && Array.isArray(data.premiumBenefits)) {
+        setBenefits(data.premiumBenefits.filter((b: string) => b.trim()));
+      } else {
+        setBenefits([
+          "Barcha premium darslar va mavzular",
+          "500+ interaktiv testlar",
+          "Video yechimlar — har bir misol uchun",
+          "Shaxsiy progress tahlili",
+          "Sertifikat olish imkoniyati",
+          "Reklama va cheklovlarsiz",
+        ]);
+      }
 
       setPlans([
         {
@@ -154,14 +169,7 @@ export default function Subscription() {
         <div className="mb-6">
           <p className="text-xs text-gray-500 uppercase font-semibold mb-3">Siz nimalarga ega bo'lasiz:</p>
           <div className="space-y-2.5">
-            {[
-              "Barcha premium darslar va modullar",
-              "500+ interaktiv testlar",
-              "Video yechimlar — har bir misol uchun",
-              "Shaxsiy progress tahlili",
-              "Sertifikat olish imkoniyati",
-              "Reklama va cheklovlarsiz",
-            ].map((item, i) => (
+            {benefits.map((item, i) => (
               <div key={i} className="flex items-center gap-3">
                 <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center shrink-0">
                   <Check size={12} className="text-green-600" />

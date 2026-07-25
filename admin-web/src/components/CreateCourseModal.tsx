@@ -162,7 +162,8 @@ export default function CreateCourseModal({ open, editCourse, onClose, onCreated
           coverPosition, coverFit, tags: [category],
         });
       } else {
-        const id = title.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-");
+        const slug = title.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+        const id = `${slug}-${Date.now().toString(36)}`;
         const course: Course = {
           id, title, description, category, isPremium,
           testAfterEvery: 0, coverImage, coverPosition, coverFit,

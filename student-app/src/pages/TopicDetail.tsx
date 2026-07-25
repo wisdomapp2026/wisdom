@@ -11,6 +11,7 @@ import VideoModal from "../components/VideoModal";
 import LatexText from "../components/LatexText";
 import { TopicDetailLoader } from "../components/PageLoader";
 import { splitSolutionIntoSteps } from "../utils/splitSolution";
+import { checkAndIssueCertificate } from "../hooks/useCertificateCheck";
 
 const diffColors: Record<string, string> = { easy: "bg-green-100 text-green-700", medium: "bg-yellow-100 text-yellow-700", hard: "bg-red-100 text-red-700" };
 const diffLabels: Record<string, string> = { easy: "Easy", medium: "Medium", hard: "Hard" };
@@ -164,6 +165,10 @@ export default function TopicDetail() {
       } catch (err) {
         console.error("Progress saqlashda xatolik:", err);
       }
+
+      // Sertifikat tekshirish — 85%+ bo'lsa avtomatik beriladi
+      const userName = user.displayName || user.email?.split("@")[0] || "Foydalanuvchi";
+      checkAndIssueCertificate(userId, userName, courseId).catch(() => {});
     } else {
       // Guest — localStorage
       const allTopics = await getTopicsByCourse(courseId);

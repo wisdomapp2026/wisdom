@@ -15,6 +15,8 @@ import {
   orderBy,
   where,
   writeBatch,
+  runTransaction,
+  increment,
 } from "firebase/firestore";
 import { db } from "../firebase";
 import type { Course, Topic, Problem, Test, Advice, Folder } from "../types";
@@ -425,9 +427,10 @@ export async function getAllSocialLinks(): Promise<SocialLink[]> {
 }
 
 export async function getActiveSocialLinks(): Promise<SocialLink[]> {
-  const snap = await getDocs(collection(db, SOCIAL_LINKS_COL));
+  const q = query(collection(db, SOCIAL_LINKS_COL), where("isActive", "==", true));
+  const snap = await getDocs(q);
   const results = snap.docs.map((d) => d.data() as SocialLink);
-  return results.filter((l) => l.isActive).sort((a, b) => (a.order || 0) - (b.order || 0));
+  return results.sort((a, b) => (a.order || 0) - (b.order || 0));
 }
 
 export async function createSocialLink(link: SocialLink): Promise<void> {
@@ -493,6 +496,24 @@ export async function updatePromoCode(promoId: string, data: Partial<PromoCode>)
   await updateDoc(doc(db, PROMO_COL, promoId), data);
 }
 
+/**
+ * Promo code ishlatilganda atomik increment — race condition oldini olish.
+ * Transaction bilan tekshirib, faqat limit oshmaganida increment qiladi.
+ * @returns true agar muvaffaqiyatli bo'lsa, false agar limit tugagan bo'lsa
+ */
+export async function usePromoCodeAtomic(promoId: string): Promise<boolean> {
+  const promoRef = doc(db, PROMO_COL, promoId);
+  return runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(promoRef);
+    if (!snap.exists()) return false;
+    const data = snap.data() as PromoCode;
+    if (!data.isActive) return false;
+    if (data.maxUses > 0 && data.usedCount >= data.maxUses) return false;
+    transaction.update(promoRef, { usedCount: increment(1) });
+    return true;
+  });
+}
+
 export async function deletePromoCode(promoId: string): Promise<void> {
   await deleteDoc(doc(db, PROMO_COL, promoId));
 }
@@ -510,8 +531,9 @@ export async function getAdminNotifications(): Promise<AdminNotification[]> {
 }
 
 export async function getUnreadNotificationCount(): Promise<number> {
-  const snap = await getDocs(collection(db, NOTIFICATIONS_COL));
-  return snap.docs.filter((d) => !(d.data() as AdminNotification).isRead).length;
+  const q = query(collection(db, NOTIFICATIONS_COL), where("isRead", "==", false));
+  const snap = await getDocs(q);
+  return snap.size;
 }
 
 export async function createAdminNotification(notif: AdminNotification): Promise<void> {
@@ -523,11 +545,17 @@ export async function markNotificationRead(notifId: string): Promise<void> {
 }
 
 export async function markAllNotificationsRead(): Promise<void> {
-  const snap = await getDocs(collection(db, NOTIFICATIONS_COL));
-  for (const d of snap.docs) {
-    if (!(d.data() as AdminNotification).isRead) {
-      await updateDoc(doc(db, NOTIFICATIONS_COL, d.id), { isRead: true });
-    }
+  const q = query(collection(db, NOTIFICATIONS_COL), where("isRead", "==", false));
+  const snap = await getDocs(q);
+  if (snap.empty) return;
+
+  const BATCH_SIZE = 450;
+  const docs = snap.docs;
+  for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+    const batch = writeBatch(db);
+    const chunk = docs.slice(i, i + BATCH_SIZE);
+    chunk.forEach((d) => batch.update(d.ref, { isRead: true }));
+    await batch.commit();
   }
 }
 
@@ -545,9 +573,10 @@ export async function getAllBanners(): Promise<HomeBanner[]> {
 }
 
 export async function getActiveBanners(): Promise<HomeBanner[]> {
-  const snap = await getDocs(collection(db, BANNERS_COL));
+  const q = query(collection(db, BANNERS_COL), where("isActive", "==", true));
+  const snap = await getDocs(q);
   const results = snap.docs.map((d) => d.data() as HomeBanner);
-  return results.filter((b) => b.isActive).sort((a, b) => (a.order || 0) - (b.order || 0));
+  return results.sort((a, b) => (a.order || 0) - (b.order || 0));
 }
 
 export async function createBanner(banner: HomeBanner): Promise<void> {
@@ -576,9 +605,10 @@ export async function getAllNewsItems(): Promise<NewsItem[]> {
 }
 
 export async function getActiveNewsItems(): Promise<NewsItem[]> {
-  const snap = await getDocs(collection(db, NEWS_COL));
+  const q = query(collection(db, NEWS_COL), where("isActive", "==", true));
+  const snap = await getDocs(q);
   const results = snap.docs.map((d) => d.data() as NewsItem);
-  return results.filter((n) => n.isActive).sort((a, b) => (a.order || 0) - (b.order || 0));
+  return results.sort((a, b) => (a.order || 0) - (b.order || 0));
 }
 
 export async function createNewsItem(item: NewsItem): Promise<void> {
@@ -607,9 +637,10 @@ export async function getAllTestimonials(): Promise<Testimonial[]> {
 }
 
 export async function getActiveTestimonials(): Promise<Testimonial[]> {
-  const snap = await getDocs(collection(db, TESTIMONIALS_COL));
+  const q = query(collection(db, TESTIMONIALS_COL), where("isActive", "==", true));
+  const snap = await getDocs(q);
   const results = snap.docs.map((d) => d.data() as Testimonial);
-  return results.filter((t) => t.isActive).sort((a, b) => (a.order || 0) - (b.order || 0));
+  return results.sort((a, b) => (a.order || 0) - (b.order || 0));
 }
 
 export async function createTestimonial(testimonial: Testimonial): Promise<void> {

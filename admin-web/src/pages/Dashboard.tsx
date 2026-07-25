@@ -13,6 +13,7 @@ import { Link } from "react-router-dom";
 import { getAllCourses, getAllStudents, getRecentPayments, getStudentCountByCourse } from "@shared/repositories";
 import type { Course, User, Payment } from "@shared/types";
 import StudentActivityModal from "../components/StudentActivityModal";
+import { auth } from "@shared/firebase";
 import {
   AreaChart,
   Area,
@@ -93,14 +94,9 @@ export default function Dashboard() {
     color: ["#2196F3", "#4CAF50", "#FF9800", "#9C27B0", "#F44336"][i % 5],
   })) || [];
 
-  // Revenue data
+  // Revenue data — faqat haqiqiy to'lovlar asosida ko'rsatiladi
   const revenueData = [
-    { month: "Yan", daromad: 800, students: data?.totalStudents ? Math.round(data.totalStudents * 0.2) : 0 },
-    { month: "Fev", daromad: 1200, students: data?.totalStudents ? Math.round(data.totalStudents * 0.4) : 0 },
-    { month: "Mar", daromad: 2800, students: data?.totalStudents ? Math.round(data.totalStudents * 0.5) : 0 },
-    { month: "Apr", daromad: 3200, students: data?.totalStudents ? Math.round(data.totalStudents * 0.7) : 0 },
-    { month: "May", daromad: 4500, students: data?.totalStudents ? Math.round(data.totalStudents * 0.85) : 0 },
-    { month: "Iyn", daromad: totalRevenue > 0 ? totalRevenue / 1000 : 5200, students: data?.totalStudents || 0 },
+    { month: "So'nggi", daromad: totalRevenue > 0 ? totalRevenue / 1000 : 0, students: data?.totalStudents || 0 },
   ];
 
   return (
@@ -108,7 +104,7 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl lg:text-2xl font-bold text-gray-900">Xayrli kun, Javohir!</h1>
+          <h1 className="text-xl lg:text-2xl font-bold text-gray-900">Xayrli kun, {auth.currentUser?.displayName || "Admin"}!</h1>
           <p className="text-sm text-gray-500 mt-1">Platformadagi bugungi asosiy ko'rsatkichlar va yangilanishlar bilan tanishing.</p>
         </div>
         <div className="flex items-center gap-2 shrink-0 flex-wrap">

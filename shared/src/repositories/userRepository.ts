@@ -10,6 +10,9 @@ import {
   where,
   orderBy,
   limit,
+  writeBatch,
+  runTransaction,
+  increment,
 } from "firebase/firestore";
 import { db } from "../firebase";
 import type { User, UserProgress, TestResult, Subscription, Payment, UserActivity, ActivitySession, FavoriteTopic } from "../types";
@@ -146,36 +149,50 @@ export async function unbanUser(userId: string): Promise<void> {
 }
 
 export async function deleteUserCompletely(userId: string): Promise<void> {
+  // Barcha bog'liq ma'lumotlarni to'plash
+  const refsToDelete: any[] = [];
+
   // 1. Progress o'chirish
   const progressQ = query(collection(db, "progress"), where("userId", "==", userId));
   const progressSnap = await getDocs(progressQ);
-  for (const d of progressSnap.docs) {
-    await deleteDoc(doc(db, "progress", d.id));
-  }
+  progressSnap.docs.forEach((d) => refsToDelete.push(d.ref));
 
   // 2. Test natijalarini o'chirish
   const resultsQ = query(collection(db, "testResults"), where("userId", "==", userId));
   const resultsSnap = await getDocs(resultsQ);
-  for (const d of resultsSnap.docs) {
-    await deleteDoc(doc(db, "testResults", d.id));
-  }
+  resultsSnap.docs.forEach((d) => refsToDelete.push(d.ref));
 
   // 3. Obunalarni o'chirish
   const subsQ = query(collection(db, "subscriptions"), where("userId", "==", userId));
   const subsSnap = await getDocs(subsQ);
-  for (const d of subsSnap.docs) {
-    await deleteDoc(doc(db, "subscriptions", d.id));
-  }
+  subsSnap.docs.forEach((d) => refsToDelete.push(d.ref));
 
   // 4. To'lovlarni o'chirish
   const paymentsQ = query(collection(db, "payments"), where("userId", "==", userId));
   const paymentsSnap = await getDocs(paymentsQ);
-  for (const d of paymentsSnap.docs) {
-    await deleteDoc(doc(db, "payments", d.id));
-  }
+  paymentsSnap.docs.forEach((d) => refsToDelete.push(d.ref));
 
-  // 5. User hujjatini o'chirish
-  await deleteDoc(doc(db, "users", userId));
+  // 5. Faollik ma'lumotlarini o'chirish
+  const activityQ = query(collection(db, "userActivity"), where("userId", "==", userId));
+  const activitySnap = await getDocs(activityQ);
+  activitySnap.docs.forEach((d) => refsToDelete.push(d.ref));
+
+  // 6. Favoritelarni o'chirish
+  const favQ = query(collection(db, "favorites"), where("userId", "==", userId));
+  const favSnap = await getDocs(favQ);
+  favSnap.docs.forEach((d) => refsToDelete.push(d.ref));
+
+  // 7. User hujjatini o'chirish
+  refsToDelete.push(doc(db, "users", userId));
+
+  // WriteBatch bilan atomic o'chirish (limit: 500 per batch)
+  const BATCH_SIZE = 450;
+  for (let i = 0; i < refsToDelete.length; i += BATCH_SIZE) {
+    const batch = writeBatch(db);
+    const chunk = refsToDelete.slice(i, i + BATCH_SIZE);
+    chunk.forEach((ref) => batch.delete(ref));
+    await batch.commit();
+  }
 }
 
 
@@ -219,30 +236,32 @@ export async function startUserSession(userId: string, userName: string): Promis
   }
 }
 
-/** Sessiya vaqtini yangilash (har 30 soniyada chaqiriladi) */
+/** Sessiya vaqtini yangilash (har 30 soniyada chaqiriladi) — transaction bilan race condition oldini olish */
 export async function updateSessionTime(userId: string): Promise<void> {
   const dateStr = getTodayDateStr();
   const id = `${userId}_${dateStr}`;
   const ref = doc(db, "userActivity", id);
-  const snap = await getDoc(ref);
 
-  if (!snap.exists()) return;
+  await runTransaction(db, async (transaction) => {
+    const snap = await transaction.get(ref);
+    if (!snap.exists()) return;
 
-  const data = snap.data() as UserActivity;
-  if (data.sessions.length === 0) return;
+    const data = snap.data() as UserActivity;
+    if (data.sessions.length === 0) return;
 
-  const sessions = [...data.sessions];
-  const lastSession = { ...sessions[sessions.length - 1] };
-  const elapsed = (Date.now() - lastSession.startedAt) / 60000; // daqiqalarda
-  lastSession.durationMinutes = Math.round(elapsed);
-  sessions[sessions.length - 1] = lastSession;
+    const sessions = [...data.sessions];
+    const lastSession = { ...sessions[sessions.length - 1] };
+    const elapsed = (Date.now() - lastSession.startedAt) / 60000;
+    lastSession.durationMinutes = Math.round(elapsed);
+    sessions[sessions.length - 1] = lastSession;
 
-  const totalMinutes = sessions.reduce((sum, s) => sum + s.durationMinutes, 0);
+    const totalMinutes = sessions.reduce((sum, s) => sum + s.durationMinutes, 0);
 
-  await updateDoc(ref, {
-    sessions,
-    totalMinutes,
-    lastActiveAt: Date.now(),
+    transaction.update(ref, {
+      sessions,
+      totalMinutes,
+      lastActiveAt: Date.now(),
+    });
   });
 }
 
@@ -275,24 +294,35 @@ export async function endUserSession(userId: string): Promise<void> {
 
 /** Barcha o'quvchilarning faolligini olish (admin uchun, oxirgi N kun) */
 export async function getAllStudentActivities(daysBack = 7): Promise<UserActivity[]> {
+  // Firestore "in" query 30 ta qiymatgacha qo'llab-quvvatlaydi
+  // 30 dan ko'p bo'lsa, chunklarga bo'lamiz
+  const MAX_IN_VALUES = 30;
+  const safeDaysBack = Math.max(1, daysBack);
+
   const now = new Date();
   const dates: string[] = [];
-  for (let i = 0; i < daysBack; i++) {
+  for (let i = 0; i < safeDaysBack; i++) {
     const d = new Date(now);
     d.setDate(d.getDate() - i);
     dates.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
   }
 
   const allActivities: UserActivity[] = [];
-  // Firestore da "in" query 30 ta qiymatgacha qo'llab-quvvatlaydi
-  const q = query(
-    collection(db, "userActivity"),
-    where("date", "in", dates),
-    orderBy("lastActiveAt", "desc")
-  );
-  const snap = await getDocs(q);
-  snap.docs.forEach((d) => allActivities.push(d.data() as UserActivity));
-  return allActivities;
+
+  // Chunklarga bo'lib so'rov yuborish
+  for (let i = 0; i < dates.length; i += MAX_IN_VALUES) {
+    const chunk = dates.slice(i, i + MAX_IN_VALUES);
+    const q = query(
+      collection(db, "userActivity"),
+      where("date", "in", chunk),
+      orderBy("lastActiveAt", "desc")
+    );
+    const snap = await getDocs(q);
+    snap.docs.forEach((d) => allActivities.push(d.data() as UserActivity));
+  }
+
+  // Oxirgi faollik bo'yicha tartiblash
+  return allActivities.sort((a, b) => (b.lastActiveAt || 0) - (a.lastActiveAt || 0));
 }
 
 /** Bugungi faol o'quvchilar ro'yxati */
@@ -332,4 +362,33 @@ export async function getFavoriteTopics(userId: string): Promise<FavoriteTopic[]
 export async function isFavoriteTopic(userId: string, topicId: string): Promise<boolean> {
   const snap = await getDoc(doc(db, "favorites", `${userId}_${topicId}`));
   return snap.exists();
+}
+
+// ============ CERTIFICATES (Sertifikatlar) ============
+
+import type { Certificate } from "../types";
+
+const CERTIFICATES_COL = "certificates";
+
+export async function getCertificatesByUser(userId: string): Promise<Certificate[]> {
+  const q = query(collection(db, CERTIFICATES_COL), where("userId", "==", userId));
+  const snap = await getDocs(q);
+  const results = snap.docs.map((d) => d.data() as Certificate);
+  return results.sort((a, b) => b.issuedAt - a.issuedAt);
+}
+
+export async function getCertificate(userId: string, courseId: string): Promise<Certificate | null> {
+  const id = `cert-${userId}-${courseId}`;
+  const snap = await getDoc(doc(db, CERTIFICATES_COL, id));
+  return snap.exists() ? (snap.data() as Certificate) : null;
+}
+
+export async function createCertificate(cert: Certificate): Promise<void> {
+  await setDoc(doc(db, CERTIFICATES_COL, cert.id), cert);
+}
+
+export async function getAllCertificates(): Promise<Certificate[]> {
+  const snap = await getDocs(collection(db, CERTIFICATES_COL));
+  const results = snap.docs.map((d) => d.data() as Certificate);
+  return results.sort((a, b) => b.issuedAt - a.issuedAt);
 }

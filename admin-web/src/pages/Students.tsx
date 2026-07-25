@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Search, Loader2, Eye, Users, X, Edit, Key, BookOpen, FileText, CreditCard, Ban, Trash2, ShieldOff, Clock } from "lucide-react";
-import { getAllStudents, getAllProgressByUser, getTestResultsByUser, getRecentPayments, updateUser, banUser, unbanUser, deleteUserCompletely, getTodayActiveStudents, getAllStudentActivities } from "@shared/repositories";
-import type { User, UserProgress, TestResult, Payment, UserActivity } from "@shared/types";
+import { getAllStudents, getAllProgressByUser, getTestResultsByUser, getRecentPayments, updateUser, banUser, unbanUser, deleteUserCompletely, getTodayActiveStudents, getAllStudentActivities, getCertificatesByUser } from "@shared/repositories";
+import type { User, UserProgress, TestResult, Payment, UserActivity, Certificate } from "@shared/types";
 import LoadingButton from "../components/LoadingButton";
 
 export default function Students() {
@@ -186,11 +186,12 @@ export default function Students() {
 
 // ===== Student Detail Modal =====
 function StudentDetailModal({ student, onClose, onUpdated }: { student: User; onClose: () => void; onUpdated: () => void }) {
-  const [activeTab, setActiveTab] = useState<"info" | "courses" | "tests" | "payments">("info");
+  const [activeTab, setActiveTab] = useState<"info" | "courses" | "tests" | "payments" | "certificates">("info");
   const [zoomAvatar, setZoomAvatar] = useState(false);
   const [progress, setProgress] = useState<UserProgress[]>([]);
   const [testResults, setTestResults] = useState<TestResult[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [loadingData, setLoadingData] = useState(true);
 
   // Edit fields
@@ -228,12 +229,14 @@ function StudentDetailModal({ student, onClose, onUpdated }: { student: User; on
   async function loadStudentData() {
     setLoadingData(true);
     try {
-      const [prog, results] = await Promise.all([
+      const [prog, results, certs] = await Promise.all([
         getAllProgressByUser(student.id),
         getTestResultsByUser(student.id),
+        getCertificatesByUser(student.id),
       ]);
       setProgress(prog);
       setTestResults(results);
+      setCertificates(certs);
     } catch (err) {
       console.error("O'quvchi ma'lumotlarini yuklashda xatolik:", err);
     } finally {
@@ -325,6 +328,7 @@ function StudentDetailModal({ student, onClose, onUpdated }: { student: User; on
             { id: "courses", label: "Kurslar", icon: BookOpen },
             { id: "tests", label: "Test natijalari", icon: FileText },
             { id: "payments", label: "To'lovlar", icon: CreditCard },
+            { id: "certificates", label: "Sertifikatlar", icon: FileText },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -450,6 +454,32 @@ function StudentDetailModal({ student, onClose, onUpdated }: { student: User; on
           {!loadingData && activeTab === "payments" && (
             <div className="space-y-3">
               <p className="text-center text-gray-400 py-8">To'lovlar ma'lumoti keyingi versiyada qo'shiladi</p>
+            </div>
+          )}
+
+          {/* Certificates tab */}
+          {!loadingData && activeTab === "certificates" && (
+            <div className="space-y-3">
+              {certificates.length === 0 ? (
+                <p className="text-center text-gray-400 py-8">Hali sertifikat yo'q</p>
+              ) : (
+                certificates.map((cert) => (
+                  <div key={cert.id} className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl border border-gray-100">
+                    <div className="w-10 h-10 bg-primary-50 rounded-lg flex items-center justify-center shrink-0">
+                      <span className="text-lg">🏆</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900">{cert.courseTitle}</p>
+                      <p className="text-xs text-gray-500">
+                        {cert.completionPercent}% · {new Date(cert.issuedAt).toLocaleDateString("uz")}
+                      </p>
+                    </div>
+                    <span className="text-[10px] font-mono text-gray-400 bg-white px-2 py-1 rounded border border-gray-200">
+                      {cert.verificationCode}
+                    </span>
+                  </div>
+                ))
+              )}
             </div>
           )}
         </div>

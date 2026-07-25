@@ -78,7 +78,7 @@ export default function CourseDetail() {
     try {
       const [c, t, te] = await Promise.all([
         cachedFetch(`course-${courseId}`, () => getCourseById(courseId)),
-        cachedFetch(`topics-${courseId}`, () => getTopicsByCourse(courseId)),
+        getTopicsByCourse(courseId), // Keshsiz — har safar yangi topiklar soni olinishi uchun
         cachedFetch(`tests-${courseId}`, () => getTestsByCourse(courseId)),
       ]);
       setCourse(c);
@@ -180,21 +180,41 @@ export default function CourseDetail() {
   }
 
   // Real progress hisoblash
+  // completedTopics — o'quvchi KIRGAN topiklar (TopicDetail.saveProgress da yoziladi)
+  // completedProblems — yechimi ko'rilgan misollar
   const completedTopics = userProgress?.completedTopics || [];
   const completedProblems = userProgress?.completedProblems || [];
-  const totalProblems = Object.values(topicProblemCounts).reduce((a, b) => a + b, 0);
 
-  // Modulni "tugatilgan" hisoblash — ichidagi barcha misollar ishlangan bo'lsa
+  // Modul "tugatilgan" — o'quvchi shu topikka kirgan (TopicDetail.saveProgress() saqlaydi)
+  // completedTopics da bor = kirilgan = tugatilgan
   function isTopicCompleted(topicId: string): boolean {
-    const totalP = topicProblemCounts[topicId] || 0;
-    if (totalP === 0) return completedTopics.includes(topicId); // misol yo'q bo'lsa kirganligiga qarab
-    const doneP = completedProblems.filter((pid) => pid.startsWith(`p-${topicId.replace("topic-", "")}`)).length;
-    return doneP >= totalP;
+    return completedTopics.includes(topicId);
   }
 
+  // BARCHA topiklar (papkali va papkasiz) — bu haqiqiy "darslar soni"
+  const totalTopicsCount = topics.length;
   const realCompletedCount = topics.filter((t) => isTopicCompleted(t.id)).length;
-  const progressPercent = topics.length > 0
-    ? Math.round((realCompletedCount / topics.length) * 100)
+
+  // Progress hisoblash:
+  // Agar papkalar bor bo'lsa — progress = tugatilgan papkalar / jami papkalar
+  // Agar papkalar yo'q bo'lsa — progress = tugatilgan topiklar / jami topiklar
+  // Papka "tugatilgan" = shu papkadagi BARCHA topiklar tugatilgan
+  const hasFolders = folders.length > 0;
+
+  function isFolderCompleted(folderId: string): boolean {
+    const folderTopics = topics.filter((t) => t.folderId === folderId);
+    if (folderTopics.length === 0) return false; // Bo'sh papka tugatilgan emas
+    return folderTopics.every((t) => isTopicCompleted(t.id));
+  }
+
+  // "Modullar" soni — papkalar bor bo'lsa papkalar soni, aks holda topiklar soni
+  const totalModules = hasFolders ? folders.length : totalTopicsCount;
+  const completedModules = hasFolders
+    ? folders.filter((f) => isFolderCompleted(f.id)).length
+    : realCompletedCount;
+
+  const progressPercent = totalModules > 0
+    ? Math.round((completedModules / totalModules) * 100)
     : 0;
 
   // Bitta papkadagi progress (shu papkadagi modullar tugatilishiga qarab)
@@ -350,7 +370,7 @@ export default function CourseDetail() {
           <h3 className="text-lg font-bold text-gray-900 mb-1">{course?.title}</h3>
           <p className="text-sm text-gray-500 mb-4">{course?.description}</p>
           <div className="flex items-center justify-center gap-4 text-sm text-gray-500 mb-5">
-            <span>📚 {topics.length} modul</span>
+            <span>📚 {hasFolders ? folders.length : topics.length} modul</span>
             <span>👥 {totalStudentsInCourse} o'quvchi</span>
           </div>
           <button
@@ -378,14 +398,21 @@ export default function CourseDetail() {
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-white font-bold text-lg leading-tight truncate">{course?.title}</p>
-            <p className="text-white/60 text-[10px] uppercase tracking-wide mt-0.5">Level {Math.ceil(progressPercent / 25)} Academic Path</p>
+            <p className="text-white/60 text-[10px] uppercase tracking-wide mt-0.5">
+              {(() => {
+                const currentTopic = userProgress?.currentTopicId
+                  ? topics.find((t) => t.id === userProgress.currentTopicId)
+                  : null;
+                return currentTopic ? currentTopic.title : `Level ${Math.ceil(progressPercent / 25)} Academic Path`;
+              })()}
+            </p>
           </div>
         </div>
 
         {/* Progress percent & modullar */}
         <div className="flex items-end justify-between mb-3">
           <p className="text-white text-4xl font-bold">{progressPercent}%</p>
-          <p className="text-white/80 text-sm font-medium">{realCompletedCount} / {topics.length} MODULLAR</p>
+          <p className="text-white/80 text-sm font-medium">{completedModules} / {totalModules} MODULLAR</p>
         </div>
 
         {/* Progress bar */}

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import BottomNav from "./components/BottomNav";
+import TopHeader from "./components/TopHeader";
 import { NavigationLoader } from "./components/PageTransition";
 import Home from "./pages/Home";
 import Courses from "./pages/Courses";
@@ -21,11 +22,13 @@ import Help from "./pages/Help";
 import Messages from "./pages/Messages";
 import ProfileEdit from "./pages/ProfileEdit";
 import Favorites from "./pages/Favorites";
+import Certificates from "./pages/Certificates";
 import PaymentHistory from "./pages/PaymentHistory";
 import AllNews from "./pages/AllNews";
 import PromoPage from "./pages/PromoPage";
 import StudentNotifications from "./pages/StudentNotifications";
 import BannedScreen from "./components/BannedScreen";
+import ErrorBoundary from "./components/ErrorBoundary";
 import { useAuth } from "./hooks/useAuth";
 import { useActivityTracker } from "./hooks/useActivityTracker";
 import { getUserById } from "@shared/repositories";
@@ -106,8 +109,9 @@ export default function App() {
   }
 
   return (
-    <>
+    <ErrorBoundary>
       <NavigationLoader />
+      <TopHeader />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/continue" element={<ContinueLearning />} />
@@ -116,6 +120,7 @@ export default function App() {
         <Route path="/profile" element={<Profile />} />
         <Route path="/profile/edit" element={<ProfileEdit />} />
         <Route path="/profile/favorites" element={<Favorites />} />
+        <Route path="/profile/certificates" element={<Certificates />} />
         <Route path="/profile/payments" element={<PaymentHistory />} />
         <Route path="/news" element={<AllNews />} />
         <Route path="/profile/help" element={<Help />} />
@@ -135,6 +140,6 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <BottomNav />
-    </>
+    </ErrorBoundary>
   );
 }

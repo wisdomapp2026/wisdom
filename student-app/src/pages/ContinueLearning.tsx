@@ -59,6 +59,9 @@ export default function ContinueLearning() {
 
           // Navbatdagi tugatilmagan modulni topish (order bo'yicha birinchi completed bo'lmagan)
           const sortedTopics = [...topics].sort((a, b) => a.order - b.order);
+          // Faqat haqiqiy mavjud topiclarni hisoblash (o'chirilganlarni chiqarib tashlash)
+          const validTopicIds = topics.map(t => t.id);
+          const validCompletedCount = prog.completedTopics.filter(id => validTopicIds.includes(id)).length;
           const nextTopic = sortedTopics.find((t) => !prog.completedTopics.includes(t.id)) || null;
 
           // Agar nextTopic topilmasa, currentTopicId dan olish (fallback)
@@ -70,7 +73,7 @@ export default function ContinueLearning() {
             );
           }
 
-          const remainingTopics = topics.length - prog.completedTopics.length;
+          const remainingTopics = topics.length - validCompletedCount;
           return {
             progress: prog,
             course,
@@ -95,7 +98,7 @@ export default function ContinueLearning() {
 
   // Oxirgi o'qigan kurs
   const lastCourse = recentCourses[0];
-  const progressPercent = lastCourse?.progress.progressPercent || 0;
+  const progressPercent = Math.min(100, lastCourse?.progress.progressPercent || 0);
 
   return (
     <div className="page-content">
@@ -172,7 +175,7 @@ export default function ContinueLearning() {
               const hoursAgo = Math.floor(timeDiff / (1000 * 60 * 60));
               const timeLabel = hoursAgo < 1 ? "Hozir" : hoursAgo < 24 ? `${hoursAgo} soat oldin` : `${Math.floor(hoursAgo / 24)} kun oldin`;
               const topicProgress = item.totalTopics > 0
-                ? Math.round((item.progress.completedTopics.length / item.totalTopics) * 100)
+                ? Math.min(100, Math.round((item.progress.completedTopics.length / item.totalTopics) * 100))
                 : 0;
 
               return (
@@ -205,7 +208,7 @@ export default function ContinueLearning() {
                       <span className="text-xs font-bold text-primary-500">{topicProgress}%</span>
                     </div>
                     <div className="h-2 bg-gray-100 rounded-full">
-                      <div className="h-full bg-primary-500 rounded-full transition-all" style={{ width: `${topicProgress}%` }} />
+                      <div className="h-full bg-primary-500 rounded-full transition-all" style={{ width: `${Math.min(100, topicProgress)}%` }} />
                     </div>
                   </div>
 

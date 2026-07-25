@@ -9,9 +9,15 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
       "@shared": path.resolve(__dirname, "../shared/src"),
     },
+    dedupe: ["react", "react-dom"],
   },
   envDir: path.resolve(__dirname, ".."),
   server: {
-    port: 3000,
+    port: 3001,
+    hmr: {
+      protocol: "ws",
+      host: "localhost",
+      port: 3001,
+    },
   },
 });

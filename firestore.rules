@@ -1,0 +1,218 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===== HELPER FUNCTIONS =====
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "admin";
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // ===== USERS =====
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isOwner(userId);
+      allow update: if isOwner(userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ===== COURSES =====
+    match /courses/{courseId} {
+      allow read: if true; // Kurslar hamma ko'ra oladi
+      allow create, update, delete: if isAdmin();
+
+      // Subcollections
+      match /topics/{topicId} {
+        allow read: if true;
+        allow create, update, delete: if isAdmin();
+
+        match /problems/{problemId} {
+          allow read: if true;
+          allow create, update, delete: if isAdmin();
+        }
+      }
+
+      match /tests/{testId} {
+        allow read: if true;
+        allow create, update, delete: if isAdmin();
+      }
+
+      match /folders/{folderId} {
+        allow read: if true;
+        allow create, update, delete: if isAdmin();
+
+        match /presence/{userId} {
+          allow read: if true;
+          allow write: if isOwner(userId);
+        }
+      }
+
+      match /advices/{adviceId} {
+        allow read: if true;
+        allow create, update, delete: if isAdmin();
+      }
+
+      match /socialLinks/{linkId} {
+        allow read: if true;
+        allow create, update, delete: if isAdmin();
+      }
+    }
+
+    // ===== PROGRESS =====
+    match /progress/{progressId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated() && 
+        progressId.matches(request.auth.uid + '_.*');
+      allow delete: if isAdmin();
+    }
+
+    // ===== TEST RESULTS =====
+    match /testResults/{resultId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && 
+        request.resource.data.userId == request.auth.uid;
+      allow delete: if isAdmin();
+    }
+
+    // ===== SUBSCRIPTIONS =====
+    match /subscriptions/{subId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ===== PAYMENTS =====
+    match /payments/{paymentId} {
+      allow read: if isAdmin() || 
+        (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow create: if isAuthenticated() && 
+        request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ===== MESSAGES =====
+    match /messages/{messageId} {
+      allow read: if isAuthenticated() && 
+        (resource.data.fromUserId == request.auth.uid || 
+         resource.data.toUserId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated();
+      allow update: if isAdmin() || 
+        (isAuthenticated() && resource.data.toUserId == request.auth.uid);
+      allow delete: if isAdmin();
+    }
+
+    // ===== CATEGORIES =====
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ===== TEST LIBRARY =====
+    match /testLibrary/{testId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ===== TEST BUILDER =====
+    match /testBuilderQuestions/{questionId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /testBuilderFolders/{folderId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ===== TEST LISTS =====
+    match /testLists/{listId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ===== MOTIVATIONS =====
+    match /motivations/{phraseId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /motivationSettings/{settingId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ===== SOCIAL LINKS =====
+    match /socialLinks/{linkId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ===== PROMO CODES =====
+    match /promoCodes/{promoId} {
+      allow read: if isAuthenticated();
+      // Student faqat usedCount ni increment qilishi mumkin (atomic)
+      allow update: if isAuthenticated() && 
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usedCount']);
+      allow create, delete: if isAdmin();
+    }
+
+    // ===== ADMIN NOTIFICATIONS =====
+    match /adminNotifications/{notifId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated(); // Student to'lov bildirishnomasi yaratishi mumkin
+      allow update, delete: if isAdmin();
+    }
+
+    // ===== HOME BANNERS =====
+    match /homeBanners/{bannerId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ===== NEWS ITEMS =====
+    match /newsItems/{itemId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ===== TESTIMONIALS =====
+    match /testimonials/{testimonialId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ===== USER ACTIVITY =====
+    match /userActivity/{activityId} {
+      allow read: if isAdmin() || 
+        (isAuthenticated() && activityId.matches(request.auth.uid + '_.*'));
+      allow create, update: if isAuthenticated() && 
+        activityId.matches(request.auth.uid + '_.*');
+      allow delete: if isAdmin();
+    }
+
+    // ===== FAVORITES =====
+    match /favorites/{favId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && 
+        request.resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && 
+        resource.data.userId == request.auth.uid;
+    }
+
+    // ===== SETTINGS =====
+    match /settings/{settingId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
+    }
+  }
+}

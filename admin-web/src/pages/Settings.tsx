@@ -1,14 +1,18 @@
 import { useState, useEffect } from "react";
-import { Save, DollarSign, Globe, Shield, Bell, Palette, Server } from "lucide-react";
+import { Save, DollarSign, Globe, Shield, Bell, Palette, Server, User, Check } from "lucide-react";
 import { doc, getDoc, setDoc } from "firebase/firestore";
-import { db } from "@shared/firebase";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { db, storage } from "@shared/firebase";
 import LoadingButton from "../components/LoadingButton";
+import type { AuthorInfo, AuthorSocialLink, SocialPlatform } from "@shared/types";
 
 interface PlatformSettings {
   // Premium narxlar
-  monthlyPrice: number; // oylik narx (so'm)
-  quarterlyPrice: number; // 3 oylik
-  yearlyPrice: number; // yillik
+  monthlyPrice: number;
+  quarterlyPrice: number;
+  yearlyPrice: number;
+  // Premium foydalari (student app da ko'rinadi)
+  premiumBenefits: string[];
   // Umumiy
   platformName: string;
   supportPhone: string;
@@ -57,6 +61,14 @@ const DEFAULT_SETTINGS: PlatformSettings = {
   monthlyPrice: 50000,
   quarterlyPrice: 120000,
   yearlyPrice: 400000,
+  premiumBenefits: [
+    "Barcha premium darslar va mavzular",
+    "500+ interaktiv testlar",
+    "Video yechimlar — har bir misol uchun",
+    "Shaxsiy progress tahlili",
+    "Sertifikat olish imkoniyati",
+    "Reklama va cheklovlarsiz",
+  ],
   platformName: "EduKids",
   supportPhone: "+998 90 123 45 67",
   supportEmail: "support@edukids.uz",
@@ -75,7 +87,7 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [activeTab, setActiveTab] = useState<"pricing" | "general" | "payments" | "notifications" | "theme">("pricing");
+  const [activeTab, setActiveTab] = useState<"pricing" | "general" | "payments" | "notifications" | "theme" | "author">("pricing");
 
   useEffect(() => { loadSettings(); }, []);
 
@@ -120,6 +132,7 @@ export default function Settings() {
     { id: "payments" as const, label: "To'lov usullari", icon: <Shield size={16} /> },
     { id: "notifications" as const, label: "Bildirishnomalar", icon: <Bell size={16} /> },
     { id: "theme" as const, label: "Interfeys", icon: <Palette size={16} /> },
+    { id: "author" as const, label: "Muallif", icon: <User size={16} /> },
   ];
 
   return (
@@ -230,6 +243,53 @@ export default function Settings() {
                   </p>
                 </div>
               </div>
+            </div>
+
+            {/* Premium foydalari */}
+            <div className="border-t border-gray-100 pt-6 mt-6">
+              <div>
+                <h3 className="text-base font-semibold text-gray-900 mb-1">Premium foydalari</h3>
+                <p className="text-xs text-gray-500">Student app da "Siz nimalarga ega bo'lasiz" ro'yxatida ko'rinadi</p>
+              </div>
+
+              <div className="mt-4 space-y-2">
+                {(settings.premiumBenefits || []).map((item, i) => (
+                  <div key={i} className="flex items-center gap-2 group">
+                    <div className="w-5 h-5 bg-primary-100 rounded-full flex items-center justify-center shrink-0">
+                      <Check size={12} className="text-primary-600" />
+                    </div>
+                    <input
+                      value={item}
+                      onChange={(e) => {
+                        const benefits = [...(settings.premiumBenefits || [])];
+                        benefits[i] = e.target.value;
+                        updateField("premiumBenefits", benefits);
+                      }}
+                      className="flex-1 px-3 py-2 bg-transparent border-b border-gray-200 text-sm focus:outline-none focus:border-primary-500 hover:border-gray-300"
+                    />
+                    <button
+                      onClick={() => {
+                        const benefits = (settings.premiumBenefits || []).filter((_, idx) => idx !== i);
+                        updateField("premiumBenefits", benefits);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-opacity"
+                      title="O'chirish"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <button
+                onClick={() => {
+                  const benefits = [...(settings.premiumBenefits || []), ""];
+                  updateField("premiumBenefits", benefits);
+                }}
+                className="mt-3 text-sm text-primary-500 font-medium hover:underline"
+              >
+                + Yangi qo'shish
+              </button>
             </div>
           </div>
         )}
@@ -367,6 +427,10 @@ export default function Settings() {
             onChange={(theme) => updateField("theme", theme)}
             onReset={() => updateField("theme", DEFAULT_THEME)}
           />
+        )}
+
+        {activeTab === "author" && (
+          <AuthorEditor />
         )}
       </div>
 
@@ -544,6 +608,279 @@ function ThemeEditor({ theme, onChange, onReset }: {
             </div>
           </div>
           <p className="text-[10px] text-gray-400 text-center mt-2">Ranglar saqlangach, student ilovada avtomatik qo'llaniladi</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ===== Muallif ma'lumotlarini tahrirlash =====
+const AUTHOR_PLATFORMS: { value: SocialPlatform; label: string; emoji: string }[] = [
+  { value: "telegram", label: "Telegram", emoji: "✈️" },
+  { value: "instagram", label: "Instagram", emoji: "📸" },
+  { value: "youtube", label: "YouTube", emoji: "▶️" },
+  { value: "facebook", label: "Facebook", emoji: "📘" },
+  { value: "tiktok", label: "TikTok", emoji: "🎵" },
+  { value: "twitter", label: "Twitter / X", emoji: "🐦" },
+  { value: "linkedin", label: "LinkedIn", emoji: "💼" },
+  { value: "website", label: "Veb-sayt", emoji: "🌐" },
+];
+
+function AuthorEditor() {
+  const [author, setAuthor] = useState<AuthorInfo>({
+    name: "",
+    title: "",
+    bio: "",
+    avatarUrl: "",
+    socialLinks: [],
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreview, setAvatarPreview] = useState("");
+
+  useEffect(() => { loadAuthor(); }, []);
+
+  async function loadAuthor() {
+    try {
+      const snap = await getDoc(doc(db, "settings", "author"));
+      if (snap.exists()) {
+        const data = snap.data() as AuthorInfo;
+        setAuthor(data);
+        if (data.avatarUrl) setAvatarPreview(data.avatarUrl);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    setSaved(false);
+
+    let avatarUrl = author.avatarUrl || "";
+    if (avatarFile) {
+      try {
+        const storageRef = ref(storage, `author/avatar-${Date.now()}.jpg`);
+        await uploadBytes(storageRef, avatarFile);
+        avatarUrl = await getDownloadURL(storageRef);
+      } catch (err) {
+        console.error("Rasm yuklashda xatolik:", err);
+      }
+    }
+
+    try {
+      await setDoc(doc(db, "settings", "author"), { ...author, avatarUrl });
+      setAuthor((prev) => ({ ...prev, avatarUrl }));
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (err) {
+      console.error("Saqlashda xatolik:", err);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function addSocialLink() {
+    setAuthor((prev) => ({
+      ...prev,
+      socialLinks: [...prev.socialLinks, { platform: "telegram", url: "" }],
+    }));
+  }
+
+  function updateSocialLink(index: number, field: keyof AuthorSocialLink, value: string) {
+    setAuthor((prev) => {
+      const links = [...prev.socialLinks];
+      links[index] = { ...links[index], [field]: value };
+      return { ...prev, socialLinks: links };
+    });
+  }
+
+  function removeSocialLink(index: number) {
+    setAuthor((prev) => ({
+      ...prev,
+      socialLinks: prev.socialLinks.filter((_, i) => i !== index),
+    }));
+  }
+
+  if (loading) {
+    return <div className="flex items-center justify-center py-10"><div className="w-8 h-8 border-3 border-primary-500 border-t-transparent rounded-full animate-spin" /></div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-1">Muallif ma'lumotlari</h3>
+          <p className="text-sm text-gray-500">Student app da logo bosilganda ko'rinadigan muallif haqida ma'lumotlar</p>
+        </div>
+        <LoadingButton
+          onClick={handleSave}
+          loading={saving}
+          className="btn-primary flex items-center gap-2 text-sm"
+        >
+          <Save size={16} />
+          {saved ? "✓ Saqlandi" : "Saqlash"}
+        </LoadingButton>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Form */}
+        <div className="space-y-5">
+          {/* Avatar */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Muallif rasmi</label>
+            <div className="flex items-center gap-4">
+              <div className="w-20 h-20 rounded-full overflow-hidden bg-gray-100 border-2 border-gray-200 shrink-0">
+                {avatarPreview ? (
+                  <img src={avatarPreview} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-2xl text-gray-400">👤</div>
+                )}
+              </div>
+              <label className="cursor-pointer px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+                📷 Rasm tanlash
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      if (file.size > 5 * 1024 * 1024) { alert("Maksimal 5MB!"); return; }
+                      setAvatarFile(file);
+                      setAvatarPreview(URL.createObjectURL(file));
+                    }
+                  }}
+                />
+              </label>
+            </div>
+          </div>
+
+          {/* Ism */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">To'liq ismi</label>
+            <input
+              value={author.name}
+              onChange={(e) => setAuthor((p) => ({ ...p, name: e.target.value }))}
+              placeholder="Jo'raboyeva Dilrabo Jaloliddin qizi"
+              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+          </div>
+
+          {/* Lavozim / Institut */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Lavozim / Muassasa</label>
+            <input
+              value={author.title || ""}
+              onChange={(e) => setAuthor((p) => ({ ...p, title: e.target.value }))}
+              placeholder="Samarqand davlat chet tillari instituti"
+              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+          </div>
+
+          {/* Bio */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5">Muallif haqida</label>
+            <textarea
+              value={author.bio}
+              onChange={(e) => setAuthor((p) => ({ ...p, bio: e.target.value }))}
+              placeholder="Muallif haqida qisqacha ma'lumot..."
+              rows={4}
+              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary-500"
+            />
+          </div>
+
+          {/* Ijtimoiy tarmoqlar */}
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <label className="text-sm font-medium text-gray-700">Ijtimoiy tarmoqlar</label>
+              <button
+                onClick={addSocialLink}
+                className="text-xs text-primary-500 font-medium hover:underline"
+              >
+                + Qo'shish
+              </button>
+            </div>
+            <div className="space-y-3">
+              {author.socialLinks.map((link, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <select
+                    value={link.platform}
+                    onChange={(e) => updateSocialLink(i, "platform", e.target.value)}
+                    className="px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm"
+                  >
+                    {AUTHOR_PLATFORMS.map((p) => (
+                      <option key={p.value} value={p.value}>{p.emoji} {p.label}</option>
+                    ))}
+                  </select>
+                  <input
+                    value={link.url}
+                    onChange={(e) => updateSocialLink(i, "url", e.target.value)}
+                    placeholder="https://t.me/kanal"
+                    className="flex-1 px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  />
+                  <button
+                    onClick={() => removeSocialLink(i)}
+                    className="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+              {author.socialLinks.length === 0 && (
+                <p className="text-xs text-gray-400 text-center py-3">Hali ijtimoiy tarmoq qo'shilmagan</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Preview */}
+        <div className="sticky top-6">
+          <h4 className="text-sm font-medium text-gray-700 mb-3">Student app dagi ko'rinishi</h4>
+          <div className="bg-white border border-gray-200 rounded-3xl p-6 shadow-sm max-w-sm mx-auto">
+            {/* Avatar */}
+            <div className="flex justify-center">
+              <div className="w-20 h-20 rounded-full overflow-hidden border-4 border-primary-100">
+                {avatarPreview ? (
+                  <img src={avatarPreview} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full bg-gray-200 flex items-center justify-center text-2xl">👤</div>
+                )}
+              </div>
+            </div>
+            <h3 className="text-base font-bold text-gray-900 text-center mt-3">
+              {author.name || "Muallif ismi"}
+            </h3>
+            {author.title && (
+              <p className="text-xs text-primary-500 text-center mt-1">🎓 {author.title}</p>
+            )}
+            {author.bio && (
+              <p className="text-xs text-gray-500 text-center mt-2 leading-relaxed">{author.bio.slice(0, 100)}...</p>
+            )}
+            {author.socialLinks.length > 0 && (
+              <div className="flex justify-center gap-2 mt-4">
+                {author.socialLinks.map((link, i) => {
+                  const info = AUTHOR_PLATFORMS.find((p) => p.value === link.platform);
+                  return (
+                    <div key={i} className="w-9 h-9 bg-primary-100 rounded-full flex items-center justify-center text-sm">
+                      {info?.emoji || "🔗"}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <div className="border-t border-gray-100 mt-4 pt-4">
+              <p className="text-xs font-semibold text-gray-700 mb-2">💬 Fikr qoldirish</p>
+              <div className="flex gap-0.5 mb-2">
+                {[1,2,3,4,5].map((s) => <span key={s} className="text-yellow-400 text-sm">★</span>)}
+              </div>
+              <div className="h-16 bg-gray-50 border border-gray-200 rounded-lg" />
+            </div>
+          </div>
         </div>
       </div>
     </div>
