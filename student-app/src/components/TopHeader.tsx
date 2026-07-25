@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Search } from "lucide-react";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@shared/firebase";
 import { useAuth } from "../hooks/useAuth";
 import { getUserById } from "@shared/repositories";
-import { useEffect } from "react";
 import HamburgerMenu from "./HamburgerMenu";
 import NotificationBell from "./NotificationBell";
 import AuthorModal from "./AuthorModal";
@@ -14,6 +15,8 @@ export default function TopHeader() {
   const location = useLocation();
   const [authorModalOpen, setAuthorModalOpen] = useState(false);
   const [userData, setUserData] = useState<{ name?: string; avatar?: string } | null>(null);
+  const [logoUrl, setLogoUrl] = useState("");
+  const [appName, setAppName] = useState("EduKids");
 
   useEffect(() => {
     if (user) {
@@ -22,6 +25,22 @@ export default function TopHeader() {
       }).catch(() => {});
     }
   }, [user]);
+
+  // Admin sozlamalaridan logo va app nomini yuklash
+  useEffect(() => {
+    loadBranding();
+  }, []);
+
+  async function loadBranding() {
+    try {
+      const snap = await getDoc(doc(db, "settings", "platform"));
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data.logoUrl) setLogoUrl(data.logoUrl);
+        if (data.platformName) setAppName(data.platformName);
+      }
+    } catch {}
+  }
 
   // Bu sahifalarda header ko'rsatmaslik
   const hideOn = ["/login", "/register", "/payment", "/premium-gate", "/subscription"];
@@ -34,10 +53,14 @@ export default function TopHeader() {
         <div className="flex items-center gap-2">
           <HamburgerMenu />
           <button onClick={() => setAuthorModalOpen(true)} className="flex items-center gap-2 active:opacity-70 transition-opacity">
-            <div className="w-9 h-9 bg-primary-500 rounded-xl flex items-center justify-center">
-              <span className="text-white text-lg">⚡</span>
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center overflow-hidden bg-primary-500 shrink-0">
+              {logoUrl ? (
+                <img src={logoUrl} alt={appName} className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-white text-lg">⚡</span>
+              )}
             </div>
-            <span className="text-lg font-bold text-primary-500">EduKids</span>
+            <span className="text-lg font-bold text-primary-500">{appName}</span>
           </button>
         </div>
         <div className="flex items-center gap-1 shrink-0">

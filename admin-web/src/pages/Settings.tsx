@@ -15,6 +15,7 @@ interface PlatformSettings {
   premiumBenefits: string[];
   // Umumiy
   platformName: string;
+  logoUrl: string;
   supportPhone: string;
   supportEmail: string;
   // To'lov kartasi
@@ -70,6 +71,7 @@ const DEFAULT_SETTINGS: PlatformSettings = {
     "Reklama va cheklovlarsiz",
   ],
   platformName: "EduKids",
+  logoUrl: "",
   supportPhone: "+998 90 123 45 67",
   supportEmail: "support@edukids.uz",
   cardNumber: "8600 1234 5678 9012",
@@ -298,7 +300,56 @@ export default function Settings() {
           <div className="space-y-6">
             <div>
               <h3 className="text-lg font-semibold text-gray-900 mb-1">Umumiy sozlamalar</h3>
-              <p className="text-sm text-gray-500">Platforma nomi va aloqa ma'lumotlari</p>
+              <p className="text-sm text-gray-500">Platforma nomi, logosi va aloqa ma'lumotlari</p>
+            </div>
+
+            {/* Logo */}
+            <div className="bg-gray-50 rounded-xl p-5 border border-gray-200">
+              <h4 className="font-medium text-gray-900 mb-3">📱 App logosi (Student header)</h4>
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-xl overflow-hidden bg-primary-500 flex items-center justify-center shrink-0 border-2 border-gray-200">
+                  {settings.logoUrl ? (
+                    <img src={settings.logoUrl} alt="Logo" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-white text-2xl">⚡</span>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+                    📷 Logo tanlash
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={async (e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        if (file.size > 5 * 1024 * 1024) { alert("Maksimal 5MB!"); return; }
+                        try {
+                          const storageRef = ref(storage, `branding/logo-${Date.now()}.${file.name.split('.').pop()}`);
+                          await uploadBytes(storageRef, file);
+                          const url = await getDownloadURL(storageRef);
+                          updateField("logoUrl", url);
+                          // Avtomatik saqlash — admin alohida "Saqlash" bosmasligiga to'g'ri keladi
+                          await setDoc(doc(db, "settings", "platform"), { ...settings, logoUrl: url });
+                        } catch (err) {
+                          console.error("Logo yuklashda xatolik:", err);
+                          alert("Logo yuklashda xatolik yuz berdi");
+                        }
+                      }}
+                    />
+                  </label>
+                  {settings.logoUrl && (
+                    <button
+                      onClick={() => updateField("logoUrl", "")}
+                      className="ml-2 text-xs text-red-500 hover:underline"
+                    >
+                      O'chirish
+                    </button>
+                  )}
+                  <p className="text-xs text-gray-400 mt-1">Tavsiya: 512x512 px, PNG yoki SVG</p>
+                </div>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Search, Loader2, Eye, Users, X, Edit, Key, BookOpen, FileText, CreditCard, Ban, Trash2, ShieldOff, Clock } from "lucide-react";
-import { getAllStudents, getAllProgressByUser, getTestResultsByUser, getRecentPayments, updateUser, banUser, unbanUser, deleteUserCompletely, getTodayActiveStudents, getAllStudentActivities, getCertificatesByUser } from "@shared/repositories";
+import { getAllStudents, getAllProgressByUser, getTestResultsByUser, getRecentPayments, getPaymentsByUser, updateUser, banUser, unbanUser, deleteUserCompletely, getTodayActiveStudents, getAllStudentActivities, getCertificatesByUser } from "@shared/repositories";
 import type { User, UserProgress, TestResult, Payment, UserActivity, Certificate } from "@shared/types";
 import LoadingButton from "../components/LoadingButton";
 
@@ -229,14 +229,16 @@ function StudentDetailModal({ student, onClose, onUpdated }: { student: User; on
   async function loadStudentData() {
     setLoadingData(true);
     try {
-      const [prog, results, certs] = await Promise.all([
+      const [prog, results, certs, pays] = await Promise.all([
         getAllProgressByUser(student.id),
         getTestResultsByUser(student.id),
         getCertificatesByUser(student.id),
+        getPaymentsByUser(student.id),
       ]);
       setProgress(prog);
       setTestResults(results);
       setCertificates(certs);
+      setPayments(pays);
     } catch (err) {
       console.error("O'quvchi ma'lumotlarini yuklashda xatolik:", err);
     } finally {
@@ -453,7 +455,13 @@ function StudentDetailModal({ student, onClose, onUpdated }: { student: User; on
           {/* Payments tab */}
           {!loadingData && activeTab === "payments" && (
             <div className="space-y-3">
-              <p className="text-center text-gray-400 py-8">To'lovlar ma'lumoti keyingi versiyada qo'shiladi</p>
+              {payments.length === 0 ? (
+                <p className="text-center text-gray-400 py-8">Hali to'lov qilinmagan</p>
+              ) : (
+                payments.map((p) => (
+                  <PaymentCard key={p.id} payment={p} />
+                ))
+              )}
             </div>
           )}
 
@@ -515,5 +523,80 @@ function InfoField({ label, value }: { label: string; value: string }) {
       <p className="text-[10px] text-gray-500 uppercase font-medium">{label}</p>
       <p className="text-sm font-medium text-gray-900 mt-0.5">{value}</p>
     </div>
+  );
+}
+
+// ===== Payment Card (screenshot bilan) =====
+function PaymentCard({ payment }: { payment: Payment }) {
+  const [showScreenshot, setShowScreenshot] = useState(false);
+
+  const statusColors: Record<string, string> = {
+    success: "bg-green-100 text-green-700",
+    pending: "bg-yellow-100 text-yellow-700",
+    failed: "bg-red-100 text-red-700",
+  };
+  const statusLabels: Record<string, string> = {
+    success: "Tasdiqlangan",
+    pending: "Kutilmoqda",
+    failed: "Rad etilgan",
+  };
+
+  return (
+    <>
+      <div
+        onClick={() => payment.screenshotUrl && setShowScreenshot(true)}
+        className={`flex items-center justify-between bg-gray-50 rounded-xl p-4 border border-gray-100 ${payment.screenshotUrl ? "cursor-pointer hover:bg-gray-100 transition-colors" : ""}`}
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center shrink-0">
+            <CreditCard className="w-5 h-5 text-blue-500" />
+          </div>
+          <div>
+            <p className="font-medium text-gray-900 text-sm">{payment.courseTitle}</p>
+            <p className="text-xs text-gray-500 mt-0.5">
+              {new Date(payment.createdAt).toLocaleDateString("uz")} · {payment.method}
+              {payment.promoCode && <span className="ml-1 text-purple-500">🏷 {payment.promoCode}</span>}
+            </p>
+            {payment.cardNumber && (
+              <p className="text-[10px] text-gray-400 mt-0.5">Karta: {payment.cardNumber}</p>
+            )}
+          </div>
+        </div>
+        <div className="text-right">
+          <p className="text-sm font-bold text-gray-900">{payment.amount.toLocaleString()} so'm</p>
+          <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${statusColors[payment.status] || "bg-gray-100 text-gray-600"}`}>
+            {statusLabels[payment.status] || payment.status}
+          </span>
+          {payment.screenshotUrl && (
+            <p className="text-[9px] text-primary-500 mt-1">📷 Chekni ko'rish</p>
+          )}
+        </div>
+      </div>
+
+      {/* Screenshot modal */}
+      {showScreenshot && payment.screenshotUrl && (
+        <div
+          className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center cursor-zoom-out p-4"
+          onClick={() => setShowScreenshot(false)}
+        >
+          <div className="relative max-w-lg w-full max-h-[85vh]">
+            <img
+              src={payment.screenshotUrl}
+              alt="To'lov cheki"
+              className="w-full h-auto max-h-[85vh] object-contain rounded-xl shadow-2xl"
+            />
+            <button
+              onClick={() => setShowScreenshot(false)}
+              className="absolute -top-3 -right-3 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-lg text-gray-600 hover:text-gray-900"
+            >
+              ✕
+            </button>
+            <div className="absolute bottom-3 left-3 bg-black/60 text-white text-xs px-3 py-1.5 rounded-lg">
+              {payment.amount.toLocaleString()} so'm · {new Date(payment.createdAt).toLocaleDateString("uz")}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
