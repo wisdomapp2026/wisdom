@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { Download, Upload, Database, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { collection, getDocs, doc, setDoc, writeBatch } from "firebase/firestore";
-import { ref, listAll, getDownloadURL } from "firebase/storage";
+import { ref, listAll, getBlob } from "firebase/storage";
 import { db, storage } from "@shared/firebase";
 import JSZip from "jszip";
 
@@ -123,18 +123,17 @@ export default function Backup() {
       }
       stepsDone++;
 
-      // 3. Firebase Storage fayllar ro'yxatini saqlash (URL lar bilan)
+      // 3. Firebase Storage fayllarni ZIP ga yuklash (getBlob orqali — CORS muammosiz)
       if (includeFiles) {
-        setProgress({ current: "Storage fayllar ro'yxati yuklanmoqda...", done: stepsDone, total: totalSteps });
+        setProgress({ current: "Storage fayllar yuklanmoqda...", done: stepsDone, total: totalSteps });
         try {
-          const filesList: Array<{ path: string; url: string }> = [];
+          const filesFolder = zip.folder("files")!;
           const storageRef = ref(storage);
-          await collectStorageUrls(storageRef, "", filesList);
-          if (filesList.length > 0) {
-            dataFolder.file("_storage_files.json", JSON.stringify(filesList, null, 2));
-          }
+          await downloadStorageFiles(storageRef, filesFolder, "", (fileName) => {
+            setProgress({ current: `Fayl: ${fileName}`, done: stepsDone, total: totalSteps });
+          });
         } catch (err: any) {
-          console.warn("Storage ro'yxat xatolik:", err.message);
+          console.warn("Storage backup xatolik:", err.message);
         }
       }
       stepsDone++;
@@ -145,7 +144,7 @@ export default function Backup() {
         backupTimestamp: Date.now(),
         collectionsBackedUp: ROOT_COLLECTIONS,
         coursesCount: coursesData.length,
-        includesFileUrls: includeFiles,
+        includesFiles: includeFiles,
         version: "1.0",
       };
       zip.file("backup-meta.json", JSON.stringify(metadata, null, 2));
@@ -174,25 +173,29 @@ export default function Backup() {
     }
   }
 
-  /** Firebase Storage fayllarning URL larini yig'ish (CORS muammosiz) */
-  async function collectStorageUrls(folderRef: any, path: string, results: Array<{ path: string; url: string }>) {
+  /** Firebase Storage fayllarni rekursiv yuklash (getBlob — CORS muammosiz) */
+  async function downloadStorageFiles(folderRef: any, zipFolder: any, path: string, onFile: (name: string) => void) {
     try {
       const result = await listAll(folderRef);
 
+      // Fayllarni yuklash
       for (const item of result.items) {
         try {
-          const url = await getDownloadURL(item);
-          results.push({ path: `${path}/${item.name}`.replace(/^\//, ""), url });
+          onFile(item.fullPath);
+          const blob = await getBlob(item);
+          zipFolder.file(item.name, blob);
         } catch {
-          // ruxsat yo'q — o'tkazib yuboramiz
+          // Agar bitta fayl yuklanmasa — davom etamiz
         }
       }
 
+      // Ichki papkalarni rekursiv
       for (const prefix of result.prefixes) {
-        await collectStorageUrls(prefix, `${path}/${prefix.name}`, results);
+        const subFolder = zipFolder.folder(prefix.name)!;
+        await downloadStorageFiles(prefix, subFolder, `${path}/${prefix.name}`, onFile);
       }
     } catch {
-      // papkani o'qib bo'lmasa — o'tkazamiz
+      // Papkani o'qib bo'lmasa — o'tkazamiz
     }
   }
 
@@ -400,8 +403,8 @@ export default function Backup() {
                 className="w-4 h-4 text-primary-500 border-gray-300 rounded focus:ring-primary-500"
               />
               <div>
-                <span className="text-sm font-medium text-gray-700">Storage fayllarining URL ro'yxatini qo'shish</span>
-                <p className="text-xs text-gray-500">Barcha rasmlar va fayllarning havolalari saqlanadi (fayllarni alohida yuklab olish imkonini beradi)</p>
+                <span className="text-sm font-medium text-gray-700">Storage fayllarini ham ZIP ga qo'shish</span>
+                <p className="text-xs text-gray-500">Barcha rasmlar, hujjatlar va yuklangan fayllar ZIP ichiga yuklanadi (katta hajm bo'lishi mumkin)</p>
               </div>
             </label>
 
@@ -463,7 +466,7 @@ export default function Backup() {
           <li>• Muntazam backup qilish tavsiya etiladi (haftada kamida 1 marta)</li>
           <li>• ZIP fayl ichida har bir kolleksiya alohida JSON faylda saqlanadi</li>
           <li>• Import qilishdan oldin mavjud ma'lumotlarni export qilib saqlab qo'ying</li>
-          <li>• Storage fayllarini (rasmlar) alohida ko'chirish kerak bo'ladi</li>
+          <li>• Storage fayllarini qo'shsangiz, hajm ancha katta bo'lishi mumkin (10-100 MB)</li>
         </ul>
       </div>
     </div>
