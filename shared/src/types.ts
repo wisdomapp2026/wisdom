@@ -55,6 +55,7 @@ export interface Subscription {
   pricePerMonth: number; // so'm hisobida (50000)
   startDate: number;
   endDate: number;
+  cancelledAt?: number; // admin bekor qilgan sana
   paymentMethod?: PaymentMethod;
   promoCode?: string;
 }
@@ -86,6 +87,12 @@ export interface Course {
   coverImage?: string; // Storage URL
   coverPosition?: string; // "50% 50%" — CSS object-position (drag orqali tanlanadi)
   coverFit?: "cover" | "contain"; // CSS object-fit
+  /** Kurs sahifasi headeridagi kichik rasm (kitob muqovasi) — Storage URL */
+  heroImage?: string;
+  /** Hero rasm pozitsiyasi (CSS object-position) */
+  heroImagePosition?: string;
+  /** Hero rasm o'lchami (CSS object-fit) */
+  heroImageFit?: "cover" | "contain";
   isPremium: boolean;
   isHidden?: boolean; // Admin yashirgan — studentda ko'rinmaydi
   /** Bosh sahifada ko'rsatilsinmi (admin belgilaydi). Default: true (belgilanmagan bo'lsa ko'rinadi).
@@ -93,10 +100,28 @@ export interface Course {
    *  qolganlari "Kurslar" sahifasida ko'rinishda davom etadi. */
   showOnHomepage?: boolean;
   price?: number; // agar alohida sotilsa
+  /** Kurs narxi (so'm) — premium bo'lganda */
+  coursePrice?: number;
+  /** Narx turi: "one_time" — bir martalik, "subscription" — obuna */
+  pricingType?: "one_time" | "subscription";
+  /** Obuna tariflari (pricingType === "subscription" bo'lganda) */
+  subscriptionPlans?: Array<{
+    id: string;
+    label: string; // "1 oylik", "3 oylik", "6 oylik", "1 yillik"
+    months: number; // 1, 3, 6, 12
+    price: number; // so'm
+  }>;
+  /** Premium foydalari ro'yxati — student app da ko'rsatiladi */
+  premiumBenefits?: string[];
   totalStudents: number;
   onlineNow: number;
   progress?: number; // 0-100 (student uchun)
   testAfterEvery: number; // har nechta darsdan keyin test (admin belgilaydi), 0 = faqat oxirida
+  /** Kurs ochilish rejimi:
+   * "sequential" — ketma-ket: 1-modul tugatilgach 2-modul ochiladi, mavzular ham ketma-ket
+   * "open" — ochiq: barcha modul va mavzular ochiq (premiumdan tashqari)
+   */
+  unlockMode?: "sequential" | "open";
   tags: string[]; // ["National", "Certification", "Elite Prep"]
   order: number;
   /** Kursni tanishtirish bo'limi — avtomatik yaratiladi */
@@ -315,10 +340,14 @@ export interface Payment {
   discount: number;
   /** Student pul o'tkazgan karta raqami (masalan: 8600 **** **** 1234) */
   cardNumber?: string;
+  /** Student telefon raqami (fors-major uchun) */
+  senderPhone?: string;
   /** Admin kartasi (pul qayerga tushgan) */
   recipientCard?: string;
   /** To'lov screenshoti (chek rasmi) */
   screenshotUrl?: string;
+  /** Admin tasdiqlagan vaqt */
+  confirmedAt?: number;
   createdAt: number;
 }
 
@@ -416,6 +445,8 @@ export interface HomeBanner {
   textColor?: string;
   /** Matn shaffofligi (0-100, 100 = to'liq ko'rinadigan) */
   textOpacity?: number;
+  /** Tugmani ko'rsatish (true) yoki bannerga to'g'ridan-to'g'ri bosganda kursga yo'naltirish (false). Default: true */
+  showButton?: boolean;
   /** Tugma pozitsiyasi banner bo'ylab (CSS % formatda "x% y%"). Bo'sh bo'lsa — standart joyida (matndan pastda) turadi. */
   buttonPosition?: string;
   isActive: boolean;

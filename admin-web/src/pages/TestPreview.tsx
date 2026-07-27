@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { ChevronRight, ArrowLeft, Loader2, Edit, Trash2, Clock } from "lucide-react";
 import { getTestById, getCourseById, updateTest, deleteTest } from "@shared/repositories";
 import type { Test, Course, Question } from "@shared/types";
+import LatexText from "../components/LatexText";
 
 const difficultyColors: Record<string, string> = {
   easy: "text-green-600 bg-green-50",
@@ -175,7 +176,7 @@ export default function TestPreview() {
               </div>
 
               {/* Question content */}
-              <p className="text-gray-900 font-medium mb-4">{q.content}</p>
+              <div className="text-gray-900 font-medium mb-4"><LatexText text={q.content} /></div>
 
               {/* Options */}
               {q.options && q.options.length > 0 && (
@@ -194,7 +195,7 @@ export default function TestPreview() {
                       }`}>
                         {opt.label}
                       </span>
-                      <span className="text-gray-700">{opt.text || "(kiritilmagan)"}</span>
+                      <span className="text-gray-700">{opt.text ? <LatexText text={opt.text} /> : "(kiritilmagan)"}</span>
                       {q.correctAnswer === opt.label && <span className="ml-auto text-xs text-green-600">✓</span>}
                     </div>
                   ))}

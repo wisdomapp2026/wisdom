@@ -2,6 +2,7 @@ import { Link, useParams } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
 import {
   getFolderById,
+  getCourseById,
   getTopicsByCourse,
   getTestsByCourse,
   getAdviceByCourse,
@@ -12,9 +13,9 @@ import {
   getFolderOnlineCount,
 } from "@shared/repositories";
 import type { Topic, Test, Advice, Folder, UserProgress } from "@shared/types";
-import { ChevronLeft, CheckCircle, Clock, Lock, FileText, MessageSquare, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, CheckCircle, Circle, Lock, FileText, MessageSquare, Play, BookOpen } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
-import { useSubscription } from "../hooks/useSubscription";
+import { useCourseAccess } from "../hooks/useCourseAccess";
 import { getLocalCourseProgress } from "../hooks/useLocalProgress";
 import { CourseDetailLoader } from "../components/PageLoader";
 
@@ -23,13 +24,29 @@ type FolderItem =
   | { type: "test"; data: Test; order: number }
   | { type: "advice"; data: Advice; order: number };
 
+/** Topic title dan "N-modul:" qismini olib tashlab, "N-mavzu: Nom" formatida qaytaradi */
+function cleanTopicTitle(title: string): string {
+  // "4-modul: 4 - mavzu: Bo'linuvchanlik" → "4-mavzu: Bo'linuvchanlik"
+  const fullMatch = title.match(/^\d+-modul:\s*(\d+)\s*-\s*mavzu:\s*(.*)/i);
+  if (fullMatch) return `${fullMatch[1]}-mavzu: ${fullMatch[2]}`;
+  // "5-mavzu: Matn" — allaqachon to'g'ri format
+  if (/^\d+-mavzu:/i.test(title)) return title;
+  // "5-modul: Matn" (mavzu so'zi yo'q) → "5-mavzu: Matn"
+  const modulMatch = title.match(/^(\d+)-modul:\s*(.*)/i);
+  if (modulMatch) return `${modulMatch[1]}-mavzu: ${modulMatch[2]}`;
+  // Prefikssiz nom — topic.order bilan ko'rsatamiz (tashqaridan order beriladi)
+  return title;
+}
+
 export default function FolderDetail() {
   const { courseId, folderId } = useParams<{ courseId: string; folderId: string }>();
   const { user } = useAuth();
-  const { isPremium: hasSubscription } = useSubscription();
+  const { hasAccess: hasSubscription } = useCourseAccess(courseId);
 
   const [folder, setFolder] = useState<Folder | null>(null);
+  const [unlockMode, setUnlockMode] = useState<"sequential" | "open">("open");
   const [items, setItems] = useState<FolderItem[]>([]);
+  const [lockToast, setLockToast] = useState<string | null>(null);
   const [topicProblemCounts, setTopicProblemCounts] = useState<Record<string, number>>({});
   const [userProgress, setUserProgress] = useState<UserProgress | null>(null);
   const [onlineCount, setOnlineCount] = useState(0);
@@ -69,24 +86,21 @@ export default function FolderDetail() {
   async function loadData() {
     if (!courseId || !folderId) return;
     try {
-      const [f, allTopics, allTests, allAdvices] = await Promise.all([
+      const [f, course, allTopics, allTests, allAdvices] = await Promise.all([
         getFolderById(courseId, folderId),
+        getCourseById(courseId),
         getTopicsByCourse(courseId),
         getTestsByCourse(courseId),
         getAdviceByCourse(courseId),
       ]);
       setFolder(f);
+      setUnlockMode(course?.unlockMode || "open");
 
       const topics = allTopics.filter((t) => !t.isHidden && t.folderId === folderId);
-      const tests = allTests.filter((t) => t.status === "published" && t.folderId === folderId);
       const advices = allAdvices.filter((a) => a.folderId === folderId);
 
       const combined: FolderItem[] = [];
       for (const topic of topics) combined.push({ type: "topic", data: topic, order: topic.order });
-      for (const test of tests) {
-        const order = test.afterTopicOrder != null ? test.afterTopicOrder + 0.5 : 99999;
-        combined.push({ type: "test", data: test, order });
-      }
       for (const adv of advices) combined.push({ type: "advice", data: adv, order: adv.afterTopicOrder + 0.3 });
       combined.sort((a, b) => a.order - b.order);
       setItems(combined);
@@ -143,13 +157,40 @@ export default function FolderDetail() {
   }
 
   const totalTopics = items.filter((it) => it.type === "topic").length;
+  const totalTests = 0; // Testlar faqat mavzu ichida ko'rinadi
   const doneTopics = items.filter((it) => it.type === "topic" && isTopicCompleted((it.data as Topic).id)).length;
   const progress = totalTopics > 0 ? Math.round((doneTopics / totalTopics) * 100) : 0;
 
-  function renderItem(item: FolderItem) {
+  // Davom etish uchun keyingi tugatilmagan mavzu (yoki birinchi mavzu)
+  const topicItems = items.filter((it) => it.type === "topic") as Array<{ type: "topic"; data: Topic; order: number }>;
+  const nextTopic =
+    topicItems.find((it) => !isTopicCompleted(it.data.id) && !(it.data.isPremium && !hasSubscription))?.data ||
+    topicItems[0]?.data ||
+    null;
+  const currentTopicTitle = nextTopic ? cleanTopicTitle(nextTopic.title) : "";
+  const continueLink = nextTopic
+    ? (nextTopic.isPremium && !hasSubscription ? `/premium-gate?course=${courseId}` : `/course/${courseId}/topic/${nextTopic.id}`)
+    : null;
+
+  function renderItem(item: FolderItem, itemIndex: number) {
     if (item.type === "topic") {
       const topic = item.data as Topic;
-      const isLocked = topic.isPremium && !hasSubscription;
+      const premiumLocked = topic.isPremium && !hasSubscription;
+
+      // Sequential mode: oldingi mavzu tugatilmaguncha keyingisi qulflangan
+      let sequenceLocked = false;
+      if (unlockMode === "sequential" && itemIndex > 0 && !premiumLocked) {
+        const prevTopics = items.slice(0, itemIndex).filter((it) => it.type === "topic");
+        const lastPrevTopic = prevTopics[prevTopics.length - 1];
+        if (lastPrevTopic) {
+          const prevId = (lastPrevTopic.data as Topic).id;
+          if (!completedTopics.includes(prevId)) {
+            sequenceLocked = true;
+          }
+        }
+      }
+
+      const isLocked = premiumLocked || sequenceLocked;
       const totalP = topicProblemCounts[topic.id] || 0;
       const completedP = completedProblems.filter((pid) => pid.startsWith(`p-${topic.id.replace("topic-", "")}`)).length;
       const isDoneFlag = completedTopics.includes(topic.id);
@@ -159,30 +200,71 @@ export default function FolderDetail() {
 
       return (
         <Link
-          to={isLocked ? "/premium-gate" : `/course/${courseId}/topic/${topic.id}`}
+          to={isLocked ? (premiumLocked ? `/premium-gate?course=${courseId}` : "#") : `/course/${courseId}/topic/${topic.id}`}
+          onClick={(e) => {
+            if (sequenceLocked) {
+              e.preventDefault();
+              setLockToast("Avvalgi mavzuni tugatmasdan keyingisiga o'tib bo'lmaydi");
+              setTimeout(() => setLockToast(null), 3000);
+            }
+          }}
           key={`topic-${topic.id}`}
-          className="flex items-center border border-gray-100 rounded-xl p-4 gap-3 hover:shadow-sm transition-shadow bg-white"
+          className="flex items-center bg-white border border-gray-100 rounded-2xl p-3 gap-3 hover:shadow-sm transition-shadow shadow-sm"
         >
-          <div className="w-11 h-11 bg-primary-50 rounded-xl flex items-center justify-center shrink-0">
-            {isDone && <CheckCircle size={20} className="text-primary-500" />}
-            {isProgress && <Clock size={20} className="text-primary-500" />}
-            {isLocked && <Lock size={18} className="text-gray-400" />}
+          {/* Ikonka */}
+          <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${isProgress ? "bg-orange-50" : "bg-primary-50"}`}>
+            {isLocked ? (
+              <Lock size={18} className="text-gray-400" />
+            ) : isDone ? (
+              <CheckCircle size={20} className="text-primary-500" />
+            ) : isProgress ? (
+              <FileText size={20} className="text-orange-400" />
+            ) : (
+              <Circle size={20} className="text-primary-300" />
+            )}
           </div>
+
+          {/* Matn + progress */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <p className="font-semibold text-gray-900 text-sm truncate">{topic.title}</p>
-              {isDone && <span className="text-green-500 text-xs">✓</span>}
+            <div className="flex items-center gap-1.5">
+              <p className="font-semibold text-gray-900 text-sm leading-snug truncate">{cleanTopicTitle(topic.title)}</p>
+              {topic.isPremium && <span className="shrink-0 text-yellow-500 text-xs">👑</span>}
             </div>
-            <p className="text-xs text-gray-500 truncate">{topic.description}</p>
-            <div className="flex items-center mt-1.5">
-              <span className="text-[10px] text-gray-400 uppercase mr-2">Progress</span>
-              <div className="flex-1 h-1 bg-gray-100 rounded-full">
-                <div className="h-full bg-primary-500 rounded-full" style={{ width: `${topicProgress}%` }} />
+            <div className="flex items-center mt-1.5 gap-2">
+              <span className="text-[9px] text-gray-400 uppercase tracking-wide shrink-0">Progress</span>
+              <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                <div className="h-full bg-primary-500 rounded-full transition-all" style={{ width: `${topicProgress}%` }} />
               </div>
-              <span className="text-xs font-medium text-gray-600 ml-2">{topicProgress}%</span>
             </div>
           </div>
-          <span className="text-gray-400">›</span>
+
+          {/* O'ng tomon: bajarilgan bo'lsa ✓ + %, jarayonda bo'lsa dumaloq progress */}
+          <div className="shrink-0 flex items-center gap-1.5">
+            {isDone ? (
+              <div className="flex flex-col items-end">
+                <span className="text-green-500 text-sm leading-none">✓</span>
+                <span className="text-[11px] font-semibold text-gray-600 mt-0.5">100%</span>
+              </div>
+            ) : isProgress ? (
+              <div className="relative w-9 h-9">
+                <svg className="w-9 h-9" viewBox="0 0 36 36">
+                  <circle cx="18" cy="18" r="15" fill="none" stroke="#e5e7eb" strokeWidth="4" />
+                  <circle
+                    cx="18" cy="18" r="15" fill="none" stroke="#3b82f6" strokeWidth="4"
+                    strokeDasharray={`${(topicProgress / 100) * 94.2} 94.2`}
+                    strokeLinecap="round"
+                    transform="rotate(-90 18 18)"
+                  />
+                </svg>
+                <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-primary-600">
+                  {topicProgress}%
+                </span>
+              </div>
+            ) : (
+              <span className="text-[11px] font-semibold text-gray-400">{topicProgress}%</span>
+            )}
+            <ChevronRight className="w-4 h-4 text-gray-300" />
+          </div>
         </Link>
       );
     } else if (item.type === "test") {
@@ -190,7 +272,7 @@ export default function FolderDetail() {
       const testLocked = test.isPremium && !hasSubscription;
       return (
         <Link
-          to={testLocked ? "/premium-gate" : `/test/${test.id}`}
+          to={testLocked ? `/premium-gate?course=${courseId}` : `/test/${test.id}`}
           key={`test-${test.id}`}
           className={`flex items-center border rounded-xl p-4 gap-3 hover:shadow-sm transition-shadow ${testLocked ? "border-yellow-200 bg-yellow-50/30" : "border-orange-100 bg-orange-50/30"}`}
         >
@@ -234,58 +316,123 @@ export default function FolderDetail() {
 
   return (
     <div className="page-content">
-      {/* Header */}
+      {/* Header — orqaga + nom + bajarildi badge */}
       <header className="px-5 pt-4 pb-2 flex items-center gap-3">
         <Link to={`/course/${courseId}`} className="text-gray-500 shrink-0"><ChevronLeft size={22} /></Link>
-        <h1 className="text-lg font-bold text-gray-900 truncate flex-1">{folder.title}</h1>
+        <h1 className="text-lg font-bold text-gray-900 flex-1 leading-tight">{folder.title}</h1>
+        <div className="shrink-0 flex items-center gap-1.5 bg-white border border-gray-200 rounded-full px-3 py-1.5 shadow-sm">
+          <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 36 36">
+            <circle cx="18" cy="18" r="15" fill="none" stroke="#e5e7eb" strokeWidth="6" />
+            <circle
+              cx="18" cy="18" r="15" fill="none" stroke="#3b82f6" strokeWidth="6"
+              strokeDasharray={`${(progress / 100) * 94.2} 94.2`}
+              strokeLinecap="round"
+              transform="rotate(-90 18 18)"
+            />
+          </svg>
+          <span className="text-xs font-semibold text-gray-700 whitespace-nowrap">{progress}% bajarildi</span>
+        </div>
       </header>
 
-      {/* Bo'lim kartasi — muqova + progress */}
+      {/* Davom eting kartasi — mijoz dizayni */}
       <div className="mx-5 mt-3 bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-        <div className="flex gap-3">
-          <div className="w-20 h-28 rounded-xl overflow-hidden shrink-0 bg-gradient-to-br from-primary-100 to-primary-50 flex items-center justify-center relative">
+        <div className="flex gap-4 items-center">
+          {/* Muqova / illustratsiya */}
+          <div className="w-24 h-24 rounded-2xl overflow-hidden shrink-0 bg-gradient-to-br from-blue-50 to-primary-50 flex items-center justify-center">
             {folder.coverImage ? (
               <img src={folder.coverImage} alt={folder.title} className="w-full h-full object-cover" />
             ) : (
               <span className="text-4xl">{folder.icon || "📚"}</span>
             )}
           </div>
-          <div className="flex-1 min-w-0 flex flex-col">
-            {folder.description && (
-              <p className="text-xs text-gray-500 leading-relaxed line-clamp-3">{folder.description}</p>
-            )}
-            <div className="flex items-center gap-3 mt-2 text-[11px] text-gray-500">
-              <span className="flex items-center gap-1">
-                📖 {totalTopics} dars{items.length - totalTopics > 0 ? ` · ${items.length - totalTopics} test` : ""}
-              </span>
-              {onlineCount > 0 && (
-                <span className="flex items-center gap-1 text-green-600 font-medium">
-                  <Users size={12} /> {onlineCount} onlayn
-                  <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-                </span>
-              )}
+
+          {/* Ma'lumot */}
+          <div className="flex-1 min-w-0">
+            {/* DAVOM ETING badge */}
+            <div className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-600 rounded-md px-2 py-1 mb-2">
+              <Play className="w-3 h-3 fill-current" />
+              <span className="text-[10px] font-bold uppercase tracking-wide">Davom eting</span>
             </div>
-            <div className="mt-auto pt-2">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] text-gray-400 uppercase tracking-wide">Progress</span>
-                <span className="text-[11px] font-bold text-primary-600">{progress}%</span>
-              </div>
-              <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                <div className="h-full bg-primary-500 rounded-full transition-all" style={{ width: `${progress}%` }} />
-              </div>
+
+            {/* Joriy mavzu nomi */}
+            <h2 className="text-base font-bold text-gray-900 leading-snug">
+              {currentTopicTitle || folder.title}
+            </h2>
+
+            <p className="text-xs text-gray-400 mt-1">Siz to'xtagan joyingizdan davom eting</p>
+          </div>
+        </div>
+
+        {/* Progress bar + davom etish tugmasi */}
+        <div className="mt-4 flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-full bg-primary-500 rounded-full transition-all" style={{ width: `${progress}%` }} />
             </div>
+            <div className="flex items-center justify-between mt-1.5">
+              <span className="text-sm font-bold text-primary-500">{progress}%</span>
+              <span className="text-xs text-gray-400">{totalTopics} dars</span>
+            </div>
+          </div>
+          {continueLink && (
+            <Link
+              to={continueLink}
+              className="shrink-0 flex items-center gap-1.5 bg-primary-500 text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-sm active:scale-[0.97] transition-transform"
+            >
+              <Play className="w-4 h-4 fill-current" />
+              Davom etish
+            </Link>
+          )}
+        </div>
+      </div>
+
+      {/* Statistika konteyneri — darslar, testlar, onlayn userlar */}
+      <div className="mx-5 mt-3 bg-white border border-gray-100 rounded-2xl px-4 py-3 shadow-sm">
+        <div className="flex items-center justify-around">
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="text-base font-bold text-gray-900">{totalTopics}</span>
+            <span className="text-[10px] text-gray-400 uppercase tracking-wide">dars</span>
+          </div>
+          <div className="w-px h-8 bg-gray-100" />
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="text-base font-bold text-gray-900">{totalTests}</span>
+            <span className="text-[10px] text-gray-400 uppercase tracking-wide">test</span>
+          </div>
+          <div className="w-px h-8 bg-gray-100" />
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="text-base font-bold text-green-600 flex items-center gap-1">
+              {onlineCount}
+              {onlineCount > 0 && <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />}
+            </span>
+            <span className="text-[10px] text-gray-400 uppercase tracking-wide">onlayn</span>
           </div>
         </div>
       </div>
 
+      {/* Mavzular sarlavhasi */}
+      <div className="px-5 mt-5 flex items-center">
+        <div className="flex items-center gap-2">
+          <BookOpen className="w-4 h-4 text-primary-500" />
+          <h3 className="text-base font-bold text-gray-900">Mavzular</h3>
+        </div>
+      </div>
+
       {/* Ichidagi darslar/testlar */}
-      <div className="px-5 mt-5 space-y-3">
+      <div className="px-5 mt-3 space-y-2.5">
         {items.length === 0 ? (
           <p className="text-center text-sm text-gray-400 py-10">Bu bo'lim hozircha bo'sh</p>
         ) : (
-          items.map((item) => renderItem(item))
+          items.map((item, idx) => renderItem(item, idx))
         )}
       </div>
+
+      {/* Lock toast */}
+      {lockToast && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white text-xs font-medium px-4 py-3 rounded-xl shadow-lg flex items-center gap-2 max-w-[85%] animate-fadeIn">
+          <Lock size={14} className="shrink-0 text-yellow-400" />
+          <span>{lockToast}</span>
+        </div>
+      )}
     </div>
   );
 }

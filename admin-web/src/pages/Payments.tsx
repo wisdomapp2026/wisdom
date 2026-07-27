@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
-import { Check, X, Clock, Eye, Phone, CreditCard, Calendar, Image } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { Check, X, Clock, Eye, Phone, CreditCard, Calendar, Image, Search } from "lucide-react";
 import { getRecentPayments, createSubscription, getUserById } from "@shared/repositories";
-import { doc, updateDoc } from "firebase/firestore";
+import { doc, updateDoc, setDoc, collection } from "firebase/firestore";
 import { db } from "@shared/firebase";
 import type { Payment, Subscription, User } from "@shared/types";
 
@@ -10,6 +10,9 @@ export default function Payments() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<"all" | "pending" | "success">("all");
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   useEffect(() => { loadData(); }, []);
 
@@ -23,7 +26,7 @@ export default function Payments() {
     if (!confirm(`${payment.userName} ning ${payment.amount.toLocaleString()} so'm to'lovini tasdiqlaysizmi?`)) return;
 
     // 1. To'lov holatini "success" ga o'zgartirish
-    await updateDoc(doc(db, "payments", payment.id), { status: "success" });
+    await updateDoc(doc(db, "payments", payment.id), { status: "success", confirmedAt: Date.now() });
 
     // 2. Obuna yaratish
     const now = Date.now();
@@ -35,6 +38,7 @@ export default function Payments() {
     const subscription: Subscription = {
       id: `sub-${payment.userId}-${now}`,
       userId: payment.userId,
+      courseId: payment.courseId || "",
       status: "active",
       plan: payment.courseTitle,
       pricePerMonth: Math.round(payment.amount / (days / 30)),
@@ -45,6 +49,18 @@ export default function Payments() {
     };
     await createSubscription(subscription);
 
+    // 3. Studentga bildirishnoma yuborish
+    const notifId = `notif-${payment.userId}-${now}`;
+    await setDoc(doc(db, "studentNotifications", notifId), {
+      id: notifId,
+      type: "payment",
+      title: "To'lov tasdiqlandi ✅",
+      body: `Sizning ${payment.amount.toLocaleString()} so'm to'lovingiz tasdiqlandi. "${payment.courseTitle}" kursiga kirish ochildi!`,
+      isRead: false,
+      userId: payment.userId,
+      createdAt: now,
+    });
+
     await loadData();
   }
 
@@ -54,7 +70,40 @@ export default function Payments() {
     await loadData();
   }
 
-  const filtered = filter === "all" ? payments : payments.filter((p) => p.status === filter);
+  const filtered = useMemo(() => {
+    let result = payments;
+
+    // Status filter
+    if (filter !== "all") {
+      result = result.filter((p) => p.status === filter);
+    }
+
+    // Search filter — ism, telefon, karta, promo, tarif bo'yicha
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter((p) =>
+        p.userName?.toLowerCase().includes(q) ||
+        p.courseTitle?.toLowerCase().includes(q) ||
+        p.promoCode?.toLowerCase().includes(q) ||
+        p.cardNumber?.toLowerCase().includes(q) ||
+        p.userId?.toLowerCase().includes(q) ||
+        p.method?.toLowerCase().includes(q)
+      );
+    }
+
+    // Date range filter
+    if (dateFrom) {
+      const from = new Date(dateFrom).getTime();
+      result = result.filter((p) => p.createdAt >= from);
+    }
+    if (dateTo) {
+      const to = new Date(dateTo).getTime() + 86400000; // kun oxirigacha
+      result = result.filter((p) => p.createdAt < to);
+    }
+
+    return result;
+  }, [payments, filter, searchQuery, dateFrom, dateTo]);
+
   const pendingCount = payments.filter((p) => p.status === "pending").length;
 
   if (loading) {
@@ -74,7 +123,7 @@ export default function Payments() {
       </div>
 
       {/* Filtrlar */}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2 items-center">
         {(["all", "pending", "success"] as const).map((f) => (
           <button
             key={f}
@@ -85,6 +134,66 @@ export default function Payments() {
           </button>
         ))}
       </div>
+
+      {/* Search va Date picker */}
+      <div className="flex flex-wrap gap-3 items-end">
+        {/* Qidiruv */}
+        <div className="flex-1 min-w-[200px]">
+          <label className="block text-xs font-medium text-gray-500 mb-1">Qidiruv</label>
+          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2">
+            <Search size={16} className="text-gray-400 shrink-0" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Ism, telefon, karta, promo..."
+              className="flex-1 outline-none text-sm bg-transparent"
+            />
+            {searchQuery && (
+              <button onClick={() => setSearchQuery("")} className="text-gray-400 hover:text-gray-600">
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Sana dan */}
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-1">Dan</label>
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(e) => setDateFrom(e.target.value)}
+            className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary-500"
+          />
+        </div>
+
+        {/* Sana gacha */}
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-1">Gacha</label>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(e) => setDateTo(e.target.value)}
+            className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm outline-none focus:ring-2 focus:ring-primary-500"
+          />
+        </div>
+
+        {/* Tozalash */}
+        {(searchQuery || dateFrom || dateTo) && (
+          <button
+            onClick={() => { setSearchQuery(""); setDateFrom(""); setDateTo(""); }}
+            className="px-3 py-2 text-sm text-gray-500 hover:text-gray-700 bg-gray-100 rounded-lg"
+          >
+            Tozalash
+          </button>
+        )}
+      </div>
+
+      {/* Natija soni */}
+      {(searchQuery || dateFrom || dateTo) && (
+        <p className="text-xs text-gray-500">{filtered.length} ta natija topildi</p>
+      )}
 
       {/* Jadval */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">

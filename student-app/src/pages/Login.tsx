@@ -36,26 +36,27 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-6 bg-white">
+    <div className="min-h-screen flex flex-col items-center justify-center px-6" style={{ backgroundColor: 'var(--theme-card-bg)' }}>
       {/* Logo */}
       <div className="w-16 h-16 bg-primary-500 rounded-2xl flex items-center justify-center mb-6">
         <span className="text-white text-2xl">⚡</span>
       </div>
-      <h1 className="text-2xl font-bold text-gray-900">Xush kelibsiz!</h1>
-      <p className="text-sm text-gray-500 mt-1">O'rganishni davom ettirish uchun kiring</p>
+      <h1 className="text-2xl font-bold" style={{ color: 'var(--theme-text)' }}>Xush kelibsiz!</h1>
+      <p className="text-sm mt-1" style={{ color: 'var(--theme-text-secondary)' }}>O'rganishni davom ettirish uchun kiring</p>
 
       {/* Form */}
       <form onSubmit={handleLogin} className="w-full mt-8 space-y-4">
         {/* Phone */}
         <div>
-          <label className="text-sm font-medium text-gray-700">Telefon raqam</label>
-          <div className="mt-1.5 flex items-center border border-gray-200 rounded-xl px-4 py-3">
+          <label className="text-sm font-medium" style={{ color: 'var(--theme-text)' }}>Telefon raqam</label>
+          <div className="mt-1.5 flex items-center border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-3" style={{ backgroundColor: 'var(--theme-bg)' }}>
             <span className="text-gray-400 mr-3">📞</span>
             <input
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="+998 90 123 45 67"
-              className="flex-1 outline-none text-base"
+              className="flex-1 outline-none text-base bg-transparent"
+              style={{ color: 'var(--theme-text)' }}
               required
             />
           </div>
@@ -63,15 +64,16 @@ export default function Login() {
 
         {/* Password */}
         <div>
-          <label className="text-sm font-medium text-gray-700">Parol</label>
-          <div className="mt-1.5 flex items-center border border-gray-200 rounded-xl px-4 py-3">
+          <label className="text-sm font-medium" style={{ color: 'var(--theme-text)' }}>Parol</label>
+          <div className="mt-1.5 flex items-center border border-gray-200 dark:border-gray-600 rounded-xl px-4 py-3" style={{ backgroundColor: 'var(--theme-bg)' }}>
             <span className="text-gray-400 mr-3">🔒</span>
             <input
               type={showPassword ? "text" : "password"}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="********"
-              className="flex-1 outline-none text-base"
+              className="flex-1 outline-none text-base bg-transparent"
+              style={{ color: 'var(--theme-text)' }}
               required
               minLength={6}
             />
@@ -103,9 +105,9 @@ export default function Login() {
 
       {/* Separator */}
       <div className="flex items-center gap-3 my-8 w-full">
-        <div className="flex-1 h-px bg-gray-200" />
-        <span className="text-sm text-gray-400">YOKI</span>
-        <div className="flex-1 h-px bg-gray-200" />
+        <div className="flex-1 h-px" style={{ backgroundColor: 'var(--theme-text-secondary)', opacity: 0.2 }} />
+        <span className="text-sm" style={{ color: 'var(--theme-text-secondary)' }}>YOKI</span>
+        <div className="flex-1 h-px" style={{ backgroundColor: 'var(--theme-text-secondary)', opacity: 0.2 }} />
       </div>
 
       {/* Register link */}

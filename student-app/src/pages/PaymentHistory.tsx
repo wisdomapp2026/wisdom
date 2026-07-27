@@ -150,19 +150,28 @@ function PaymentDetailModal({ payment, onClose }: { payment: Payment; onClose: (
           <div className="bg-gray-50 rounded-xl p-4 space-y-3">
             <DetailRow label="Kurs" value={payment.courseTitle} />
             <DetailRow label="To'lov usuli" value={methodLabels[payment.method] || payment.method} />
-            <DetailRow label="Sana" value={date.toLocaleDateString("uz-UZ", { year: "numeric", month: "long", day: "numeric" })} />
-            <DetailRow label="Vaqt" value={date.toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" })} />
+            {payment.cardNumber && <DetailRow label="Qaysi kartadan" value={payment.cardNumber} />}
+            {payment.recipientCard && <DetailRow label="Qaysi kartaga" value={payment.recipientCard} />}
+            <DetailRow label="To'lov sanasi" value={date.toLocaleDateString("uz-UZ", { year: "numeric", month: "long", day: "numeric" })} />
+            <DetailRow label="To'lov vaqti" value={date.toLocaleTimeString("uz-UZ", { hour: "2-digit", minute: "2-digit" })} />
+            {payment.status === "success" && (
+              <DetailRow label="Tasdiqlangan" value={payment.confirmedAt ? new Date(payment.confirmedAt).toLocaleDateString("uz-UZ", { year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "Tasdiqlangan"} />
+            )}
             <DetailRow label="To'lov ID" value={payment.id} />
             {payment.promoCode && <DetailRow label="Promo kod" value={payment.promoCode} />}
-            {payment.subscriptionId && <DetailRow label="Obuna ID" value={payment.subscriptionId} />}
           </div>
 
-          {/* Chek ko'rish (placeholder) */}
-          <div className="border border-dashed border-gray-200 rounded-xl p-4 text-center">
-            <Receipt size={24} className="mx-auto mb-2 text-gray-300" />
-            <p className="text-xs text-gray-500">Chek rasmi</p>
-            <p className="text-[10px] text-gray-400 mt-1">To'lov tasdiqlangandan so'ng chek shu yerda ko'rinadi</p>
-          </div>
+          {/* Screenshot */}
+          {payment.screenshotUrl ? (
+            <div className="border border-gray-200 rounded-xl overflow-hidden">
+              <img src={payment.screenshotUrl} alt="To'lov cheki" className="w-full max-h-48 object-contain" />
+            </div>
+          ) : (
+            <div className="border border-dashed border-gray-200 rounded-xl p-4 text-center">
+              <Receipt size={24} className="mx-auto mb-2 text-gray-300" />
+              <p className="text-xs text-gray-500">Chek rasmi</p>
+            </div>
+          )}
         </div>
       </div>
 

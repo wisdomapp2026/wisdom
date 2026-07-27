@@ -89,7 +89,7 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [activeTab, setActiveTab] = useState<"pricing" | "general" | "payments" | "notifications" | "theme" | "author">("pricing");
+  const [activeTab, setActiveTab] = useState<"general" | "payments" | "notifications" | "theme" | "author">("general");
 
   useEffect(() => { loadSettings(); }, []);
 
@@ -129,7 +129,6 @@ export default function Settings() {
   }
 
   const tabs = [
-    { id: "pricing" as const, label: "Premium narxlar", icon: <DollarSign size={16} /> },
     { id: "general" as const, label: "Umumiy", icon: <Globe size={16} /> },
     { id: "payments" as const, label: "To'lov usullari", icon: <Shield size={16} /> },
     { id: "notifications" as const, label: "Bildirishnomalar", icon: <Bell size={16} /> },
@@ -174,128 +173,6 @@ export default function Settings() {
 
       {/* Tab Content */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6">
-        {activeTab === "pricing" && (
-          <div className="space-y-6">
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-1">Premium obuna narxlari</h3>
-              <p className="text-sm text-gray-500">O'quvchilar uchun premium obuna tariflari</p>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {/* Oylik */}
-              <div className="border-2 border-gray-200 rounded-2xl p-6 hover:border-primary-300 transition-colors">
-                <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center mb-4">
-                  <span className="text-2xl">📅</span>
-                </div>
-                <h4 className="font-semibold text-gray-900">Oylik tarif</h4>
-                <p className="text-xs text-gray-500 mt-1">1 oy muddatli obuna</p>
-                <div className="mt-4">
-                  <label className="text-xs text-gray-500 font-medium">Narxi (so'm)</label>
-                  <input
-                    type="number"
-                    value={settings.monthlyPrice}
-                    onChange={(e) => updateField("monthlyPrice", Number(e.target.value))}
-                    className="w-full mt-1 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-lg font-bold focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  />
-                  <p className="text-xs text-gray-400 mt-1">{settings.monthlyPrice.toLocaleString()} so'm/oy</p>
-                </div>
-              </div>
-
-              {/* 3 oylik */}
-              <div className="border-2 border-primary-200 rounded-2xl p-6 relative bg-primary-50/30">
-                <span className="absolute -top-3 left-4 bg-primary-500 text-white text-[10px] font-bold px-3 py-1 rounded-full">Mashhur</span>
-                <div className="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center mb-4">
-                  <span className="text-2xl">🎯</span>
-                </div>
-                <h4 className="font-semibold text-gray-900">3 oylik tarif</h4>
-                <p className="text-xs text-gray-500 mt-1">3 oy muddatli obuna</p>
-                <div className="mt-4">
-                  <label className="text-xs text-gray-500 font-medium">Narxi (so'm)</label>
-                  <input
-                    type="number"
-                    value={settings.quarterlyPrice}
-                    onChange={(e) => updateField("quarterlyPrice", Number(e.target.value))}
-                    className="w-full mt-1 px-4 py-3 bg-white border border-gray-200 rounded-xl text-lg font-bold focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  />
-                  <p className="text-xs text-gray-400 mt-1">{settings.quarterlyPrice.toLocaleString()} so'm / 3 oy</p>
-                  <p className="text-xs text-green-600 font-medium mt-0.5">
-                    {Math.round((1 - settings.quarterlyPrice / (settings.monthlyPrice * 3)) * 100)}% tejash
-                  </p>
-                </div>
-              </div>
-
-              {/* Yillik */}
-              <div className="border-2 border-gray-200 rounded-2xl p-6 hover:border-primary-300 transition-colors">
-                <div className="w-12 h-12 bg-purple-50 rounded-xl flex items-center justify-center mb-4">
-                  <span className="text-2xl">👑</span>
-                </div>
-                <h4 className="font-semibold text-gray-900">Yillik tarif</h4>
-                <p className="text-xs text-gray-500 mt-1">12 oy muddatli obuna</p>
-                <div className="mt-4">
-                  <label className="text-xs text-gray-500 font-medium">Narxi (so'm)</label>
-                  <input
-                    type="number"
-                    value={settings.yearlyPrice}
-                    onChange={(e) => updateField("yearlyPrice", Number(e.target.value))}
-                    className="w-full mt-1 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-lg font-bold focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  />
-                  <p className="text-xs text-gray-400 mt-1">{settings.yearlyPrice.toLocaleString()} so'm / yil</p>
-                  <p className="text-xs text-green-600 font-medium mt-0.5">
-                    {Math.round((1 - settings.yearlyPrice / (settings.monthlyPrice * 12)) * 100)}% tejash
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Premium foydalari */}
-            <div className="border-t border-gray-100 pt-6 mt-6">
-              <div>
-                <h3 className="text-base font-semibold text-gray-900 mb-1">Premium foydalari</h3>
-                <p className="text-xs text-gray-500">Student app da "Siz nimalarga ega bo'lasiz" ro'yxatida ko'rinadi</p>
-              </div>
-
-              <div className="mt-4 space-y-2">
-                {(settings.premiumBenefits || []).map((item, i) => (
-                  <div key={i} className="flex items-center gap-2 group">
-                    <div className="w-5 h-5 bg-primary-100 rounded-full flex items-center justify-center shrink-0">
-                      <Check size={12} className="text-primary-600" />
-                    </div>
-                    <input
-                      value={item}
-                      onChange={(e) => {
-                        const benefits = [...(settings.premiumBenefits || [])];
-                        benefits[i] = e.target.value;
-                        updateField("premiumBenefits", benefits);
-                      }}
-                      className="flex-1 px-3 py-2 bg-transparent border-b border-gray-200 text-sm focus:outline-none focus:border-primary-500 hover:border-gray-300"
-                    />
-                    <button
-                      onClick={() => {
-                        const benefits = (settings.premiumBenefits || []).filter((_, idx) => idx !== i);
-                        updateField("premiumBenefits", benefits);
-                      }}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-opacity"
-                      title="O'chirish"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              <button
-                onClick={() => {
-                  const benefits = [...(settings.premiumBenefits || []), ""];
-                  updateField("premiumBenefits", benefits);
-                }}
-                className="mt-3 text-sm text-primary-500 font-medium hover:underline"
-              >
-                + Yangi qo'shish
-              </button>
-            </div>
-          </div>
-        )}
-
         {activeTab === "general" && (
           <div className="space-y-6">
             <div>

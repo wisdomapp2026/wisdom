@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Menu, X, Moon, Star, CreditCard, Settings, Shield, Bell, HelpCircle, MessageSquare, LogOut, ChevronRight, BookOpen, Award } from "lucide-react";
+import { doc, getDoc } from "firebase/firestore";
+import { db } from "@shared/firebase";
 import { useAuth } from "../hooks/useAuth";
 import { useDarkMode } from "../hooks/useDarkMode";
 import AuthorModal from "./AuthorModal";
@@ -10,6 +12,18 @@ export default function HamburgerMenu() {
   const [authorModalOpen, setAuthorModalOpen] = useState(false);
   const { isLoggedIn } = useAuth();
   const { isDark, toggle: toggleDark } = useDarkMode();
+  const [logoUrl, setLogoUrl] = useState("");
+  const [appName, setAppName] = useState("EduKids");
+
+  useEffect(() => {
+    getDoc(doc(db, "settings", "platform")).then((snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        if (data.logoUrl) setLogoUrl(data.logoUrl);
+        if (data.platformName) setAppName(data.platformName);
+      }
+    }).catch(() => {});
+  }, []);
 
   function handleExit() {
     setOpen(false);
@@ -47,8 +61,18 @@ export default function HamburgerMenu() {
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        {/* Header — faqat close button */}
-        <div className="flex items-center justify-end px-5 pt-5 pb-4 border-b border-gray-100">
+        {/* Header — logo va app nomi */}
+        <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl overflow-hidden bg-primary-500 flex items-center justify-center shrink-0">
+              {logoUrl ? (
+                <img src={logoUrl} alt={appName} className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-white text-lg">⚡</span>
+              )}
+            </div>
+            <span className="text-lg font-bold text-primary-500">{appName}</span>
+          </div>
           <button
             onClick={() => setOpen(false)}
             className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center active:bg-gray-200"

@@ -6,6 +6,7 @@ import type { Test, TestResult as TestResultType, Question, Problem } from "@sha
 import { useAuth } from "../hooks/useAuth";
 import { cachedFetch } from "../hooks/useCache";
 import LatexText from "../components/LatexText";
+import VideoModal from "../components/VideoModal";
 
 const LOCAL_TEST_RESULTS_KEY = "edukids_local_test_results";
 
@@ -375,44 +376,7 @@ export default function TestResult() {
       </div>
 
       {/* Video Modal */}
-      {videoModalUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setVideoModalUrl(null)}>
-          <div className="w-full max-w-lg bg-black rounded-2xl overflow-hidden shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between px-4 py-3 bg-gray-900">
-              <p className="text-white text-sm font-medium">🎬 Video yechim</p>
-              <button onClick={() => setVideoModalUrl(null)} className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white rounded-lg">
-                <X size={20} />
-              </button>
-            </div>
-            <div className="aspect-video">
-              {(videoModalUrl.includes("youtube") || videoModalUrl.includes("youtu.be")) ? (
-                <iframe
-                  src={getYouTubeEmbedUrl(videoModalUrl)}
-                  className="w-full h-full"
-                  allowFullScreen
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  title="Video yechim"
-                />
-              ) : (
-                <video src={videoModalUrl} controls autoPlay className="w-full h-full" />
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <VideoModal open={!!videoModalUrl} videoUrl={videoModalUrl || ""} onClose={() => setVideoModalUrl(null)} />
     </div>
   );
-}
-
-/** YouTube URL ni embed formatga o'tkazish */
-function getYouTubeEmbedUrl(url: string): string {
-  // youtube.com/watch?v=ID
-  const watchMatch = url.match(/youtube\.com\/watch\?v=([\w-]+)/);
-  if (watchMatch) return `https://www.youtube.com/embed/${watchMatch[1]}?autoplay=1`;
-  // youtu.be/ID
-  const shortMatch = url.match(/youtu\.be\/([\w-]+)/);
-  if (shortMatch) return `https://www.youtube.com/embed/${shortMatch[1]}?autoplay=1`;
-  // Already embed format
-  if (url.includes("/embed/")) return url + (url.includes("?") ? "&autoplay=1" : "?autoplay=1");
-  return url;
 }

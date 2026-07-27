@@ -24,6 +24,7 @@ import Motivations from "./pages/Motivations";
 import SocialLinks from "./pages/SocialLinks";
 import Notifications from "./pages/Notifications";
 import Testimonials from "./pages/Testimonials";
+import Backup from "./pages/Backup";
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -76,6 +77,7 @@ export default function App() {
           <Route path="banners" element={<Banners />} />
           <Route path="news-items" element={<NewsItems />} />
           <Route path="testimonials" element={<Testimonials />} />
+          <Route path="backup" element={<Backup />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

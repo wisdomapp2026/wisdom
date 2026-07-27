@@ -19,6 +19,19 @@ type ListItem =
   | { type: "test"; data: Test; order: number }
   | { type: "advice"; data: Advice; order: number };
 
+/** Topic title dan "N-modul:" qismini olib tashlab, "N-mavzu: Nom" formatida qaytaradi */
+function cleanTopicTitle(title: string): string {
+  // "4-modul: 4 - mavzu: Bo'linuvchanlik" → "4-mavzu: Bo'linuvchanlik"
+  const fullMatch = title.match(/^\d+-modul:\s*(\d+)\s*-\s*mavzu:\s*(.*)/i);
+  if (fullMatch) return `${fullMatch[1]}-mavzu: ${fullMatch[2]}`;
+  // "5-mavzu: Matn" — allaqachon to'g'ri format
+  if (/^\d+-mavzu:/i.test(title)) return title;
+  // "5-modul: Matn" (mavzu so'zi yo'q) → "5-mavzu: Matn"
+  const modulMatch = title.match(/^(\d+)-modul:\s*(.*)/i);
+  if (modulMatch) return `${modulMatch[1]}-mavzu: ${modulMatch[2]}`;
+  return title;
+}
+
 export default function CourseDetail() {
   const { courseId } = useParams<{ courseId: string }>();
   const navigate = useNavigate();
@@ -246,7 +259,7 @@ export default function CourseDetail() {
             <h1 className="text-2xl font-bold text-gray-900">{course.title}</h1>
             <p className="text-gray-500 mt-1">{course.description}</p>
             <div className="flex items-center gap-4 mt-4 text-sm text-gray-500">
-              <span>📚 {topics.length} modul</span>
+              <span>📚 {topics.length} mavzu</span>
               <span>👥 {studentCount.toLocaleString()} o'quvchi</span>
               <span className={course.isPremium ? "text-yellow-600 font-medium" : "text-green-600 font-medium"}>
                 {course.isPremium ? "Premium" : "Bepul"}
@@ -310,11 +323,11 @@ export default function CourseDetail() {
           className="btn-primary flex items-center gap-2 text-sm"
         >
           <FolderPlus className="w-4 h-4" />
-          Yangi papka qo'shish
+          Yangi Modul qo'shish
         </button>
         <button onClick={() => { setTargetFolderId(undefined); setShowTopicModal(true); }} className="btn-outline flex items-center gap-2 text-sm">
           <Plus className="w-4 h-4" />
-          Modul qo'shish
+          Mavzu qo'shish
         </button>
         <button
           onClick={() => { setTargetFolderId(undefined); setShowImportTestModal(true); }}
@@ -349,8 +362,8 @@ export default function CourseDetail() {
         {folders.length === 0 && items.length === 0 && (
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm text-center py-12 text-gray-400">
             <p className="text-4xl mb-2">📚</p>
-            <p>Hali papka, modul yoki test qo'shilmagan</p>
-            <p className="text-xs mt-1">Avval "Yangi papka qo'shish" tugmasini bosing (masalan: IDC 1)</p>
+            <p>Hali modul, mavzu yoki test qo'shilmagan</p>
+            <p className="text-xs mt-1">Avval "Yangi Modul qo'shish" tugmasini bosing (masalan: IDC 1)</p>
           </div>
         )}
 
@@ -395,7 +408,7 @@ export default function CourseDetail() {
             >
               <div className="p-4 border-b border-gray-100 flex items-center justify-between">
                 <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                  📋 Papkasiz modul va testlar ({looseItems.length})
+                  📋 Modulsiz mavzu va testlar ({looseItems.length})
                 </h3>
                 <p className="text-xs text-gray-400">Papka ichiga sudrab tashlang</p>
               </div>
@@ -487,12 +500,10 @@ function TopicRow({ topic, courseId, folders, onUpdate }: { topic: Topic; course
       setOrderValue(String(topic.order));
       return;
     }
-    // topic.order ni yangilash + sarlavhadagi "N-modul:" prefiksini ham yangilash
+    // topic.order ni yangilash
     // folderId ni saqlab qolamiz (papka ichidan chiqib ketmasligi uchun)
-    const newTitle = topic.title.replace(/^\d+-modul:/, `${newOrder}-modul:`);
     await updateTopic(courseId, topic.id, {
       order: newOrder,
-      title: newTitle,
       ...(topic.folderId ? { folderId: topic.folderId } : {}),
     });
     onUpdate();
@@ -527,7 +538,7 @@ function TopicRow({ topic, courseId, folders, onUpdate }: { topic: Topic; course
         )}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h4 className="font-medium text-gray-900">{topic.title}</h4>
+            <h4 className="font-medium text-gray-900">{cleanTopicTitle(topic.title)}</h4>
             {topic.isPremium && <Lock className="w-3.5 h-3.5 text-yellow-500" />}
           </div>
           <p className="text-sm text-gray-500 truncate">{topic.description}</p>
@@ -559,7 +570,7 @@ function TopicRow({ topic, courseId, folders, onUpdate }: { topic: Topic; course
           {topic.isHidden ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
         </LoadingButton>
         <span className="text-[10px] font-medium px-2 py-1 rounded bg-blue-50 text-blue-600 border border-blue-200">
-          Modul
+          Mavzu
         </span>
         <Link
           to={`/courses/${courseId}/topics/${topic.id}`}
@@ -580,7 +591,7 @@ function TopicRow({ topic, courseId, folders, onUpdate }: { topic: Topic; course
         <LoadingButton
           onClick={async (e) => {
             e.stopPropagation();
-            if (!confirm(`"${topic.title}" modulini o'chirishga ishonchingiz komilmi?`)) return;
+            if (!confirm(`"${topic.title}" mavzusini o'chirishga ishonchingiz komilmi?`)) return;
             await deleteTopic(courseId, topic.id);
             onUpdate();
           }}
@@ -1088,7 +1099,7 @@ function FolderSection({
   const isDropZoneActive = dnd.dragOverFolderId === folder.id;
 
   async function handleDeleteFolder() {
-    if (!confirm(`"${folder.title}" papkasini o'chirmoqchimisiz?\n\n⚠️ DIQQAT: Papka ichidagi barcha modul, test va maslahatlar ham o'chiriladi!`)) return;
+    if (!confirm(`"${folder.title}" modulini o'chirmoqchimisiz?\n\n⚠️ DIQQAT: Modul ichidagi barcha mavzu, test va maslahatlar ham o'chiriladi!`)) return;
     await deleteFolder(courseId, folder.id);
     onUpdate();
   }
@@ -1139,7 +1150,7 @@ function FolderSection({
                 <div className="fixed inset-0 z-10" onClick={() => setShowAddMenu(false)} />
                 <div className="absolute right-0 top-full mt-1 z-20 bg-white border border-gray-200 rounded-lg shadow-lg py-1 w-44">
                   <button onClick={() => { setShowAddMenu(false); onAddTopic(); }} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2">
-                    📖 Modul qo'shish
+                    📖 Mavzu qo'shish
                   </button>
                   <button onClick={() => { setShowAddMenu(false); onAddTest(); }} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center gap-2">
                     📝 Test qo'shish

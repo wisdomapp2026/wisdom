@@ -100,7 +100,7 @@ export default function CreateFolderModal({ open, courseId, existingCount, editF
           <div className="flex items-center gap-2">
             <FolderPlus className="w-5 h-5 text-primary-500" />
             <h2 className="text-xl font-bold text-gray-900">
-              {editFolder ? "Papkani tahrirlash" : "Yangi papka qo'shish"}
+              {editFolder ? "Modulni tahrirlash" : "Yangi Modul qo'shish"}
             </h2>
           </div>
           <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600">

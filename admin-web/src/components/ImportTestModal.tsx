@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { X, Search, ChevronDown, ChevronRight, CheckSquare, Square, Eye, EyeOff, List } from "lucide-react";
 import { createTest, getAllTestLists, getAllTBQuestions, getAllTBFolders } from "@shared/repositories";
 import type { Test, Question as TQuestion, TestList } from "@shared/types";
+import LatexText from "./LatexText";
+import { latexPreview } from "../utils/latexPreview";
 
 /** Content Library dagi savol formati */
 interface LibQuestion {
@@ -424,13 +426,13 @@ export default function ImportTestModal({ open, courseId, existingTestIds, folde
                     <button onClick={() => setPreviewId(null)} className="text-xs text-gray-500">Yopish ✕</button>
                   </div>
                   <div className="bg-white rounded-lg p-4 border border-gray-100">
-                    <p className="text-sm text-gray-900 font-medium mb-3">{previewQuestion.content}</p>
+                    <div className="text-sm text-gray-900 font-medium mb-3"><LatexText text={previewQuestion.content} /></div>
                     {previewQuestion.options && previewQuestion.options.length > 0 ? (
                       <div className="space-y-2">
                         {previewQuestion.options.map((opt) => (
                           <div key={opt.label} className={`flex items-center gap-3 px-3 py-2 rounded-lg border text-sm ${previewQuestion.correctAnswer === opt.label ? "border-green-300 bg-green-50" : "border-gray-200"}`}>
                             <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${previewQuestion.correctAnswer === opt.label ? "bg-green-500 text-white" : "bg-gray-100 text-gray-500"}`}>{opt.label}</span>
-                            <span>{opt.text || "(kiritilmagan)"}</span>
+                            <span>{opt.text ? <LatexText text={opt.text} /> : "(kiritilmagan)"}</span>
                             {previewQuestion.correctAnswer === opt.label && <span className="ml-auto text-xs text-green-600">✓ To'g'ri</span>}
                           </div>
                         ))}
@@ -524,7 +526,7 @@ function QuestionRow({ question, isSelected, isPreview, onToggle, onPreview }: {
         {isSelected ? <CheckSquare className="w-5 h-5 text-primary-500" /> : <Square className="w-5 h-5 text-gray-300" />}
       </button>
       <div className="flex-1 min-w-0 cursor-pointer" onClick={onToggle}>
-        <p className="text-sm text-gray-900 truncate">{question.content.startsWith("[IMAGES:") || question.content.startsWith("data:") ? "📷 Rasmli savol" : question.content}</p>
+        <p className="text-sm text-gray-900 truncate">{question.content.startsWith("[IMAGES:") || question.content.startsWith("data:") ? "📷 Rasmli savol" : latexPreview(question.content, 70)}</p>
         <div className="flex items-center gap-2 mt-1">
           <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${diffColors[question.difficulty]}`}>{diffLabels[question.difficulty]}</span>
           <span className="text-[10px] text-gray-400">⏱ {question.time}</span>

@@ -5,6 +5,8 @@ import { getAllCourses, getTestsByCourse, deleteTest, updateTest, getAllTestList
 import type { Course, Test, TestList } from "@shared/types";
 import CreateTestListModal from "../components/CreateTestListModal";
 import LoadingButton from "../components/LoadingButton";
+import LatexText from "../components/LatexText";
+import { latexPreview } from "../utils/latexPreview";
 
 interface TestWithCourse extends Test {
   courseName: string;
@@ -474,11 +476,11 @@ function PreviewModal({ testId, onClose }: { testId: string; onClose: () => void
 
         {question ? (
           <div className="space-y-4">
-            <p className="text-sm text-gray-900 font-medium">
+            <div className="text-sm text-gray-900 font-medium">
               {question.content.startsWith("[IMAGES:") || question.content.startsWith("data:")
                 ? "📷 Rasmli savol"
-                : question.content}
-            </p>
+                : <LatexText text={question.content} />}
+            </div>
 
             {question.options && question.options.length > 0 && (
               <div className="space-y-2">
@@ -496,7 +498,7 @@ function PreviewModal({ testId, onClose }: { testId: string; onClose: () => void
                     }`}>
                       {opt.label}
                     </span>
-                    <span>{opt.text || "(kiritilmagan)"}</span>
+                    <span>{opt.text ? <LatexText text={opt.text} /> : "(kiritilmagan)"}</span>
                     {question.correctAnswer === opt.label && (
                       <span className="ml-auto text-xs text-green-600 font-medium">✓ To'g'ri</span>
                     )}
@@ -612,7 +614,7 @@ function AddToListModal({ listId, existingIds, onClose, onAdded }: {
                             {alreadyAdded ? <CheckSquare className="w-5 h-5 text-gray-300" /> : isSelected ? <CheckSquare className="w-5 h-5 text-primary-500" /> : <Square className="w-5 h-5 text-gray-300" />}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm text-gray-900 truncate">{q.content.startsWith("[") || q.content.startsWith("data:") ? "📷 Rasmli savol" : q.content}</p>
+                            <p className="text-sm text-gray-900 truncate">{q.content.startsWith("[") || q.content.startsWith("data:") ? "📷 Rasmli savol" : latexPreview(q.content, 70)}</p>
                             <div className="flex items-center gap-2 mt-0.5">
                               <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${diffColors[q.difficulty] || ""}`}>{diffLabels[q.difficulty] || q.difficulty}</span>
                               <span className="text-[10px] text-gray-400">⏱ {q.time}</span>
@@ -647,7 +649,7 @@ function AddToListModal({ listId, existingIds, onClose, onAdded }: {
                           {alreadyAdded ? <CheckSquare className="w-5 h-5 text-gray-300" /> : isSelected ? <CheckSquare className="w-5 h-5 text-primary-500" /> : <Square className="w-5 h-5 text-gray-300" />}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm text-gray-900 truncate">{q.content.startsWith("[") || q.content.startsWith("data:") ? "📷 Rasmli savol" : q.content}</p>
+                          <p className="text-sm text-gray-900 truncate">{q.content.startsWith("[") || q.content.startsWith("data:") ? "📷 Rasmli savol" : latexPreview(q.content, 70)}</p>
                           <div className="flex items-center gap-2 mt-0.5">
                             <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${diffColors[q.difficulty] || ""}`}>{diffLabels[q.difficulty] || q.difficulty}</span>
                             <span className="text-[10px] text-gray-400">⏱ {q.time}</span>

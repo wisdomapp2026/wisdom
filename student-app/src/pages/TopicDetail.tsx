@@ -1,6 +1,6 @@
 import { Link, useParams, useNavigate } from "react-router-dom";
-import { useState, useEffect } from "react";
-import { getTopicById, getProblemsByTopic, getUserProgress, setUserProgress, getTopicsByCourse, getMotivationPhrases, getMotivationSettings, addFavoriteTopic, removeFavoriteTopic, isFavoriteTopic, getTestsByCourse } from "@shared/repositories";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { getTopicById, getProblemsByTopic, getUserProgress, setUserProgress, getTopicsByCourse, getMotivationPhrases, getMotivationSettings, addFavoriteTopic, removeFavoriteTopic, isFavoriteTopic, getTestsByCourse, markTopicPresence, clearTopicPresence, getTopicPresenceUsers, getUserById } from "@shared/repositories";
 import type { Topic, Problem, UserProgress, Test } from "@shared/types";
 import { ChevronLeft, Star, Play, Lock, CheckCircle, ChevronDown, ChevronUp, FileText, Download } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
@@ -8,6 +8,20 @@ import { getLocalCourseProgress, setLocalCourseProgress } from "../hooks/useLoca
 import { invalidateCache, invalidateCacheByPrefix } from "../hooks/useCache";
 import AuthModal from "../components/AuthModal";
 import VideoModal from "../components/VideoModal";
+
+/** Topic title dan "N-modul:" qismini olib tashlab, "N-mavzu: Nom" formatida qaytaradi */
+function cleanTopicTitle(title: string): string {
+  // "4-modul: 4 - mavzu: Bo'linuvchanlik" → "4-mavzu: Bo'linuvchanlik"
+  const fullMatch = title.match(/^\d+-modul:\s*(\d+)\s*-\s*mavzu:\s*(.*)/i);
+  if (fullMatch) return `${fullMatch[1]}-mavzu: ${fullMatch[2]}`;
+  // "5-mavzu: Matn" — allaqachon to'g'ri format
+  if (/^\d+-mavzu:/i.test(title)) return title;
+  // "5-modul: Matn" (mavzu so'zi yo'q) → "5-mavzu: Matn"
+  const modulMatch = title.match(/^(\d+)-modul:\s*(.*)/i);
+  if (modulMatch) return `${modulMatch[1]}-mavzu: ${modulMatch[2]}`;
+  // Prefikssiz nom
+  return title;
+}
 import LatexText from "../components/LatexText";
 import { TopicDetailLoader } from "../components/PageLoader";
 import { splitSolutionIntoSteps } from "../utils/splitSolution";
@@ -30,6 +44,10 @@ export default function TopicDetail() {
   const [motivationPhrase, setMotivationPhrase] = useState("");
   const [isFavorite, setIsFavorite] = useState(false);
   const [favLoading, setFavLoading] = useState(false);
+  const [viewedCount, setViewedCount] = useState(0);
+  const viewedRef = useRef(new Set<string>());
+  const [topicOnlineUsers, setTopicOnlineUsers] = useState<Array<{ avatar?: string; name?: string }>>([]);
+  const presenceRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (!courseId || !topicId) return;
@@ -48,6 +66,40 @@ export default function TopicDetail() {
     // Dars ichidagi motivatsion frazani yuklash
     loadMotivation();
   }, [courseId, topicId]);
+
+  // Topic presence — hozir shu mavzuni o'qiyotgan userlar
+  useEffect(() => {
+    if (!courseId || !topicId || !user?.uid) return;
+    let cancelled = false;
+
+    async function beat() {
+      try {
+        await markTopicPresence(courseId!, topicId!, user!.uid);
+        const userIds = await getTopicPresenceUsers(courseId!, topicId!);
+        // O'zimni chiqarib tashlash
+        const others = userIds.filter((id) => id !== user!.uid);
+        if (cancelled) return;
+        // Birinchi 3 userning avatarini olish
+        const avatars = await Promise.all(
+          others.slice(0, 3).map(async (uid) => {
+            try {
+              const u = await getUserById(uid);
+              return { avatar: u?.avatar, name: u?.name };
+            } catch { return { avatar: undefined, name: undefined }; }
+          })
+        );
+        if (!cancelled) setTopicOnlineUsers(others.length > 0 ? avatars : []);
+      } catch {}
+    }
+    beat();
+    presenceRef.current = setInterval(beat, 30000);
+
+    return () => {
+      cancelled = true;
+      if (presenceRef.current) clearInterval(presenceRef.current);
+      clearTopicPresence(courseId!, topicId!, user!.uid).catch(() => {});
+    };
+  }, [courseId, topicId, user?.uid]);
 
   async function loadMotivation() {
     try {
@@ -321,12 +373,25 @@ export default function TopicDetail() {
     }
   }
 
+  // Misol ekranda ko'ringanda "ko'rilgan" deb belgilash (faqat bepul misollar)
+  const handleProblemVisible = useCallback((problemId: string) => {
+    // Premium misolni o'qilgan deb hisoblamaslik
+    const problem = problems.find((p) => p.id === problemId);
+    if (problem?.isPremium) return;
+    if (!viewedRef.current.has(problemId)) {
+      viewedRef.current.add(problemId);
+      setViewedCount(viewedRef.current.size);
+    }
+  }, [problems]);
+
   if (loading) {
     return <TopicDetailLoader />;
   }
 
   const freeProblems = problems.filter((p) => !p.isPremium).length;
-  const mastery = problems.length > 0 ? Math.round((freeProblems / problems.length) * 100) : 0;
+  // Progress = o'qilgan bepul misollar / JAMI misollar soni (premium ham hisobga olinadi)
+  // Premium ochilmaguncha 100% bo'lmaydi
+  const mastery = problems.length > 0 ? Math.round((viewedCount / problems.length) * 100) : 0;
 
   function handlePremiumClick() {
     if (!isLoggedIn) {
@@ -339,15 +404,15 @@ export default function TopicDetail() {
   return (
     <div className="page-content bg-gray-50">
       {/* Header */}
-      <header className="bg-white px-5 pt-4 pb-4 border-b border-gray-100 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Link to={`/course/${courseId}`} className="text-gray-500"><ChevronLeft size={22} /></Link>
-          <h1 className="text-lg font-bold text-gray-900 truncate">{topic?.title || "Modul"}</h1>
+      <header className="bg-white px-5 pt-4 pb-4 border-b border-gray-100 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <Link to={`/course/${courseId}`} className="text-gray-500 shrink-0 self-center"><ChevronLeft size={22} /></Link>
+          <h1 className="text-base font-bold text-gray-900 leading-tight line-clamp-2">{topic ? cleanTopicTitle(topic.title) : "Mavzu"}</h1>
         </div>
         <button
           onClick={handleToggleFavorite}
           disabled={favLoading}
-          className={`transition-colors ${isFavorite ? "text-yellow-400" : "text-gray-300 hover:text-yellow-400"}`}
+          className={`shrink-0 transition-colors ${isFavorite ? "text-yellow-400" : "text-gray-300 hover:text-yellow-400"}`}
           title={isFavorite ? "Tanlanganlardan o'chirish" : "Tanlanganlarga qo'shish"}
         >
           <Star size={22} fill={isFavorite ? "currentColor" : "none"} />
@@ -366,28 +431,39 @@ export default function TopicDetail() {
         </div>
       )}
 
-      {/* Modulni tanishtirish — kursni tanishtirish blokiga o'xshash (video doim ochiq, izoh akkordion) */}
+      {/* Mavzuni tanishtirish — kursni tanishtirish blokiga o'xshash (video doim ochiq, izoh akkordion) */}
       {topic?.introduction && topic.introduction.text && (
-        <TopicIntroCard introduction={topic.introduction} />
+        <TopicIntroCard introduction={topic.introduction} onPlayVideo={(url) => { setVideoUrl(url); setShowVideoModal(true); }} />
       )}
 
-      {/* Topic Mastery */}
+      {/* Mavzu darajasi */}
       <div className="mx-5 mt-4 bg-white rounded-xl p-4 border border-gray-100">
         <div className="flex items-center justify-between">
-          <p className="font-semibold text-gray-900 text-sm">Modul darajasi</p>
+          <p className="font-semibold text-gray-900 text-sm">Mavzu darajasi</p>
           <p className="text-2xl font-bold text-primary-500">{mastery}%</p>
         </div>
-        <p className="text-xs text-gray-500 mt-1">{freeProblems} / {problems.length} ta misol ochiq</p>
+        <p className="text-xs text-gray-500 mt-1">{viewedCount} / {problems.length} ta misol o'qilgan</p>
         <div className="h-2 bg-gray-100 rounded-full mt-2">
           <div className="h-full bg-primary-500 rounded-full transition-all" style={{ width: `${mastery}%` }} />
         </div>
-        <div className="flex items-center mt-2 gap-2">
-          <div className="flex -space-x-1.5">
-            <div className="w-5 h-5 bg-gray-300 rounded-full border-2 border-white" />
-            <div className="w-5 h-5 bg-gray-400 rounded-full border-2 border-white" />
+        {topicOnlineUsers.length > 0 && (
+          <div className="flex items-center mt-2 gap-2">
+            <div className="flex -space-x-1.5">
+              {topicOnlineUsers.map((u, i) => (
+                <div key={i} className="w-5 h-5 rounded-full border-2 border-white overflow-hidden bg-gradient-to-br from-indigo-300 to-purple-400 flex items-center justify-center">
+                  {u.avatar ? (
+                    <img src={u.avatar} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-[8px] font-bold text-white">{(u.name || "U").charAt(0).toUpperCase()}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+            <p className="text-[11px] text-gray-500">
+              {topicOnlineUsers.length} nafar hozir shu mavzuni o'rganmoqda
+            </p>
           </div>
-          <p className="text-[11px] text-gray-500">Siz va 12 nafar boshqalar hozir shu modulni o'rganmoqda</p>
-        </div>
+        )}
       </div>
 
       {/* Misollar */}
@@ -411,6 +487,7 @@ export default function TopicDetail() {
               onPremiumClick={handlePremiumClick}
               onPlayVideo={(url) => { setVideoUrl(url); setShowVideoModal(true); }}
               onSolutionViewed={handleProblemCompleted}
+              onVisible={handleProblemVisible}
             />
           );
         })}
@@ -434,6 +511,9 @@ export default function TopicDetail() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-gray-900 text-sm truncate">{test.title}</p>
+                    <p className="text-[10px] text-primary-500 font-medium truncate mt-0.5">
+                      {topic ? cleanTopicTitle(topic.title) : ""}
+                    </p>
                     <div className="flex items-center gap-3 mt-1">
                       <span className="text-[10px] text-gray-500">❓ {test.questions?.length || 0} savol</span>
                       <span className="text-[10px] text-gray-500">⏱ {test.totalTime} daqiqa</span>
@@ -480,33 +560,24 @@ export default function TopicDetail() {
 }
 
 
-// ===== Modulni tanishtirish kartasi — CourseDetail dagi CourseIntroCard bilan bir xil uslub =====
-function TopicIntroCard({ introduction }: { introduction: NonNullable<Topic["introduction"]> }) {
+// ===== Mavzuni tanishtirish kartasi — CourseDetail dagi CourseIntroCard bilan bir xil uslub =====
+function TopicIntroCard({ introduction, onPlayVideo }: { introduction: NonNullable<Topic["introduction"]>; onPlayVideo: (url: string) => void }) {
   // Videodan keyingi matn (izoh) — akkordion, yopiq holatda boshlanadi
   const [textExpanded, setTextExpanded] = useState(false);
-  // Video sahifaning o'zida ko'rsatiladi (modal emas), doim ochiq turadi — bosilgach pleer ishga tushadi
-  const [videoPlaying, setVideoPlaying] = useState(false);
 
   function getYouTubeThumbnail(url: string): string {
     const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&?]+)/);
     return match ? `https://img.youtube.com/vi/${match[1]}/mqdefault.jpg` : "";
   }
 
-  function getEmbedUrl(url: string): string {
-    const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&?]+)/);
-    const videoId = match ? match[1] : "";
-    return `https://www.youtube.com/embed/${videoId}?autoplay=1`;
-  }
-
   const thumbnail = introduction.thumbnailUrl || (introduction.videoType === "youtube" && introduction.videoUrl ? getYouTubeThumbnail(introduction.videoUrl) : "");
-  const isYoutube = introduction.videoType === "youtube" || !!introduction.videoUrl?.includes("youtube") || !!introduction.videoUrl?.includes("youtu.be");
 
   return (
     <div className="mx-5 mt-4 bg-white border border-gray-100 rounded-xl p-4">
       {/* Sarlavha */}
       <div className="flex items-center gap-2 mb-3">
         <Play className="w-4 h-4 text-primary-500" />
-        <p className="font-semibold text-gray-900 text-sm">Modulni tanishtirish</p>
+        <p className="font-semibold text-gray-900 text-sm">Mavzuni tanishtirish</p>
       </div>
 
       {/* Qisqa matn */}
@@ -514,48 +585,31 @@ function TopicIntroCard({ introduction }: { introduction: NonNullable<Topic["int
 
       {introduction.imageUrl && (
         <div className="mb-3 rounded-lg overflow-hidden">
-          <img src={introduction.imageUrl} alt="Modul tanishtirish" className="w-full max-h-48 object-cover rounded-lg" />
+          <img src={introduction.imageUrl} alt="Mavzu tanishtirish" className="w-full max-h-48 object-cover rounded-lg" />
         </div>
       )}
 
-      {/* Video — doim ochiq ko'rinadi (akkordion emas) */}
+      {/* Video — bosilganda to'liq ekranda ochiladi */}
       {introduction.videoUrl && (
-        <>
-          {!videoPlaying ? (
-            <button
-              onClick={() => setVideoPlaying(true)}
-              className="w-full relative rounded-lg overflow-hidden bg-black aspect-video flex items-center justify-center group"
-            >
-              {thumbnail ? (
-                <img src={thumbnail} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full bg-gray-900" />
-              )}
-              <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-active:bg-black/40 transition-colors">
-                <div className="w-14 h-14 bg-white/95 rounded-full flex items-center justify-center shadow-lg">
-                  <Play className="w-6 h-6 text-primary-600 ml-0.5" fill="currentColor" />
-                </div>
-              </div>
-              <span className="absolute bottom-2 left-2 text-white text-xs font-medium bg-black/50 px-2 py-1 rounded">Videoni ko'rish</span>
-            </button>
+        <button
+          onClick={() => onPlayVideo(introduction.videoUrl!)}
+          className="w-full relative rounded-lg overflow-hidden bg-black aspect-video flex items-center justify-center group"
+        >
+          {thumbnail ? (
+            <img src={thumbnail} alt="" className="w-full h-full object-cover" />
           ) : (
-            <div className="w-full rounded-lg overflow-hidden bg-black aspect-video">
-              {isYoutube ? (
-                <iframe
-                  src={getEmbedUrl(introduction.videoUrl)}
-                  className="w-full h-full"
-                  allowFullScreen
-                  allow="autoplay; encrypted-media"
-                />
-              ) : (
-                <video src={introduction.videoUrl} controls autoPlay className="w-full h-full" />
-              )}
-            </div>
+            <div className="w-full h-full bg-gray-900" />
           )}
-        </>
+          <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-active:bg-black/40 transition-colors">
+            <div className="w-14 h-14 bg-white/95 rounded-full flex items-center justify-center shadow-lg">
+              <Play className="w-6 h-6 text-primary-600 ml-0.5" fill="currentColor" />
+            </div>
+          </div>
+          <span className="absolute bottom-2 left-2 text-white text-xs font-medium bg-black/50 px-2 py-1 rounded">Videoni ko'rish</span>
+        </button>
       )}
 
-      {/* Videodan keyingi matn — akkordion (drop-down), admin yozgan, LaTeX formulalarni qo'llab-quvvatlaydi */}
+      {/* Batafsil izoh — HTML rich text yoki oddiy matn */}
       {introduction.afterVideoText && (
         <div className="mt-3">
           <button
@@ -571,9 +625,15 @@ function TopicIntroCard({ introduction }: { introduction: NonNullable<Topic["int
           </button>
           {textExpanded && (
             <div className="pb-1 overflow-hidden">
-              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-                <LatexText text={introduction.afterVideoText} />
-              </p>
+              {/<[a-z][\s\S]*>/i.test(introduction.afterVideoText) ? (
+                <div className="text-sm text-gray-700 leading-relaxed break-words [overflow-wrap:anywhere] rich-text-content">
+                  <LatexText text={introduction.afterVideoText} />
+                </div>
+              ) : (
+                <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+                  <LatexText text={introduction.afterVideoText} />
+                </p>
+              )}
             </div>
           )}
         </div>
@@ -602,33 +662,37 @@ function TopicIntroCard({ introduction }: { introduction: NonNullable<Topic["int
 
 
 // ===== StudentProblemCard — flip effekti bilan =====
-function StudentProblemCard({ problem, index, isPremium, isLoggedIn, onRequireAuth, onPremiumClick, onPlayVideo, onSolutionViewed }: {
+function StudentProblemCard({ problem, index, isPremium, isLoggedIn, onRequireAuth, onPremiumClick, onPlayVideo, onSolutionViewed, onVisible }: {
   problem: Problem; index: number; isPremium: boolean; isLoggedIn: boolean;
   onRequireAuth: () => void;
   onPremiumClick: () => void; onPlayVideo: (url: string) => void; onSolutionViewed: (problemId: string) => void;
+  onVisible?: (problemId: string) => void;
 }) {
   const [flipped, setFlipped] = useState(false);
   const [visibleSteps, setVisibleSteps] = useState(1);
+  const cardRef = useRef<HTMLDivElement>(null);
   const diffColors: Record<string, string> = { easy: "bg-green-100 text-green-700", medium: "bg-yellow-100 text-yellow-700", hard: "bg-red-100 text-red-700" };
   const diffLabels: Record<string, string> = { easy: "Oson", medium: "O'rta", hard: "Qiyin" };
 
+  // IntersectionObserver — misol ekranda ko'ringanda "o'qilgan" deb belgilash
+  useEffect(() => {
+    if (!onVisible || !cardRef.current) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) onVisible(problem.id); },
+      { threshold: 0.5 }
+    );
+    observer.observe(cardRef.current);
+    return () => observer.disconnect();
+  }, [problem.id, onVisible]);
+
   return (
     <div
+      ref={cardRef}
       className={`bg-white rounded-xl border transition-all ${isPremium ? "border-yellow-100" : flipped ? "border-blue-300 ring-1 ring-blue-200" : "border-gray-100"}`}
     >
-      <div style={{ perspective: "1600px" }}>
-        <div
-          className="grid transition-transform duration-500"
-          style={{
-            transformStyle: "preserve-3d",
-            transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)",
-          }}
-        >
-          {/* FRONT — Misol */}
-          <div
-            className="p-5 col-start-1 row-start-1"
-            style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden" }}
-          >
+      {/* FRONT — Misol (flipped bo'lganda yashiriladi) */}
+      {!flipped && (
+        <div className="p-5">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
                 <span className="text-[11px] text-gray-500 font-semibold">{index + 1} · MISOL</span>
@@ -684,13 +748,12 @@ function StudentProblemCard({ problem, index, isPremium, isLoggedIn, onRequireAu
                 </div>
               </div>
             )}
-          </div>
+        </div>
+      )}
 
-          {/* BACK — Yechim */}
-          <div
-            className="p-5 bg-blue-50/50 col-start-1 row-start-1 rounded-xl"
-            style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
-          >
+      {/* BACK — Yechim (faqat flipped bo'lganda ko'rinadi) */}
+      {flipped && (
+        <div className="p-5 bg-blue-50/50 rounded-xl">
             <div className="flex items-center justify-between mb-3">
               <span className="text-sm font-bold text-blue-700">📖 Yechim</span>
               <button onClick={(e) => { e.stopPropagation(); setFlipped(false); setVisibleSteps(1); }} className="text-xs text-gray-500 px-2 py-1 bg-white rounded border border-gray-200 active:bg-gray-50">← Orqaga</button>
@@ -776,9 +839,8 @@ function StudentProblemCard({ problem, index, isPremium, isLoggedIn, onRequireAu
                 <Play size={14} fill="white" /> Video yechimni ko'rish
               </button>
             )}
-          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

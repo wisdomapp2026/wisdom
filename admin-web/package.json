@@ -10,18 +10,19 @@
   },
   "dependencies": {
     "@edukids/shared": "*",
+    "clsx": "^2.1.1",
+    "jszip": "^3.10.1",
+    "katex": "^0.16.22",
+    "lucide-react": "^0.511.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.6.1",
-    "recharts": "^2.15.3",
-    "katex": "^0.16.22",
-    "lucide-react": "^0.511.0",
-    "clsx": "^2.1.1"
+    "recharts": "^2.15.3"
   },
   "devDependencies": {
+    "@types/katex": "^0.16.7",
     "@types/react": "^19.1.4",
     "@types/react-dom": "^19.1.4",
-    "@types/katex": "^0.16.7",
     "@vitejs/plugin-react": "^4.4.1",
     "autoprefixer": "^10.4.21",
     "postcss": "^8.5.3",

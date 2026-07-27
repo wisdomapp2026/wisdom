@@ -10,12 +10,23 @@ import { getLocalCourseProgress, setLocalCourseProgress } from "../hooks/useLoca
 
 const LOCAL_TEST_RESULTS_KEY = "edukids_local_test_results";
 
+/** Fisher-Yates shuffle */
+function shuffleArray<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 export default function TestScreen() {
   const { testId } = useParams<{ testId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
   const [test, setTest] = useState<Test | null>(null);
   const [courseId, setCourseId] = useState("");
+  const [courseName, setCourseName] = useState("");
   const [current, setCurrent] = useState(0);
   const [selected, setSelected] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -23,6 +34,8 @@ export default function TestScreen() {
   const [timeLeft, setTimeLeft] = useState(0);
   const [finished, setFinished] = useState(false);
   const finishingRef = useRef(false); // dublikat finish oldini olish
+  // Har bir savol uchun shuffle qilingan options tartibini saqlash
+  const [shuffledOptionsMap, setShuffledOptionsMap] = useState<Record<string, Array<{ label: string; text: string }>>>({});
 
   useEffect(() => {
     if (!testId) return;
@@ -46,7 +59,16 @@ export default function TestScreen() {
       if (match) {
         setTest(match.test);
         setCourseId(match.courseId);
+        setCourseName(courses.find(c => c.id === match.courseId)?.title || "");
         setTimeLeft(match.test.totalTime * 60);
+        // Javob variantlarini shuffle qilish (bir marta)
+        const optionsMap: Record<string, Array<{ label: string; text: string }>> = {};
+        for (const question of match.test.questions || []) {
+          if (question.options) {
+            optionsMap[question.id] = shuffleArray([...question.options]);
+          }
+        }
+        setShuffledOptionsMap(optionsMap);
       }
     } catch (err) {
       console.error(err);
@@ -81,6 +103,31 @@ export default function TestScreen() {
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center"><div className="w-8 h-8 border-3 border-primary-500 border-t-transparent rounded-full animate-spin" /></div>;
+  }
+
+  // Faqat ro'yxatdan o'tgan foydalanuvchi test ishlay oladi
+  if (!user) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-6 text-center">
+        <div className="w-16 h-16 bg-primary-50 rounded-full flex items-center justify-center mb-4">
+          <span className="text-3xl">🔒</span>
+        </div>
+        <h2 className="text-lg font-bold text-gray-900 mb-2">Ro'yxatdan o'ting</h2>
+        <p className="text-sm text-gray-500 mb-6">Testni ishlash uchun tizimga kirish kerak</p>
+        <button
+          onClick={() => navigate("/profile")}
+          className="px-6 py-3 bg-primary-500 text-white font-semibold rounded-xl text-sm active:scale-95 transition-transform"
+        >
+          Tizimga kirish
+        </button>
+        <button
+          onClick={() => navigate(-1)}
+          className="mt-3 text-sm text-gray-500 hover:text-gray-700"
+        >
+          ← Orqaga
+        </button>
+      </div>
+    );
   }
 
   if (!test || !test.questions?.length) {
@@ -191,7 +238,10 @@ export default function TestScreen() {
       {/* Header */}
       <header className="px-5 pt-4 pb-3">
         <div className="flex items-center justify-between">
-          <h1 className="text-lg font-bold text-gray-900 truncate flex-1">{test.title}</h1>
+          <div className="min-w-0 flex-1 mr-2">
+            <h1 className="text-lg font-bold text-gray-900 truncate">{test.title}</h1>
+            {courseName && <p className="text-[11px] text-primary-500 font-medium truncate">{courseName}</p>}
+          </div>
           <div className="flex items-center gap-2">
             <div className={`px-3 py-1.5 rounded-full flex items-center gap-1 ${timeLeft <= 60 ? "bg-red-50" : "bg-primary-50"} ${timeLeft <= 10 && timeLeft > 0 ? "animate-shake" : ""}`}>
               <span className={`text-xs ${timeLeft <= 60 ? "text-red-500" : "text-primary-500"}`}>⏱</span>
@@ -250,7 +300,7 @@ export default function TestScreen() {
 
       {/* Options */}
       <div className="px-5 mt-6 space-y-3 flex-1">
-        {q.options?.map((opt) => {
+        {(shuffledOptionsMap[q.id] || q.options || []).map((opt) => {
           const isSelected = selected === opt.label;
           return (
             <button

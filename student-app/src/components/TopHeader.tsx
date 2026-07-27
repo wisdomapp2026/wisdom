@@ -49,7 +49,7 @@ export default function TopHeader() {
 
   return (
     <>
-      <header className="flex items-center justify-between px-5 pt-4 pb-2" style={{ backgroundColor: 'var(--theme-bg)' }}>
+      <header className="sticky top-0 z-40 flex items-center justify-between px-5 pt-4 pb-0" style={{ backgroundColor: 'var(--theme-bg)' }}>
         <div className="flex items-center gap-2">
           <HamburgerMenu />
           <button onClick={() => setAuthorModalOpen(true)} className="flex items-center gap-2 active:opacity-70 transition-opacity">

@@ -11,7 +11,7 @@ function getYouTubeThumbnail(url: string): string {
 
 function getEmbedUrl(url: string): string {
   const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/);
-  return match ? `https://www.youtube.com/embed/${match[1]}?autoplay=1` : url;
+  return match ? `https://www.youtube-nocookie.com/embed/${match[1]}?autoplay=1&controls=0&modestbranding=1&rel=0&showinfo=0&iv_load_policy=3&disablekb=1` : url;
 }
 
 export default function AllNews() {

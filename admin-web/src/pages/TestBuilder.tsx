@@ -4,10 +4,16 @@ import { ChevronDown, ChevronRight as ChevRight, Plus, Edit, Trash2, Filter, Sea
 import { saveTestToLibrary, getAllTBQuestions, saveTBQuestion, deleteTBQuestion, getAllTBFolders, saveTBFolder, deleteTBFolder } from "@shared/repositories";
 import type { Test, Question as TQuestion } from "@shared/types";
 import CreateQuestionModal from "../components/CreateQuestionModal";
+import LatexText from "../components/LatexText";
+import { latexPreview } from "../utils/latexPreview";
 
 interface Folder {
   id: string;
   name: string;
+  /** Ota papka ID (ierarxiya uchun). null/undefined = ildiz papka */
+  parentId?: string | null;
+  /** Avtomatik yaratilgan papkalarni aniqlash uchun kalit */
+  refKey?: string;
   questionIds: string[];
 }
 
@@ -133,19 +139,29 @@ export default function TestBuilder() {
   // Folder CRUD
   function addFolder() {
     if (!newFolderName.trim()) return;
-    const newFolder = { id: `f-${Date.now()}`, name: newFolderName, questionIds: [] };
+    const newFolder = { id: `f-${Date.now()}`, name: newFolderName, parentId: null, questionIds: [] };
     setFolders([...folders, newFolder]);
     saveTBFolder(newFolder); // Firestore
     setNewFolderName("");
     setShowNewFolder(false);
   }
   function deleteFolder(id: string) {
-    if (!confirm("Papkani o'chirishga ishonchingiz komilmi?")) return;
-    const updatedQuestions = questions.map((q) => q.folderId === id ? { ...q, folderId: undefined } : q);
+    if (!confirm("Papkani o'chirishga ishonchingiz komilmi?\n\nIchidagi barcha ost-papkalar ham o'chiriladi (savollar saqlanadi).")) return;
+
+    // O'chiriladigan papka va uning barcha bola papkalarini yig'ish
+    const toDelete = new Set<string>();
+    function collect(fid: string) {
+      toDelete.add(fid);
+      folders.filter((f) => (f.parentId ?? null) === fid).forEach((c) => collect(c.id));
+    }
+    collect(id);
+
+    const updatedQuestions = questions.map((q) => (q.folderId && toDelete.has(q.folderId)) ? { ...q, folderId: undefined } : q);
     setQuestions(updatedQuestions);
-    setFolders(folders.filter((f) => f.id !== id));
+    setFolders(folders.filter((f) => !toDelete.has(f.id)));
+
     // Firestore
-    deleteTBFolder(id);
+    toDelete.forEach((fid) => deleteTBFolder(fid));
     updatedQuestions.filter((q) => q.folderId === undefined).forEach((q) => saveTBQuestion(q));
   }
   function saveEditFolder(id: string) {
@@ -191,6 +207,102 @@ export default function TestBuilder() {
     return questions.filter((q) => q.folderId === folderId);
   }
 
+
+
+  /** Papka va uning barcha bola papkalaridagi savollar soni */
+  function countQuestionsDeep(folderId: string): number {
+    const direct = questions.filter((q) => q.folderId === folderId).length;
+    const children = folders.filter((f) => (f.parentId ?? null) === folderId);
+    return direct + children.reduce((sum, c) => sum + countQuestionsDeep(c.id), 0);
+  }
+
+  /** Ierarxik papka daraxtini render qilish */
+  function renderFolderTree(parentId: string | null, depth: number): React.ReactNode {
+    const children = folders.filter((f) => (f.parentId ?? null) === parentId);
+    if (children.length === 0) return null;
+
+    return children.map((folder) => {
+      const isExpanded = expandedFolders.includes(folder.id);
+      const folderQuestions = getQuestionsInFolder(folder.id);
+      const subFolders = folders.filter((f) => (f.parentId ?? null) === folder.id);
+      const deepCount = countQuestionsDeep(folder.id);
+      const hasChildren = subFolders.length > 0 || folderQuestions.length > 0;
+      // Chuqurlikka qarab ikonka: 0 = kurs, 1 = modul, 2 = mavzu
+      const icon = depth === 0 ? "📚" : depth === 1 ? "📁" : "📄";
+
+      return (
+        <div
+          key={folder.id}
+          className="group"
+          style={{ paddingLeft: depth > 0 ? `${depth * 10}px` : undefined }}
+          onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.add("ring-2", "ring-primary-300"); }}
+          onDragLeave={(e) => { e.currentTarget.classList.remove("ring-2", "ring-primary-300"); }}
+          onDrop={(e) => { e.preventDefault(); e.stopPropagation(); e.currentTarget.classList.remove("ring-2", "ring-primary-300"); handleDropOnFolder(folder.id); }}
+        >
+          {editingFolderId === folder.id ? (
+            <div className="flex items-center gap-1 px-2 py-1">
+              <input value={editFolderName} onChange={(e) => setEditFolderName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && saveEditFolder(folder.id)} className="flex-1 text-sm border border-gray-200 rounded px-2 py-0.5 focus:outline-none" autoFocus />
+              <button onClick={() => saveEditFolder(folder.id)} className="text-green-500 text-xs font-bold">✓</button>
+              <button onClick={() => setEditingFolderId(null)} className="text-gray-400 p-0.5"><X className="w-3.5 h-3.5" /></button>
+            </div>
+          ) : (
+            <>
+              <div
+                onClick={() => toggleFolder(folder.id)}
+                className="flex items-center justify-between px-2 py-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
+              >
+                <div className="flex items-center gap-1.5 min-w-0">
+                  {hasChildren ? (
+                    isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-gray-400 shrink-0" /> : <ChevRight className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                  ) : (
+                    <span className="w-3.5 shrink-0" />
+                  )}
+                  <span className="shrink-0">{icon}</span>
+                  <span className={`truncate ${depth === 0 ? "text-sm font-semibold text-gray-800" : depth === 1 ? "text-sm font-medium text-gray-700" : "text-[13px] text-gray-600"}`}>
+                    {folder.name}
+                  </span>
+                  <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full min-w-[18px] text-center shrink-0">{deepCount}</span>
+                </div>
+                <div className="hidden group-hover:flex items-center shrink-0">
+                  <button onClick={(e) => { e.stopPropagation(); setEditingFolderId(folder.id); setEditFolderName(folder.name); }} className="text-gray-400 hover:text-primary-500 p-0.5"><Edit className="w-3 h-3" /></button>
+                  <button onClick={(e) => { e.stopPropagation(); deleteFolder(folder.id); }} className="text-gray-400 hover:text-red-500 p-0.5"><Trash2 className="w-3 h-3" /></button>
+                </div>
+              </div>
+
+              {isExpanded && (
+                <div className="mt-0.5 space-y-0.5 mb-1">
+                  {/* Bola papkalar */}
+                  {renderFolderTree(folder.id, depth + 1)}
+
+                  {/* Shu papkadagi savollar */}
+                  {folderQuestions.length > 0 && (
+                    <div style={{ paddingLeft: `${(depth + 1) * 10 + 14}px` }} className="space-y-0.5">
+                      {folderQuestions.map((q) => (
+                        <div key={q.id} onClick={(e) => { e.stopPropagation(); scrollToQuestion(q.id); }} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-primary-50 text-xs cursor-pointer transition-colors">
+                          <span className="w-1.5 h-1.5 bg-primary-400 rounded-full shrink-0" />
+                          <span className="text-gray-600 truncate hover:text-primary-600">
+                            {q.content.startsWith("[") || q.content.startsWith("data:") ? "📷 Rasmli savol" : latexPreview(q.content, 32)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Bo'sh papka */}
+                  {subFolders.length === 0 && folderQuestions.length === 0 && (
+                    <p className="text-[10px] text-gray-400 italic px-2" style={{ paddingLeft: `${(depth + 1) * 10 + 14}px` }}>
+                      Bo'sh — testlarni shu yerga tashlang
+                    </p>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      );
+    });
+  }
+
   if (loadingData) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -229,62 +341,9 @@ export default function TestBuilder() {
               </div>
             )}
 
-            {/* Folders */}
+            {/* Folders — ierarxik (Kurs → Modul → Mavzu) */}
             <div className="space-y-1">
-              {folders.map((folder) => {
-                const isExpanded = expandedFolders.includes(folder.id);
-                const folderQuestions = getQuestionsInFolder(folder.id);
-                return (
-                  <div
-                    key={folder.id}
-                    className="group"
-                    onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add("ring-2", "ring-primary-300"); }}
-                    onDragLeave={(e) => { e.currentTarget.classList.remove("ring-2", "ring-primary-300"); }}
-                    onDrop={(e) => { e.preventDefault(); e.currentTarget.classList.remove("ring-2", "ring-primary-300"); handleDropOnFolder(folder.id); }}
-                  >
-                    {editingFolderId === folder.id ? (
-                      <div className="flex items-center gap-1 px-2 py-1">
-                        <input value={editFolderName} onChange={(e) => setEditFolderName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && saveEditFolder(folder.id)} className="flex-1 text-sm border border-gray-200 rounded px-2 py-0.5 focus:outline-none" autoFocus />
-                        <button onClick={() => saveEditFolder(folder.id)} className="text-green-500 text-xs font-bold">✓</button>
-                        <button onClick={() => setEditingFolderId(null)} className="text-gray-400 p-0.5"><X className="w-3.5 h-3.5" /></button>
-                      </div>
-                    ) : (
-                      <>
-                        <div
-                          onClick={() => toggleFolder(folder.id)}
-                          className="flex items-center justify-between px-2 py-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors"
-                        >
-                          <div className="flex items-center gap-2">
-                            {isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-gray-400" /> : <ChevRight className="w-3.5 h-3.5 text-gray-400" />}
-                            <span>📁</span>
-                            <span className="text-sm font-medium text-gray-700">{folder.name}</span>
-                            <span className="text-[10px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-full min-w-[18px] text-center">{folderQuestions.length}</span>
-                          </div>
-                          <div className="hidden group-hover:flex items-center">
-                            <button onClick={(e) => { e.stopPropagation(); setEditingFolderId(folder.id); setEditFolderName(folder.name); }} className="text-gray-400 hover:text-primary-500 p-0.5"><Edit className="w-3 h-3" /></button>
-                            <button onClick={(e) => { e.stopPropagation(); deleteFolder(folder.id); }} className="text-gray-400 hover:text-red-500 p-0.5"><Trash2 className="w-3 h-3" /></button>
-                          </div>
-                        </div>
-                        {/* Expanded — papka ichidagi testlar */}
-                        {isExpanded && (
-                          <div className="ml-6 mt-1 space-y-1 mb-2">
-                            {folderQuestions.length === 0 ? (
-                              <p className="text-[10px] text-gray-400 italic px-2">Bo'sh — testlarni shu yerga tashlang</p>
-                            ) : (
-                              folderQuestions.map((q) => (
-                                <div key={q.id} onClick={() => scrollToQuestion(q.id)} className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-primary-50 text-xs cursor-pointer transition-colors">
-                                  <span className="w-1.5 h-1.5 bg-primary-400 rounded-full shrink-0" />
-                                  <span className="text-gray-600 truncate hover:text-primary-600">{q.content.startsWith("[") || q.content.startsWith("data:") ? "📷 Rasmli savol" : q.content.slice(0, 40) + "..."}</span>
-                                </div>
-                              ))
-                            )}
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                );
-              })}
+              {renderFolderTree(null, 0)}
               {folders.length === 0 && <p className="text-xs text-gray-400 text-center py-4">Papka yo'q</p>}
             </div>
 
@@ -354,7 +413,29 @@ export default function TestBuilder() {
                     <input type="checkbox" checked={selectedIds.includes(q.id)} onChange={() => toggleSelect(q.id)} className="mt-1 w-4 h-4 text-primary-500 rounded shrink-0" />
                     <div className="flex-1 min-w-0">
                         <>
-                          <p className="text-sm text-gray-900 break-words">{q.content.startsWith("[IMAGES:") || q.content.startsWith("data:") ? "📷 Rasmli savol" : q.content}</p>
+                          <div className="text-sm text-gray-900 break-words">
+                            {q.content.startsWith("[IMAGES:") || q.content.startsWith("data:")
+                              ? "📷 Rasmli savol"
+                              : <LatexText text={q.content} />}
+                          </div>
+
+                          {/* Javob variantlari — LaTeX render bilan */}
+                          {q.options && q.options.some((o) => o.text?.trim()) && (
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2">
+                              {q.options.filter((o) => o.text?.trim()).map((o) => (
+                                <div key={o.label} className="flex items-start gap-1.5 text-xs">
+                                  <span className={`shrink-0 font-semibold ${q.correctAnswer === o.label ? "text-green-600" : "text-gray-400"}`}>
+                                    {o.label})
+                                  </span>
+                                  <span className={q.correctAnswer === o.label ? "text-green-700 font-medium" : "text-gray-600"}>
+                                    <LatexText text={o.text} />
+                                  </span>
+                                  {q.correctAnswer === o.label && <span className="text-green-600 shrink-0">✓</span>}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
                           <div className="flex items-center gap-3 mt-2">
                             <span className="text-xs text-gray-500">⏱ {q.time}</span>
                             {q.tags.map((tag) => <span key={tag} className="text-xs text-gray-500">#{tag}</span>)}

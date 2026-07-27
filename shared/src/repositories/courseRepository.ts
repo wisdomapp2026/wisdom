@@ -206,6 +206,56 @@ export async function getFolderOnlineCount(courseId: string, folderId: string): 
   }).length;
 }
 
+// ============ COURSE PRESENCE (Kursda hozir turgan onlayn userlar) ============
+
+// ============ TOPIC PRESENCE (Mavzuni o'qiyotgan onlayn userlar) ============
+
+export async function markTopicPresence(courseId: string, topicId: string, userId: string): Promise<void> {
+  await setDoc(doc(db, COURSES_COL, courseId, "topics", topicId, "presence", userId), {
+    userId,
+    lastSeen: Date.now(),
+  });
+}
+
+export async function clearTopicPresence(courseId: string, topicId: string, userId: string): Promise<void> {
+  await deleteDoc(doc(db, COURSES_COL, courseId, "topics", topicId, "presence", userId));
+}
+
+/** Mavzuni hozir o'qiyotgan onlayn userlar ro'yxati (oxirgi 60 soniyada faol) */
+export async function getTopicPresenceUsers(courseId: string, topicId: string): Promise<string[]> {
+  const snap = await getDocs(collection(db, COURSES_COL, courseId, "topics", topicId, "presence"));
+  const cutoff = Date.now() - 60000;
+  return snap.docs
+    .filter((d) => { const data = d.data() as { lastSeen?: number }; return (data.lastSeen || 0) >= cutoff; })
+    .map((d) => d.id);
+}
+
+/**
+ * Foydalanuvchi kursni ochganda "men shu kursdaman" deb belgilaydi.
+ * Har ~30 soniyada qayta chaqirilishi kerak (heartbeat).
+ */
+export async function markCoursePresence(courseId: string, userId: string): Promise<void> {
+  await setDoc(doc(db, COURSES_COL, courseId, "presence", userId), {
+    userId,
+    lastSeen: Date.now(),
+  });
+}
+
+/** Foydalanuvchi kursdan chiqqanda presence ni o'chirish */
+export async function clearCoursePresence(courseId: string, userId: string): Promise<void> {
+  await deleteDoc(doc(db, COURSES_COL, courseId, "presence", userId));
+}
+
+/** Kursda hozir turgan onlayn userlar soni (oxirgi 60 soniyada faol) */
+export async function getCourseOnlineCount(courseId: string): Promise<number> {
+  const snap = await getDocs(collection(db, COURSES_COL, courseId, "presence"));
+  const cutoff = Date.now() - 60000; // 60 soniya
+  return snap.docs.filter((d) => {
+    const data = d.data() as { lastSeen?: number };
+    return (data.lastSeen || 0) >= cutoff;
+  }).length;
+}
+
 // ============ TOPICS ============
 export async function getTopicsByCourse(courseId: string): Promise<Topic[]> {
   const q = query(

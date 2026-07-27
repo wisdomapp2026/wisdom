@@ -114,8 +114,28 @@ export async function getUserSubscription(userId: string): Promise<Subscription 
   return snap.empty ? null : (snap.docs[0].data() as Subscription);
 }
 
+/** Foydalanuvchining barcha obunalarini olish (faol + bekor qilingan — tarix uchun) */
+export async function getAllUserSubscriptions(userId: string): Promise<Subscription[]> {
+  const q = query(
+    collection(db, "subscriptions"),
+    where("userId", "==", userId)
+  );
+  const snap = await getDocs(q);
+  return snap.docs
+    .map((d) => d.data() as Subscription)
+    .sort((a, b) => (b.startDate || 0) - (a.startDate || 0));
+}
+
 export async function createSubscription(sub: Subscription): Promise<void> {
   await setDoc(doc(db, "subscriptions", sub.id), sub);
+}
+
+/** Admin tomonidan obunani bekor qilish */
+export async function cancelSubscription(subscriptionId: string): Promise<void> {
+  await updateDoc(doc(db, "subscriptions", subscriptionId), {
+    status: "cancelled",
+    cancelledAt: Date.now(),
+  });
 }
 
 // ============ PAYMENTS ============

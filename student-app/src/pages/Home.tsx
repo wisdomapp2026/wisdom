@@ -91,16 +91,16 @@ export default function Home() {
       .slice(0, 10);
 
     // Progress olish — login yoki guest
-    let progressMap: Record<string, number> = {};
+    let progressMap: Record<string, { completedTopics: string[] }> = {};
     if (user) {
       const allProgress = await cachedFetch(`progress-${user.uid}`, () => getAllProgressByUser(user.uid));
       for (const p of allProgress) {
-        progressMap[p.courseId] = p.progressPercent || 0;
+        progressMap[p.courseId] = { completedTopics: p.completedTopics || [] };
       }
     } else {
       const localData = getLocalProgress();
       for (const [courseId, p] of Object.entries(localData)) {
-        progressMap[courseId] = p.progressPercent || 0;
+        progressMap[courseId] = { completedTopics: p.completedTopics || [] };
       }
     }
 
@@ -110,7 +110,14 @@ export default function Home() {
           cachedFetch(`topics-${c.id}`, () => getTopicsByCourse(c.id)),
           cachedFetch(`students-${c.id}`, () => getStudentCountByCourse(c.id)),
         ]);
-        return { ...c, topicCount: topics.length, studentCount: students, progress: progressMap[c.id] || 0 };
+        // Progress ni haqiqiy mavzular asosida hisoblash
+        const userProgress = progressMap[c.id];
+        let progress = 0;
+        if (userProgress && topics.length > 0) {
+          const validCompleted = userProgress.completedTopics.filter((id) => topics.some((t) => t.id === id));
+          progress = Math.min(100, Math.round((validCompleted.length / topics.length) * 100));
+        }
+        return { ...c, topicCount: topics.length, studentCount: students, progress };
       })
     );
     setCourses(withMeta);
@@ -257,7 +264,7 @@ export default function Home() {
 
       {/* Banner carousel */}
       {banners.length > 0 && (
-        <div className="mx-5 mt-4 relative">
+        <div className="mx-5 mt-0 relative">
           <div
             className="flex gap-3 overflow-x-auto snap-x snap-mandatory scrollbar-hide -mx-5 px-5"
             style={{ cursor: "grab" }}
@@ -298,8 +305,12 @@ export default function Home() {
             {banners.map((banner) => (
               <div
                 key={banner.id}
-                className="snap-center shrink-0 w-full rounded-2xl p-5 relative overflow-hidden"
+                className="snap-center shrink-0 w-full rounded-2xl p-5 relative overflow-hidden cursor-pointer"
                 style={{ backgroundColor: banner.bgColor, minWidth: "calc(100% - 0px)", minHeight: "180px" }}
+                onClick={() => {
+                  if (banner.courseId) navigate(`/course/${banner.courseId}`);
+                  else if (banner.linkUrl) window.open(banner.linkUrl, "_blank");
+                }}
               >
                 {banner.imageUrl && !banner.imageFullWidth && (
                   <img src={banner.imageUrl} alt="" className="absolute right-0 top-0 h-full w-1/3" style={{ objectFit: banner.imageFit || "cover", objectPosition: banner.imagePosition || "center", opacity: (banner.imageOpacity ?? 50) / 100 }} />
@@ -321,29 +332,32 @@ export default function Home() {
                     {banner.subtitle}
                   </p>
                 )}
-                <button
-                  onClick={() => {
-                    if (banner.courseId) navigate(`/course/${banner.courseId}`);
-                    else if (banner.linkUrl) window.open(banner.linkUrl, "_blank");
-                  }}
-                  className={
-                    banner.buttonPosition
-                      ? "absolute bg-gray-900 text-white text-sm font-medium px-4 py-2 rounded-lg z-10 active:bg-gray-800"
-                      : "mt-3 bg-gray-900 text-white text-sm font-medium px-4 py-2 rounded-lg relative z-10 active:bg-gray-800"
-                  }
-                  style={
-                    banner.buttonPosition
-                      ? (() => {
-                          const m = banner.buttonPosition!.match(/([\d.]+)%?\s+([\d.]+)%?/);
-                          const x = m ? parseFloat(m[1]) : 50;
-                          const y = m ? parseFloat(m[2]) : 50;
-                          return { left: `${x}%`, top: `${y}%`, transform: "translate(-50%, -50%)" };
-                        })()
-                      : undefined
-                  }
-                >
-                  {banner.buttonText}
-                </button>
+                {banner.showButton !== false && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (banner.courseId) navigate(`/course/${banner.courseId}`);
+                      else if (banner.linkUrl) window.open(banner.linkUrl, "_blank");
+                    }}
+                    className={
+                      banner.buttonPosition
+                        ? "absolute bg-gray-900 text-white text-sm font-medium px-4 py-2 rounded-lg z-10 active:bg-gray-800"
+                        : "mt-3 bg-gray-900 text-white text-sm font-medium px-4 py-2 rounded-lg relative z-10 active:bg-gray-800"
+                    }
+                    style={
+                      banner.buttonPosition
+                        ? (() => {
+                            const m = banner.buttonPosition!.match(/([\d.]+)%?\s+([\d.]+)%?/);
+                            const x = m ? parseFloat(m[1]) : 50;
+                            const y = m ? parseFloat(m[2]) : 50;
+                            return { left: `${x}%`, top: `${y}%`, transform: "translate(-50%, -50%)" };
+                          })()
+                        : undefined
+                    }
+                  >
+                    {banner.buttonText}
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -440,7 +454,7 @@ export default function Home() {
             <Link to={`/course/${c.id}`} key={i} className="block border border-gray-100 rounded-2xl overflow-hidden hover:shadow-md transition-shadow bg-white">
               {/* Muqova rasmi */}
               {c.coverImage ? (
-                <div className="h-40 overflow-hidden">
+                <div className="h-40 overflow-hidden relative">
                   <img
                     src={c.coverImage}
                     alt={c.title}
@@ -448,12 +462,22 @@ export default function Home() {
                     loading="lazy"
                     style={{ objectFit: c.coverFit || "cover", objectPosition: c.coverPosition || "50% 50%" }}
                   />
+                  {c.isPremium && (
+                    <span className="absolute top-2 right-2 bg-yellow-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow">
+                      👑 Premium
+                    </span>
+                  )}
                 </div>
               ) : (
-                <div className="h-32 bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
+                <div className="h-32 bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center relative">
                   <svg className="w-10 h-10 text-white/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                     <path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                   </svg>
+                  {c.isPremium && (
+                    <span className="absolute top-2 right-2 bg-yellow-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow">
+                      👑 Premium
+                    </span>
+                  )}
                 </div>
               )}
 
@@ -467,9 +491,16 @@ export default function Home() {
                     </svg>
                   </div>
                   <div className="text-right space-y-0.5">
-                    <p className="text-xs text-gray-500 flex items-center justify-end gap-1">
-                      👥 Kursdagi o'quvchilar: <span className="font-semibold text-gray-700">{c.studentCount || 0}</span>
-                    </p>
+                    <div className="flex items-center justify-end gap-2">
+                      {c.category && (
+                        <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                          {c.category}
+                        </span>
+                      )}
+                      <p className="text-xs text-gray-500 flex items-center gap-1">
+                        👥 Kursdagi o'quvchilar: <span className="font-semibold text-gray-700">{c.studentCount || 0}</span>
+                      </p>
+                    </div>
                     <p className="text-xs flex items-center justify-end gap-1">
                       <span className="w-2 h-2 bg-green-500 rounded-full inline-block" />
                       <span className="text-green-600 font-medium">Hozir onlayn: {c.onlineNow || 0}</span>
@@ -477,14 +508,9 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* Kurs nomi va kategoriya */}
-                <div className="flex items-center justify-between gap-2 mb-2">
+                {/* Kurs nomi */}
+                <div className="mb-2">
                   <h3 className="text-lg font-bold text-gray-900 leading-tight">{c.title}</h3>
-                  {c.category && (
-                    <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-gray-100 text-gray-600 shrink-0">
-                      {c.category}
-                    </span>
-                  )}
                 </div>
 
                 {/* Tavsif */}
@@ -724,7 +750,7 @@ function NewsDetailModal({ item, onClose }: { item: NewsItem; onClose: () => voi
 
   function getEmbedUrl(url: string): string {
     const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/);
-    return match ? `https://www.youtube.com/embed/${match[1]}?autoplay=1` : url;
+    return match ? `https://www.youtube-nocookie.com/embed/${match[1]}?autoplay=1&controls=0&modestbranding=1&rel=0&showinfo=0&iv_load_policy=3&disablekb=1` : url;
   }
 
   return (

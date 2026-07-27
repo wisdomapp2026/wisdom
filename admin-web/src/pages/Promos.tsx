@@ -13,6 +13,13 @@ export default function Promos() {
   const [newMaxUses, setNewMaxUses] = useState(0);
   const [saving, setSaving] = useState(false);
 
+  // Edit state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editCode, setEditCode] = useState("");
+  const [editDiscount, setEditDiscount] = useState(10);
+  const [editMaxUses, setEditMaxUses] = useState(0);
+  const [editSaving, setEditSaving] = useState(false);
+
   useEffect(() => { loadData(); }, []);
 
   async function loadData() {
@@ -40,6 +47,33 @@ export default function Promos() {
     setNewDiscount(10);
     setNewMaxUses(0);
     setSaving(false);
+    await loadData();
+  }
+
+  function startEdit(promo: PromoCode) {
+    setEditingId(promo.id);
+    setEditCode(promo.code);
+    setEditDiscount(promo.discountPercent);
+    setEditMaxUses(promo.maxUses);
+  }
+
+  function cancelEdit() {
+    setEditingId(null);
+    setEditCode("");
+    setEditDiscount(10);
+    setEditMaxUses(0);
+  }
+
+  async function handleEditSave() {
+    if (!editingId || !editCode.trim()) return;
+    setEditSaving(true);
+    await updatePromoCode(editingId, {
+      code: editCode.trim().toUpperCase(),
+      discountPercent: editDiscount,
+      maxUses: editMaxUses,
+    });
+    setEditSaving(false);
+    cancelEdit();
     await loadData();
   }
 
@@ -111,17 +145,47 @@ export default function Promos() {
             <tbody>
               {promos.map((p) => (
                 <tr key={p.id} className="border-b border-gray-50">
-                  <td className="px-4 py-3 font-mono font-bold text-gray-900">{p.code}</td>
-                  <td className="px-4 py-3 text-primary-500 font-semibold">{p.discountPercent}%</td>
-                  <td className="px-4 py-3 text-gray-600">{p.usedCount} / {p.maxUses || "∞"}</td>
-                  <td className="px-4 py-3">
-                    <LoadingButton onClick={() => handleToggle(p.id, p.isActive)} className={`text-xs px-2 py-1 rounded-full font-medium ${p.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
-                      {p.isActive ? "Faol" : "O'chiq"}
-                    </LoadingButton>
-                  </td>
-                  <td className="px-4 py-3 text-right">
-                    <LoadingButton onClick={() => handleDelete(p.id)} className="p-1.5 text-gray-400 hover:text-red-500 rounded" iconOnly><Trash2 className="w-4 h-4" /></LoadingButton>
-                  </td>
+                  {editingId === p.id ? (
+                    <>
+                      <td className="px-4 py-2">
+                        <input value={editCode} onChange={(e) => setEditCode(e.target.value.toUpperCase())} className="w-full px-2 py-1.5 bg-gray-50 border border-gray-200 rounded text-sm font-mono uppercase" />
+                      </td>
+                      <td className="px-4 py-2">
+                        <input type="number" min={1} max={100} value={editDiscount} onChange={(e) => setEditDiscount(Number(e.target.value))} className="w-20 px-2 py-1.5 bg-gray-50 border border-gray-200 rounded text-sm" />
+                      </td>
+                      <td className="px-4 py-2">
+                        <input type="number" min={0} value={editMaxUses} onChange={(e) => setEditMaxUses(Number(e.target.value))} className="w-20 px-2 py-1.5 bg-gray-50 border border-gray-200 rounded text-sm" />
+                      </td>
+                      <td className="px-4 py-2">
+                        <LoadingButton onClick={() => handleToggle(p.id, p.isActive)} className={`text-xs px-2 py-1 rounded-full font-medium ${p.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                          {p.isActive ? "Faol" : "O'chiq"}
+                        </LoadingButton>
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <LoadingButton loading={editSaving} onClick={handleEditSave} className="p-1.5 text-green-600 hover:bg-green-50 rounded" iconOnly><Check className="w-4 h-4" /></LoadingButton>
+                          <button onClick={cancelEdit} className="p-1.5 text-gray-400 hover:text-gray-600 rounded"><X className="w-4 h-4" /></button>
+                        </div>
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td className="px-4 py-3 font-mono font-bold text-gray-900">{p.code}</td>
+                      <td className="px-4 py-3 text-primary-500 font-semibold">{p.discountPercent}%</td>
+                      <td className="px-4 py-3 text-gray-600">{p.usedCount} / {p.maxUses || "∞"}</td>
+                      <td className="px-4 py-3">
+                        <LoadingButton onClick={() => handleToggle(p.id, p.isActive)} className={`text-xs px-2 py-1 rounded-full font-medium ${p.isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                          {p.isActive ? "Faol" : "O'chiq"}
+                        </LoadingButton>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button onClick={() => startEdit(p)} className="p-1.5 text-gray-400 hover:text-blue-500 rounded"><Edit className="w-4 h-4" /></button>
+                          <LoadingButton onClick={() => handleDelete(p.id)} className="p-1.5 text-gray-400 hover:text-red-500 rounded" iconOnly><Trash2 className="w-4 h-4" /></LoadingButton>
+                        </div>
+                      </td>
+                    </>
+                  )}
                 </tr>
               ))}
             </tbody>

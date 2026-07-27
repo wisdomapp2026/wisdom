@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { Search, Loader2, Eye, Users, X, Edit, Key, BookOpen, FileText, CreditCard, Ban, Trash2, ShieldOff, Clock } from "lucide-react";
-import { getAllStudents, getAllProgressByUser, getTestResultsByUser, getRecentPayments, getPaymentsByUser, updateUser, banUser, unbanUser, deleteUserCompletely, getTodayActiveStudents, getAllStudentActivities, getCertificatesByUser } from "@shared/repositories";
-import type { User, UserProgress, TestResult, Payment, UserActivity, Certificate } from "@shared/types";
+import { Search, Loader2, Eye, Users, X, Edit, Key, BookOpen, FileText, CreditCard, Ban, Trash2, ShieldOff, Clock, Monitor } from "lucide-react";
+import { getAllStudents, getAllProgressByUser, getTestResultsByUser, getRecentPayments, getPaymentsByUser, updateUser, banUser, unbanUser, deleteUserCompletely, getTodayActiveStudents, getAllStudentActivities, getCertificatesByUser, getAllUserSubscriptions, cancelSubscription, getUserDevices, forceRemoveDevice, removeAllUserDevices } from "@shared/repositories";
+import type { User, UserProgress, TestResult, Payment, UserActivity, Certificate, Subscription } from "@shared/types";
 import LoadingButton from "../components/LoadingButton";
 
 export default function Students() {
@@ -186,12 +186,14 @@ export default function Students() {
 
 // ===== Student Detail Modal =====
 function StudentDetailModal({ student, onClose, onUpdated }: { student: User; onClose: () => void; onUpdated: () => void }) {
-  const [activeTab, setActiveTab] = useState<"info" | "courses" | "tests" | "payments" | "certificates">("info");
+  const [activeTab, setActiveTab] = useState<"info" | "courses" | "tests" | "payments" | "certificates" | "devices">("info");
   const [zoomAvatar, setZoomAvatar] = useState(false);
   const [progress, setProgress] = useState<UserProgress[]>([]);
   const [testResults, setTestResults] = useState<TestResult[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [certificates, setCertificates] = useState<Certificate[]>([]);
+  const [studentSubs, setStudentSubs] = useState<Subscription[]>([]);
+  const [devices, setDevices] = useState<any[]>([]);
   const [loadingData, setLoadingData] = useState(true);
 
   // Edit fields
@@ -229,20 +231,34 @@ function StudentDetailModal({ student, onClose, onUpdated }: { student: User; on
   async function loadStudentData() {
     setLoadingData(true);
     try {
-      const [prog, results, certs, pays] = await Promise.all([
+      const [prog, results, certs, pays, subs, devs] = await Promise.all([
         getAllProgressByUser(student.id),
         getTestResultsByUser(student.id),
         getCertificatesByUser(student.id),
         getPaymentsByUser(student.id),
+        getAllUserSubscriptions(student.id),
+        getUserDevices(student.id),
       ]);
       setProgress(prog);
       setTestResults(results);
       setCertificates(certs);
       setPayments(pays);
+      setStudentSubs(subs);
+      setDevices(devs);
     } catch (err) {
       console.error("O'quvchi ma'lumotlarini yuklashda xatolik:", err);
     } finally {
       setLoadingData(false);
+    }
+  }
+
+  async function handleCancelSubscription(subId: string) {
+    if (!confirm("Bu obunani bekor qilmoqchimisiz? O'quvchi premium mavzularga kira olmaydi.")) return;
+    try {
+      await cancelSubscription(subId);
+      setStudentSubs((prev) => prev.filter((s) => s.id !== subId));
+    } catch (err) {
+      console.error("Obuna bekor qilishda xatolik:", err);
     }
   }
 
@@ -331,6 +347,7 @@ function StudentDetailModal({ student, onClose, onUpdated }: { student: User; on
             { id: "tests", label: "Test natijalari", icon: FileText },
             { id: "payments", label: "To'lovlar", icon: CreditCard },
             { id: "certificates", label: "Sertifikatlar", icon: FileText },
+            { id: "devices", label: "Qurilmalar", icon: Monitor },
           ].map((tab) => (
             <button
               key={tab.id}
@@ -454,14 +471,77 @@ function StudentDetailModal({ student, onClose, onUpdated }: { student: User; on
 
           {/* Payments tab */}
           {!loadingData && activeTab === "payments" && (
-            <div className="space-y-3">
-              {payments.length === 0 ? (
-                <p className="text-center text-gray-400 py-8">Hali to'lov qilinmagan</p>
-              ) : (
-                payments.map((p) => (
-                  <PaymentCard key={p.id} payment={p} />
-                ))
+            <div className="space-y-4">
+              {/* Faol obunalar */}
+              {studentSubs.filter(s => s.status === "active" && s.endDate > Date.now()).length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-900 mb-2">Faol obunalar</h4>
+                  <div className="space-y-2">
+                    {studentSubs.filter(s => s.status === "active" && s.endDate > Date.now()).map((sub) => (
+                      <div key={sub.id} className="flex items-center justify-between bg-green-50 border border-green-200 rounded-xl p-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-9 h-9 bg-green-100 rounded-lg flex items-center justify-center shrink-0">
+                            <span className="text-green-600 text-sm">✓</span>
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-gray-900 truncate">{sub.plan}</p>
+                            <p className="text-[10px] text-gray-500">
+                              {sub.courseId ? `Kurs: ${sub.courseId}` : "Umumiy obuna"} · Muddati: {new Date(sub.endDate).toLocaleDateString("uz")}
+                            </p>
+                            <p className="text-[10px] text-gray-400">Ulangan: {new Date(sub.startDate).toLocaleDateString("uz")}</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleCancelSubscription(sub.id)}
+                          className="shrink-0 px-3 py-1.5 bg-red-50 border border-red-200 text-red-600 text-xs font-medium rounded-lg hover:bg-red-100 transition-colors"
+                        >
+                          Bekor qilish
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               )}
+
+              {/* Bekor qilingan obunalar tarixi */}
+              {studentSubs.filter(s => s.status === "cancelled").length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-gray-900 mb-2">Obuna tarixi</h4>
+                  <div className="space-y-2">
+                    {studentSubs.filter(s => s.status === "cancelled").map((sub) => (
+                      <div key={sub.id} className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-xl p-3 opacity-70">
+                        <div className="w-9 h-9 bg-red-50 rounded-lg flex items-center justify-center shrink-0">
+                          <span className="text-red-400 text-sm">✕</span>
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-gray-700 truncate">{sub.plan}</p>
+                          <p className="text-[10px] text-gray-500">
+                            {sub.courseId ? `Kurs: ${sub.courseId}` : "Umumiy obuna"}
+                          </p>
+                          <p className="text-[10px] text-gray-400">
+                            Ulangan: {new Date(sub.startDate).toLocaleDateString("uz")} · Bekor qilingan: {sub.cancelledAt ? new Date(sub.cancelledAt).toLocaleDateString("uz") : "—"}
+                          </p>
+                        </div>
+                        <span className="text-[10px] font-medium text-red-500 bg-red-50 px-2 py-0.5 rounded shrink-0">Bekor qilingan</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* To'lovlar */}
+              <div>
+                {(studentSubs.length > 0) && <h4 className="text-sm font-semibold text-gray-900 mb-2">To'lovlar tarixi</h4>}
+                {payments.length === 0 ? (
+                  <p className="text-center text-gray-400 py-8">Hali to'lov qilinmagan</p>
+                ) : (
+                  <div className="space-y-3">
+                    {payments.map((p) => (
+                      <PaymentCard key={p.id} payment={p} />
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -488,6 +568,65 @@ function StudentDetailModal({ student, onClose, onUpdated }: { student: User; on
                   </div>
                 ))
               )}
+            </div>
+          )}
+
+          {/* Devices tab */}
+          {!loadingData && activeTab === "devices" && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm text-gray-600">Ro'yxatdagi qurilmalar: <strong>{devices.length}</strong> / 3</p>
+                {devices.length > 0 && (
+                  <LoadingButton
+                    onClick={async () => {
+                      if (!confirm("Barcha qurilmalarni o'chirmoqchimisiz? O'quvchi barcha qurilmalardan chiqariladi.")) return;
+                      await removeAllUserDevices(student.id);
+                      setDevices([]);
+                    }}
+                    className="text-xs px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
+                  >
+                    Barchasini o'chirish
+                  </LoadingButton>
+                )}
+              </div>
+              {devices.length === 0 ? (
+                <p className="text-center text-gray-400 py-8">Hozirda aktiv qurilma yo'q</p>
+              ) : (
+                devices.map((device: any) => {
+                  const isActive = Date.now() - device.lastSeen < 120000;
+                  return (
+                    <div key={device.id} className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl border border-gray-100">
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${isActive ? "bg-green-50" : "bg-gray-100"}`}>
+                        <Monitor className={`w-5 h-5 ${isActive ? "text-green-500" : "text-gray-400"}`} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium text-gray-900">{device.deviceName || "Noma'lum qurilma"}</p>
+                          {isActive && <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />}
+                        </div>
+                        <p className="text-xs text-gray-500">
+                          {isActive ? "Hozir faol" : `Oxirgi faollik: ${new Date(device.lastSeen).toLocaleString("uz")}`}
+                        </p>
+                        <p className="text-[10px] text-gray-400 font-mono mt-0.5">{device.id}</p>
+                      </div>
+                      <LoadingButton
+                        onClick={async () => {
+                          await forceRemoveDevice(student.id, device.id);
+                          setDevices((prev: any[]) => prev.filter((d: any) => d.id !== device.id));
+                        }}
+                        className="text-xs px-2.5 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
+                      >
+                        Chiqarish
+                      </LoadingButton>
+                    </div>
+                  );
+                })
+              )}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mt-2">
+                <p className="text-xs text-blue-700">
+                  💡 Bitta hisob maksimum 3 ta qurilmadan kirishga ruxsat etiladi. "Chiqarish" tugmasi bilan o'quvchining ma'lum qurilmasini majburan chiqarib yuborishingiz mumkin.
+                </p>
+              </div>
             </div>
           )}
         </div>

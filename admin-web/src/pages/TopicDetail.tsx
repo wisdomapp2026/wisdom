@@ -3,6 +3,16 @@ import { useState, useEffect } from "react";
 import { ChevronRight, Plus, Edit, Trash2, Play, Loader2, Lock, Unlock, Eye, EyeOff, Video, FileText, GripVertical, Save } from "lucide-react";
 import { getTopicById, getProblemsByTopic, updateTopic, deleteTopic, deleteProblem, updateProblem, getTestsByCourse, updateTest, deleteTest } from "@shared/repositories";
 import type { Topic, Problem, Test } from "@shared/types";
+
+/** Topic title dan "N-modul:" qismini olib tashlab, "N-mavzu: Nom" formatida qaytaradi */
+function cleanTopicTitle(title: string): string {
+  const fullMatch = title.match(/^\d+-modul:\s*(\d+)\s*-\s*mavzu:\s*(.*)/i);
+  if (fullMatch) return `${fullMatch[1]}-mavzu: ${fullMatch[2]}`;
+  if (/^\d+-mavzu:/i.test(title)) return title;
+  const modulMatch = title.match(/^(\d+)-modul:\s*(.*)/i);
+  if (modulMatch) return `${modulMatch[1]}-mavzu: ${modulMatch[2]}`;
+  return title;
+}
 import CreateProblemModal from "../components/CreateProblemModal";
 import ImportTestModal from "../components/ImportTestModal";
 import LoadingButton from "../components/LoadingButton";
@@ -148,7 +158,7 @@ export default function TopicDetail() {
 
   async function handleDeleteTopic() {
     if (!courseId || !topicId) return;
-    if (!confirm(`"${topic?.title}" modulini o'chirishga ishonchingiz komilmi? Ichidagi barcha misollar ham o'chiriladi.`)) return;
+    if (!confirm(`"${cleanTopicTitle(topic?.title || "")}" mavzusini o'chirishga ishonchingiz komilmi? Ichidagi barcha misollar ham o'chiriladi.`)) return;
     await deleteTopic(courseId, topicId);
     navigate(`/courses/${courseId}`);
   }
@@ -187,7 +197,7 @@ export default function TopicDetail() {
         <ChevronRight className="w-4 h-4" />
         <Link to={`/courses/${courseId}`} className="hover:text-primary-500">Kurs</Link>
         <ChevronRight className="w-4 h-4" />
-        <span className="text-gray-900 font-medium">{topic.title}</span>
+        <span className="text-gray-900 font-medium">{cleanTopicTitle(topic.title)}</span>
       </div>
 
       {/* Topic header */}
@@ -215,7 +225,7 @@ export default function TopicDetail() {
           /* View mode */
           <div className="flex items-start justify-between">
             <div>
-              <h1 className="text-xl font-bold text-gray-900">{topic.title}</h1>
+              <h1 className="text-xl font-bold text-gray-900">{cleanTopicTitle(topic.title)}</h1>
               <p className="text-gray-500 mt-1">{topic.description}</p>
               <div className="flex items-center gap-3 mt-3 text-sm text-gray-500">
                 <span>📝 {problems.length} ta misol</span>
@@ -259,7 +269,7 @@ export default function TopicDetail() {
       />
 
       {/* Add problem / Add test */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 sticky top-0 z-20 bg-gray-50 py-3 -mx-6 px-6 border-b border-gray-100 shadow-sm">
         <button onClick={() => setShowProblemModal(true)} className="btn-primary flex items-center gap-2 text-sm">
           <Plus className="w-4 h-4" />
           Yangi misol qo'shish

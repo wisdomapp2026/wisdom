@@ -28,9 +28,11 @@ import AllNews from "./pages/AllNews";
 import PromoPage from "./pages/PromoPage";
 import StudentNotifications from "./pages/StudentNotifications";
 import BannedScreen from "./components/BannedScreen";
+import DeviceLimitScreen from "./components/DeviceLimitScreen";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { useAuth } from "./hooks/useAuth";
 import { useActivityTracker } from "./hooks/useActivityTracker";
+import { useDeviceSession } from "./hooks/useDeviceSession";
 import { getUserById } from "@shared/repositories";
 import { syncLocalProgressToDb, hasLocalProgress } from "./hooks/useLocalProgress";
 import type { User } from "@shared/types";
@@ -61,6 +63,9 @@ export default function App() {
 
   // O'quvchi faolligini kuzatish (kunlik ishlatish vaqti)
   useActivityTracker(user?.uid, userData?.name || user?.displayName || undefined);
+
+  // Qurilma sessiyasini tekshirish (3 ta qurilma limiti)
+  const { checking: deviceChecking, allowed: deviceAllowed, activeDevices, maxDevices } = useDeviceSession(user?.uid);
 
   // Interfeys temasini Firestore'dan yuklash va CSS custom properties orqali qo'llash
   useEffect(() => {
@@ -103,6 +108,23 @@ export default function App() {
     );
   }
 
+  // Qurilma sessiyasi tekshirilayotganda
+  if (user && deviceChecking) {
+    return (
+      <div className="page-content flex items-center justify-center min-h-screen">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-12 h-12 border-[3px] border-primary-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-gray-400">Qurilma tekshirilmoqda...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Qurilma limiti oshgan bo'lsa
+  if (user && !deviceAllowed) {
+    return <DeviceLimitScreen activeDevices={activeDevices} maxDevices={maxDevices} />;
+  }
+
   // Ban qilingan bo'lsa
   if (user && userData?.isBanned) {
     return <BannedScreen userId={user.uid} userName={userData.name} />;
@@ -134,7 +156,7 @@ export default function App() {
         <Route path="/course/:courseId/topic/:topicId" element={<TopicDetail />} />
         <Route path="/test/:testId" element={<TestScreen />} />
         <Route path="/test-result" element={<TestResult />} />
-        <Route path="/subscription" element={<Subscription />} />
+        <Route path="/subscription" element={<Navigate to="/courses" replace />} />
         <Route path="/payment" element={<Payment />} />
         <Route path="/premium-gate" element={<PremiumGate />} />
         <Route path="*" element={<Navigate to="/" replace />} />

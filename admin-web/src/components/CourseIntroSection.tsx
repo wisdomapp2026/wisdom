@@ -6,6 +6,7 @@ import { storage } from "@shared/firebase";
 import { deleteField } from "firebase/firestore";
 import type { Course, CourseIntroduction } from "@shared/types";
 import RichMathInput from "./RichMathInput";
+import RichTextEditor from "./RichTextEditor";
 import LatexText from "./LatexText";
 
 /** Ruxsat etilgan biriktirma fayl turlari (PDF, Word) */
@@ -252,24 +253,15 @@ export default function CourseIntroSection({ course, onUpdate }: Props) {
           <p className="text-xs text-gray-400 mt-1">Kurs haqida rasm qo'shish (banner yoki screenshot)</p>
         </div>
 
-        {/* Videodan keyingi matn — LaTeX formulalar yozish imkoni bilan */}
+        {/* Videodan keyingi matn — Rich Text Editor */}
         <div>
-          <RichMathInput
-            label="Videodan keyingi matn (ixtiyoriy)"
+          <RichTextEditor
+            label="Batafsil izoh (ixtiyoriy)"
             value={afterVideoText}
             onChange={setAfterVideoText}
-            placeholder="Video ostida ko'rsatiladigan qo'shimcha tushuntirish, dastur mazmuni yoki tavsiyalar... Masalan: $$x^2 + y^2 = r^2$$"
-            rows={4}
-            hint="Bu matn student ilovada video ostida ko'rinadi. Matematik formula uchun Σ Formulalar panelidan foydalaning yoki $$...$$ ichida LaTeX yozing."
+            placeholder="Kurs haqida batafsil tushuntirish, dastur mazmuni, ro'yxatlar... Word dan copy-paste qilsangiz stillar saqlanadi."
+            hint="Word yoki boshqa manbadan nusxa ko'chirib paste qilsangiz, shrift dizaynlari (qalin, qiyshiq, ro'yxatlar) avtomatik saqlanadi."
           />
-          {afterVideoText.trim() && (
-            <div className="mt-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
-              <p className="text-[10px] text-gray-400 uppercase font-medium mb-1.5">Ko'rinishi:</p>
-              <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
-                <LatexText text={afterVideoText} />
-              </p>
-            </div>
-          )}
         </div>
 
         {/* Biriktirilgan fayl (PDF/Word) */}

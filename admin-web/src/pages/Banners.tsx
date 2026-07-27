@@ -28,6 +28,7 @@ export default function Banners() {
   const [textColor, setTextColor] = useState("#ffffff");
   const [textOpacity, setTextOpacity] = useState(100);
   const [buttonPosition, setButtonPosition] = useState("");
+  const [showButton, setShowButton] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => { loadData(); }, []);
@@ -44,7 +45,7 @@ export default function Banners() {
     setTitle(""); setSubtitle(""); setButtonText("Boshlash"); setCourseId(""); setBgColor("#3b82f6");
     setImageFile(null); setImagePreview(""); setImagePosition("center"); setImageFit("cover"); setImageFullWidth(false);
     setImageOpacity(70);
-    setTextColor("#ffffff"); setTextOpacity(100); setButtonPosition("");
+    setTextColor("#ffffff"); setTextOpacity(100); setButtonPosition(""); setShowButton(true);
     setShowForm(true);
   }
 
@@ -57,12 +58,11 @@ export default function Banners() {
     setImageFullWidth(banner.imageFullWidth || false);
     setImageOpacity(banner.imageOpacity ?? (banner.imageFullWidth ? 70 : 50));
     setTextColor(banner.textColor || "#ffffff"); setTextOpacity(banner.textOpacity ?? 100);
-    setButtonPosition(banner.buttonPosition || "");
+    setButtonPosition(banner.buttonPosition || ""); setShowButton(banner.showButton !== false);
     setShowForm(true);
   }
 
   async function handleSave() {
-    if (!title.trim() || !buttonText.trim()) return;
     setSaving(true);
     const now = Date.now();
 
@@ -80,6 +80,7 @@ export default function Banners() {
           courseId: courseId || undefined, bgColor, imageUrl: imageUrl || undefined,
           imagePosition, imageFit, imageFullWidth, imageOpacity,
           textColor, textOpacity, buttonPosition: buttonPosition || undefined,
+          showButton,
         });
       } else {
         const banner: HomeBanner = {
@@ -88,6 +89,7 @@ export default function Banners() {
           bgColor, imageUrl: imageUrl || undefined,
           imagePosition, imageFit, imageFullWidth, imageOpacity,
           textColor, textOpacity, buttonPosition: buttonPosition || undefined,
+          showButton,
           isActive: true, order: banners.length + 1,
           createdAt: now, updatedAt: now,
         };
@@ -137,17 +139,43 @@ export default function Banners() {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Sarlavha *</label>
-              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Milliy sertifikatga tayyormisiz?" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm" required />
+              <label className="block text-sm font-medium text-gray-700 mb-1">Sarlavha</label>
+              <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Milliy sertifikatga tayyormisiz?" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm" />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Kichik matn</label>
               <input value={subtitle} onChange={(e) => setSubtitle(e.target.value)} placeholder="Ixtiyoriy qo'shimcha matn" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm" />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Tugma matni *</label>
-              <input value={buttonText} onChange={(e) => setButtonText(e.target.value)} placeholder="Boshlash" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm" required />
+
+            {/* Yo'naltirish turi tanlash */}
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Kursga yo'naltirish turi</label>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowButton(true)}
+                  className={`flex-1 px-4 py-3 rounded-lg border text-sm font-medium transition-all ${showButton ? "border-primary-400 bg-primary-50 text-primary-700 ring-1 ring-primary-200" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}
+                >
+                  🔘 Tugma orqali
+                  <p className="text-[10px] font-normal mt-0.5 opacity-70">Foydalanuvchi tugmani bosadi</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowButton(false)}
+                  className={`flex-1 px-4 py-3 rounded-lg border text-sm font-medium transition-all ${!showButton ? "border-primary-400 bg-primary-50 text-primary-700 ring-1 ring-primary-200" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}
+                >
+                  👆 To'g'ridan-to'g'ri
+                  <p className="text-[10px] font-normal mt-0.5 opacity-70">Banner bosilganda kursga o'tadi</p>
+                </button>
+              </div>
             </div>
+
+            {showButton && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Tugma matni</label>
+                <input value={buttonText} onChange={(e) => setButtonText(e.target.value)} placeholder="Boshlash" className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm" />
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Kursga yo'naltirish</label>
               <select value={courseId} onChange={(e) => setCourseId(e.target.value)} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm">
@@ -263,17 +291,57 @@ export default function Banners() {
               {/* Tavsiya o'lchami */}
               <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
                 <p className="text-xs text-blue-700 font-medium">📐 Tavsiya etiladigan rasm o'lchami:</p>
-                <p className="text-xs text-blue-600 mt-1">• To'liq yoyish uchun: <strong>800×200 px</strong> (4:1 nisbat)</p>
+                <p className="text-xs text-blue-600 mt-1">• To'liq yoyish uchun: <strong>800×450 px</strong> (16:9 nisbat)</p>
                 <p className="text-xs text-blue-600">• O'ng tomonda ko'rsatish uchun: <strong>300×200 px</strong></p>
                 <p className="text-xs text-blue-600">• Banner balandligi: ~130 px (mobilda), ~150 px (desktop)</p>
               </div>
             </div>
           )}
 
-          {/* Preview — rasm pozitsiyasini va tugma joyini drag qilib o'zgartirish */}
+          {/* Preview — student appdagi ko'rinish (mobil ramka) */}
+          <div>
+            <p className="text-xs text-gray-500 mb-2">📱 Student app dagi ko'rinishi:</p>
+            <div className="border-[3px] border-gray-800 rounded-[1.5rem] overflow-hidden mx-auto" style={{ width: "320px" }}>
+              <div className="bg-gray-50 p-4">
+                <div
+                  className="rounded-2xl p-5 relative overflow-hidden"
+                  style={{ backgroundColor: bgColor, minHeight: "160px" }}
+                >
+                  {imagePreview && !imageFullWidth && (
+                    <img src={imagePreview} alt="" className="absolute right-0 top-0 h-full w-1/3" style={{ objectFit: imageFit, objectPosition: imagePosition, opacity: imageOpacity / 100 }} draggable={false} />
+                  )}
+                  {imagePreview && imageFullWidth && (
+                    <img src={imagePreview} alt="" className="absolute inset-0 w-full h-full" style={{ objectFit: imageFit, objectPosition: imagePosition, opacity: imageOpacity / 100 }} draggable={false} />
+                  )}
+                  <h2 className="text-lg font-bold leading-tight relative z-10" style={{ color: textColor, opacity: textOpacity / 100 }}>
+                    {title || "Sarlavha"}
+                  </h2>
+                  {subtitle && (
+                    <p className="text-sm mt-1 relative z-10" style={{ color: textColor, opacity: (textOpacity / 100) * 0.8 }}>
+                      {subtitle}
+                    </p>
+                  )}
+                  {showButton && (() => {
+                    const bp = buttonPosition ? (() => { const m = buttonPosition.match(/([\d.]+)%?\s+([\d.]+)%?/); return m ? { x: parseFloat(m[1]), y: parseFloat(m[2]) } : null; })() : null;
+                    return bp ? (
+                      <div className="absolute bg-gray-900 text-white text-sm font-semibold px-4 py-2 rounded-xl z-10" style={{ left: `${bp.x}%`, top: `${bp.y}%`, transform: "translate(-50%, -50%)" }}>
+                        {buttonText || "Tugma"}
+                      </div>
+                    ) : (
+                      <div className="mt-3 inline-block bg-gray-900 text-white text-sm font-semibold px-4 py-2 rounded-xl relative z-10">
+                        {buttonText || "Tugma"}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Drag editor — rasm va tugma pozitsiyasini o'zgartirish */}
           <div>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs text-gray-500">Ko'rinishi: <span className="text-gray-400">(rasmni yoki tugmani sichqoncha bilan sudrab joylang)</span></p>
+              <p className="text-xs text-gray-500">Pozitsiya tahrirlash: <span className="text-gray-400">(rasmni yoki tugmani sudrab joylang)</span></p>
               {buttonPosition && (
                 <button type="button" onClick={() => setButtonPosition("")} className="text-[11px] text-primary-500 font-medium hover:text-primary-700">
                   ↺ Tugma joyini standartga qaytarish
@@ -284,6 +352,7 @@ export default function Banners() {
               title={title}
               subtitle={subtitle}
               buttonText={buttonText}
+              showButton={showButton}
               bgColor={bgColor}
               textColor={textColor}
               textOpacity={textOpacity}
@@ -299,7 +368,7 @@ export default function Banners() {
           </div>
 
           <div className="flex gap-3">
-            <LoadingButton onClick={handleSave} disabled={!title.trim()} className="btn-primary">
+            <LoadingButton onClick={handleSave} className="btn-primary">
               {editBanner ? "Saqlash" : "Yaratish"}
             </LoadingButton>
             <button onClick={() => setShowForm(false)} className="btn-outline">Bekor</button>
@@ -346,9 +415,9 @@ export default function Banners() {
 
 // ===== Drag bilan rasm pozitsiyasi, matn rangi va tugma joyini o'zgartirish =====
 function BannerPreviewDraggable({
-  title, subtitle, buttonText, bgColor, textColor, textOpacity, imagePreview, imageFullWidth, imageFit, imagePosition, imageOpacity, buttonPosition, onPositionChange, onButtonPositionChange,
+  title, subtitle, buttonText, showButton, bgColor, textColor, textOpacity, imagePreview, imageFullWidth, imageFit, imagePosition, imageOpacity, buttonPosition, onPositionChange, onButtonPositionChange,
 }: {
-  title: string; subtitle: string; buttonText: string; bgColor: string;
+  title: string; subtitle: string; buttonText: string; showButton: boolean; bgColor: string;
   textColor: string; textOpacity: number;
   imagePreview: string; imageFullWidth: boolean; imageFit: "cover" | "contain";
   imagePosition: string; imageOpacity: number;
@@ -451,7 +520,7 @@ function BannerPreviewDraggable({
       {subtitle && <p className="text-sm mt-1 relative z-10 pointer-events-none" style={{ ...textStyle, opacity: (textOpacity / 100) * 0.8 }}>{subtitle}</p>}
 
       {/* Tugma — standart holatda matn ostida, buttonPosition belgilangan bo'lsa — absolute + drag qilinadigan */}
-      {btnPos ? (
+      {showButton && (btnPos ? (
         <div
           className={`absolute bg-gray-900 text-white text-sm font-semibold px-4 py-2 rounded-xl z-20 select-none ${dragTarget === "button" ? "cursor-grabbing ring-2 ring-primary-400" : "cursor-grab"}`}
           style={{ left: `${btnPos.x}%`, top: `${btnPos.y}%`, transform: "translate(-50%, -50%)" }}
@@ -468,7 +537,7 @@ function BannerPreviewDraggable({
         >
           {buttonText || "Tugma"}
         </div>
-      )}
+      ))}
 
       {/* Pozitsiya qiymatlarini ko'rsatish */}
       {(imagePreview || btnPos) && (

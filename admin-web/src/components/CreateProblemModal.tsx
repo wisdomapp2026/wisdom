@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { X, Upload } from "lucide-react";
-import { createProblem, updateProblem, saveTestToLibrary, saveTBQuestion, saveTBFolder, getAllTBFolders } from "@shared/repositories";
+import { createProblem, updateProblem, saveTestToLibrary, saveTBQuestion, saveTBFolder, getAllTBFolders, getCourseById, getTopicById, getFoldersByCourse } from "@shared/repositories";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { storage } from "@shared/firebase";
 import type { Problem, Test, Question } from "@shared/types";
@@ -179,20 +179,57 @@ export default function CreateProblemModal({ open, courseId, topicId, existingCo
 
           await saveTestToLibrary(testEntry);
 
-          // Test Builder (Content Library) — Firestore va localStorage ga saqlash
+          // Test Builder (Content Library) — Kurs → Modul → Mavzu ierarxiyasi bilan saqlash
           try {
             const tagList = tags.split(",").map((t) => t.trim()).filter(Boolean);
-            const folderName = tagList[0] || "Umumiy";
 
-            // Firestore'dagi papkalarni tekshirish
+            // Kurs, modul (folder) va mavzu (topic) ma'lumotlarini olish
+            const [course, topic, courseFolders] = await Promise.all([
+              getCourseById(courseId),
+              getTopicById(courseId, topicId),
+              getFoldersByCourse(courseId),
+            ]);
+
+            const courseName = course?.title || "Kurs";
+            const moduleName = topic?.folderId
+              ? (courseFolders.find((f) => f.id === topic.folderId)?.title || "Modulsiz")
+              : "Modulsiz";
+            const topicName = topic?.title || "Mavzu";
+
             const existingFolders = await getAllTBFolders();
-            let folder = existingFolders.find((f: any) => f.name === folderName);
-            if (!folder) {
-              folder = { id: `folder-${Date.now()}`, name: folderName, questionIds: [] };
-              await saveTBFolder(folder);
+
+            /** Papkani topish yoki yaratish (parentId bo'yicha ierarxiya) */
+            async function ensureFolder(
+              name: string,
+              parentId: string | null,
+              refKey: string
+            ): Promise<any> {
+              let f = existingFolders.find(
+                (x: any) => x.refKey === refKey || (x.name === name && (x.parentId ?? null) === parentId)
+              );
+              if (!f) {
+                f = {
+                  id: `tbf-${refKey}`,
+                  name,
+                  parentId: parentId ?? null,
+                  refKey,
+                  questionIds: [],
+                };
+                await saveTBFolder(f);
+                existingFolders.push(f);
+              }
+              return f;
             }
 
-            // Savol obyekti
+            // 1. Kurs papkasi
+            const courseFolder = await ensureFolder(courseName, null, `c-${courseId}`);
+            // 2. Modul papkasi (kurs ichida)
+            const moduleRefKey = topic?.folderId ? `m-${courseId}-${topic.folderId}` : `m-${courseId}-none`;
+            const moduleFolder = await ensureFolder(moduleName, courseFolder.id, moduleRefKey);
+            // 3. Mavzu papkasi (modul ichida) — test shu papkaga tushadi
+            const topicFolder = await ensureFolder(topicName, moduleFolder.id, `t-${courseId}-${topicId}`);
+
+            // Savol obyekti — mavzu papkasiga biriktiriladi
             const newQ = {
               id: testQuestion.id,
               content,
@@ -200,29 +237,27 @@ export default function CreateProblemModal({ open, courseId, topicId, existingCo
               time: `${estimatedMinutes} min`,
               tags: tagList,
               order: Date.now(),
-              folderId: folder.id,
+              folderId: topicFolder.id,
               options: testQuestion.options,
               correctAnswer,
             };
 
-            // Firestore'ga saqlash
             await saveTBQuestion(newQ);
 
-            // Folder'ga questionId qo'shish (agar yo'q bo'lsa)
-            if (!folder.questionIds?.includes(testQuestion.id)) {
-              folder.questionIds = [...(folder.questionIds || []), testQuestion.id];
-              await saveTBFolder(folder);
+            // Mavzu papkasiga questionId qo'shish
+            if (!topicFolder.questionIds?.includes(testQuestion.id)) {
+              topicFolder.questionIds = [...(topicFolder.questionIds || []), testQuestion.id];
+              await saveTBFolder(topicFolder);
             }
 
             // localStorage sync (fallback uchun)
             const tbQuestions = JSON.parse(localStorage.getItem("tb_questions") || "[]");
             const tbFolders = JSON.parse(localStorage.getItem("tb_folders") || "[]");
             tbQuestions.push(newQ);
-            const localFolder = tbFolders.find((f: any) => f.id === folder.id);
-            if (localFolder) {
-              localFolder.questionIds.push(testQuestion.id);
-            } else {
-              tbFolders.push(folder);
+            for (const f of [courseFolder, moduleFolder, topicFolder]) {
+              const idx = tbFolders.findIndex((x: any) => x.id === f.id);
+              if (idx >= 0) tbFolders[idx] = f;
+              else tbFolders.push(f);
             }
             localStorage.setItem("tb_questions", JSON.stringify(tbQuestions));
             localStorage.setItem("tb_folders", JSON.stringify(tbFolders));

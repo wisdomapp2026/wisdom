@@ -33,7 +33,7 @@ export default function CreateTopicModal({ open, courseId, existingCount, folder
       id,
       courseId,
       ...(folderId ? { folderId } : {}),
-      title: `${order}-modul: ${title}`,
+      title: title,
       description,
       icon: "📖",
       order,
@@ -49,7 +49,7 @@ export default function CreateTopicModal({ open, courseId, existingCount, folder
       setTitle("");
       setDescription("");
     } catch (err) {
-      console.error("Modul yaratishda xatolik:", err);
+      console.error("Mavzu yaratishda xatolik:", err);
     } finally {
       setLoading(false);
     }
@@ -59,7 +59,7 @@ export default function CreateTopicModal({ open, courseId, existingCount, folder
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-xl">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-gray-900">Yangi modul qo'shish</h2>
+          <h2 className="text-xl font-bold text-gray-900">Yangi mavzu qo'shish</h2>
           <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600">
             <X className="w-5 h-5" />
           </button>
@@ -67,7 +67,7 @@ export default function CreateTopicModal({ open, courseId, existingCount, folder
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Modul nomi *</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Mavzu nomi *</label>
             <input
               type="text"
               value={title}
@@ -76,7 +76,7 @@ export default function CreateTopicModal({ open, courseId, existingCount, folder
               className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               required
             />
-            <p className="text-xs text-gray-400 mt-1">Tartib raqami avtomatik qo'shiladi: "{existingCount + 1}-modul: ..."</p>
+            <p className="text-xs text-gray-400 mt-1">Mavzu nomi kiritilganidek saqlanadi</p>
           </div>
 
           <div>
@@ -84,7 +84,7 @@ export default function CreateTopicModal({ open, courseId, existingCount, folder
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Bu modulda nimalar o'rganiladi..."
+              placeholder="Bu mavzuda nimalar o'rganiladi..."
               rows={2}
               className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm resize-none"
             />
@@ -98,7 +98,7 @@ export default function CreateTopicModal({ open, courseId, existingCount, folder
               onChange={(e) => setIsPremium(e.target.checked)}
               className="w-4 h-4 text-primary-500 rounded"
             />
-            <label htmlFor="topicPremium" className="text-sm text-gray-700">Premium modul</label>
+            <label htmlFor="topicPremium" className="text-sm text-gray-700">Premium mavzu</label>
           </div>
 
           <div className="flex gap-3 pt-4 border-t border-gray-100">

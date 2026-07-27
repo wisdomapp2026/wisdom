@@ -7,7 +7,7 @@ import { CoursesLoader } from "../components/PageLoader";
 import { cachedFetch } from "../hooks/useCache";
 import { getLocalProgress } from "../hooks/useLocalProgress";
 
-const DEFAULT_CATEGORIES = ["Barchasi", "Jarayonda"];
+const DEFAULT_CATEGORIES = ["Jarayonda", "Barchasi"];
 // Lazy load: bir vaqtda nechta kurs ko'rsatilishi (30 tadan keyin, ro'yxat oxiriga yetganda keyingi 30 tasi yuklanadi)
 const PAGE_SIZE = 30;
 
@@ -18,7 +18,7 @@ interface CourseWithRealStats extends Course {
 
 export default function Courses() {
   const { user, loading: authLoading } = useAuth();
-  const [activeCategory, setActiveCategory] = useState("Barchasi");
+  const [activeCategory, setActiveCategory] = useState("Jarayonda");
   // Barcha (yashirilmagan) kurslar — statistikasiz, filterlash/qidiruv shu ro'yxat ustida ishlaydi
   const [rawCourses, setRawCourses] = useState<Course[]>([]);
   // Har bir kurs uchun hisoblangan statistika (faqat ekranda ko'rinadigan kurslar uchun to'ldiriladi)
@@ -47,7 +47,7 @@ export default function Courses() {
     try {
       const cats = await cachedFetch("all-categories", getAllCategories);
       const catNames = cats.map((c) => c.name);
-      setCategories(["Barchasi", "Jarayonda", ...catNames]);
+      setCategories(["Jarayonda", "Barchasi", ...catNames]);
     } catch (err) {
       // Default qoladi
     }
@@ -234,7 +234,7 @@ export default function Courses() {
             <Link to={`/course/${course.id}`} key={course.id} className="block border border-gray-100 rounded-2xl overflow-hidden hover:shadow-md transition-shadow bg-white">
               {/* Muqova rasmi */}
               {course.coverImage ? (
-                <div className="h-40 overflow-hidden">
+                <div className="h-40 overflow-hidden relative">
                   <img
                     src={course.coverImage}
                     alt={course.title}
@@ -242,12 +242,22 @@ export default function Courses() {
                     loading="lazy"
                     style={{ objectFit: (course as any).coverFit || "cover", objectPosition: (course as any).coverPosition || "50% 50%" }}
                   />
+                  {course.isPremium && (
+                    <span className="absolute top-2 right-2 bg-yellow-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow">
+                      👑 Premium
+                    </span>
+                  )}
                 </div>
               ) : (
-                <div className="h-32 bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center">
+                <div className="h-32 bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center relative">
                   <svg className="w-10 h-10 text-white/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                     <path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                   </svg>
+                  {course.isPremium && (
+                    <span className="absolute top-2 right-2 bg-yellow-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow">
+                      👑 Premium
+                    </span>
+                  )}
                 </div>
               )}
 
@@ -263,9 +273,14 @@ export default function Courses() {
                 </div>
                 {/* Statistikalar */}
                 <div className="text-right space-y-1">
-                  <p className="text-xs text-gray-500 flex items-center justify-end gap-1">
-                    <span>👥</span> Kursdagi o'quvchilar: <span className="font-semibold text-gray-700">{(course.realStudentCount || course.totalStudents || 0).toLocaleString()}</span>
-                  </p>
+                  <div className="flex items-center justify-end gap-2">
+                    <span className="text-xs font-semibold px-3 py-0.5 rounded-full shrink-0" style={{ backgroundColor: color + "12", color }}>
+                      {course.category}
+                    </span>
+                    <p className="text-xs text-gray-500 flex items-center gap-1">
+                      <span>👥</span> Kursdagi o'quvchilar: <span className="font-semibold text-gray-700">{(course.realStudentCount || course.totalStudents || 0).toLocaleString()}</span>
+                    </p>
+                  </div>
                   <p className="text-xs flex items-center justify-end gap-1">
                     <span className="w-2 h-2 bg-green-500 rounded-full inline-block"></span>
                     <span className="text-green-600 font-medium">Hozir onlayn: {course.onlineNow || 0}</span>
@@ -273,12 +288,9 @@ export default function Courses() {
                 </div>
               </div>
 
-              {/* Kurs nomi va kategoriya */}
-              <div className="flex items-center justify-between mb-2">
+              {/* Kurs nomi */}
+              <div className="mb-2">
                 <h3 className="text-lg font-bold text-gray-900">{course.title}</h3>
-                <span className="text-xs font-semibold px-3 py-1 rounded-full shrink-0 ml-2" style={{ backgroundColor: color + "12", color }}>
-                  {course.category}
-                </span>
               </div>
 
               {/* Description */}

@@ -38,6 +38,11 @@ service cloud.firestore {
           allow read: if true;
           allow create, update, delete: if isAdmin();
         }
+
+        match /presence/{userId} {
+          allow read: if true;
+          allow write: if isOwner(userId);
+        }
       }
 
       match /tests/{testId} {
@@ -63,6 +68,12 @@ service cloud.firestore {
       match /socialLinks/{linkId} {
         allow read: if true;
         allow create, update, delete: if isAdmin();
+      }
+
+      // Kursda hozir turgan onlayn userlar (heartbeat)
+      match /presence/{userId} {
+        allow read: if true;
+        allow write: if isOwner(userId);
       }
     }
 

@@ -12,6 +12,7 @@ export default function Payment() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
+  const courseId = params.get("course") || "";
   const planId = params.get("plan") || "monthly";
   const baseAmount = Number(params.get("amount")) || 50000;
 
@@ -28,6 +29,7 @@ export default function Payment() {
   const [screenshotFile, setScreenshotFile] = useState<File | null>(null);
   const [screenshotPreview, setScreenshotPreview] = useState("");
   const [senderCard, setSenderCard] = useState("");
+  const [senderPhone, setSenderPhone] = useState("");
 
   const finalAmount = Math.max(0, baseAmount - Math.round(baseAmount * discount / 100));
 
@@ -73,6 +75,14 @@ export default function Payment() {
 
   async function handleSubmitPayment() {
     if (!user) return;
+    if (!senderCard.trim() || senderCard.replace(/\D/g, "").length < 16) {
+      alert("Iltimos, karta raqamingizni to'liq kiriting!");
+      return;
+    }
+    if (!senderPhone.trim() || senderPhone.replace(/\D/g, "").length < 9) {
+      alert("Iltimos, telefon raqamingizni kiriting!");
+      return;
+    }
     if (!screenshotFile) {
       alert("Iltimos, to'lov screenshotini yuklang!");
       return;
@@ -97,14 +107,15 @@ export default function Payment() {
       id: `pay-${now}`,
       userId: user.uid,
       userName: userName || "Foydalanuvchi",
-      courseId: "",
+      courseId: courseId,
       courseTitle: `Premium obuna (${planLabel})`,
       amount: finalAmount,
       method: "card",
       status: "pending",
-      promoCode: promoApplied ? promo : undefined,
+      promoCode: promoApplied ? promo : "",
       discount,
-      cardNumber: senderCard.trim() || undefined,
+      cardNumber: senderCard.trim() || "",
+      senderPhone: senderPhone.trim(),
       recipientCard: cardNumber,
       screenshotUrl: "",
       createdAt: now,
@@ -231,7 +242,7 @@ export default function Payment() {
 
         {/* O'z karta raqami */}
         <div className="mt-5">
-          <p className="text-xs text-gray-500 uppercase font-semibold mb-2">Sizning karta raqamingiz</p>
+          <p className="text-xs text-gray-500 uppercase font-semibold mb-2">Sizning karta raqamingiz *</p>
           <input
             value={senderCard}
             onChange={(e) => {
@@ -244,6 +255,20 @@ export default function Payment() {
             className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
           <p className="text-xs text-gray-400 mt-1">Pul o'tkazgan kartangiz raqamini kiriting</p>
+        </div>
+
+        {/* Telefon raqami */}
+        <div className="mt-5">
+          <p className="text-xs text-gray-500 uppercase font-semibold mb-2">Telefon raqamingiz *</p>
+          <input
+            value={senderPhone}
+            onChange={(e) => setSenderPhone(e.target.value)}
+            placeholder="+998 90 123 45 67"
+            type="tel"
+            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+            required
+          />
+          <p className="text-xs text-gray-400 mt-1">Fors-major holatlarda siz bilan bog'lanish uchun</p>
         </div>
 
         {/* Screenshot yuklash */}
