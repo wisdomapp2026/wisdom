@@ -216,8 +216,8 @@ export default function Home() {
       {/* Qidiruv paneli */}
       {showSearch && (
         <div className="px-5 pb-3 animate-fadeIn">
-          <div className="flex items-center bg-gray-50 border border-gray-200 rounded-xl px-4 py-2.5 gap-2">
-            <Search size={18} className="text-gray-400 shrink-0" />
+          <div className="flex items-center bg-white border border-gray-200/80 rounded-2xl px-4 py-3 gap-2.5 shadow-sm ring-1 ring-primary-500/5">
+            <Search size={18} className="text-primary-400 shrink-0" />
             <input
               autoFocus
               placeholder="Kurslarni qidirish..."
@@ -230,15 +230,15 @@ export default function Home() {
                   setSearchQuery("");
                 }
               }}
-              className="flex-1 bg-transparent text-sm outline-none"
+              className="flex-1 bg-transparent text-sm outline-none placeholder:text-gray-400"
             />
-            <button onClick={() => { setShowSearch(false); setSearchQuery(""); }} className="text-gray-400">
-              <X size={18} />
+            <button onClick={() => { setShowSearch(false); setSearchQuery(""); }} className="w-7 h-7 flex items-center justify-center rounded-full bg-gray-100 text-gray-400 active:bg-gray-200 transition-colors">
+              <X size={15} />
             </button>
           </div>
           {/* Tezkor natijalar */}
           {searchQuery.trim() && (
-            <div className="mt-2 space-y-1">
+            <div className="mt-2 bg-white border border-gray-100 rounded-2xl p-1.5 shadow-sm space-y-0.5">
               {allCoursesForSearch
                 .filter((c) => c.title.toLowerCase().includes(searchQuery.toLowerCase()))
                 .slice(0, 4)
@@ -246,16 +246,17 @@ export default function Home() {
                   <button
                     key={c.id}
                     onClick={() => { navigate(`/course/${c.id}`); setShowSearch(false); setSearchQuery(""); }}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 active:bg-gray-100 text-left"
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-primary-50/50 active:bg-primary-50 text-left transition-colors"
                   >
-                    <div className="w-8 h-8 bg-primary-50 rounded-lg flex items-center justify-center shrink-0">
-                      <span className="text-primary-500 text-xs">📚</span>
+                    <div className="w-9 h-9 bg-gradient-to-br from-primary-400 to-primary-600 rounded-xl flex items-center justify-center shrink-0 shadow-sm">
+                      <span className="text-white text-sm">📚</span>
                     </div>
-                    <span className="text-sm text-gray-700 truncate">{c.title}</span>
+                    <span className="text-sm font-medium text-gray-700 truncate">{c.title}</span>
+                    <ChevronRight size={15} className="text-gray-300 ml-auto shrink-0" />
                   </button>
                 ))}
               {allCoursesForSearch.filter((c) => c.title.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
-                <p className="text-sm text-gray-400 px-3 py-2">Natija topilmadi</p>
+                <p className="text-sm text-gray-400 px-3 py-3 text-center">Natija topilmadi</p>
               )}
             </div>
           )}
@@ -305,7 +306,7 @@ export default function Home() {
             {banners.map((banner) => (
               <div
                 key={banner.id}
-                className="snap-center shrink-0 w-full rounded-2xl p-5 relative overflow-hidden cursor-pointer"
+                className="snap-center shrink-0 w-full rounded-3xl p-5 relative overflow-hidden cursor-pointer shadow-lg shadow-black/5 ring-1 ring-black/5"
                 style={{ backgroundColor: banner.bgColor, minWidth: "calc(100% - 0px)", minHeight: "180px" }}
                 onClick={() => {
                   if (banner.courseId) navigate(`/course/${banner.courseId}`);
@@ -319,7 +320,7 @@ export default function Home() {
                   <img src={banner.imageUrl} alt="" className="absolute inset-0 w-full h-full" style={{ objectFit: banner.imageFit || "cover", objectPosition: banner.imagePosition || "center", opacity: (banner.imageOpacity ?? 70) / 100 }} />
                 )}
                 <h2
-                  className="text-lg font-bold leading-tight relative z-10"
+                  className="text-xl font-extrabold leading-tight relative z-10 tracking-tight"
                   style={{ color: banner.textColor || "#ffffff", opacity: (banner.textOpacity ?? 100) / 100 }}
                 >
                   {banner.title}
@@ -341,8 +342,8 @@ export default function Home() {
                     }}
                     className={
                       banner.buttonPosition
-                        ? "absolute bg-gray-900 text-white text-sm font-medium px-4 py-2 rounded-lg z-10 active:bg-gray-800"
-                        : "mt-3 bg-gray-900 text-white text-sm font-medium px-4 py-2 rounded-lg relative z-10 active:bg-gray-800"
+                        ? "absolute bg-white/95 backdrop-blur-sm text-gray-900 text-sm font-semibold px-5 py-2.5 rounded-full z-10 shadow-lg active:scale-95 transition-transform"
+                        : "mt-4 bg-white/95 backdrop-blur-sm text-gray-900 text-sm font-semibold px-5 py-2.5 rounded-full relative z-10 shadow-lg active:scale-95 transition-transform"
                     }
                     style={
                       banner.buttonPosition
@@ -365,7 +366,7 @@ export default function Home() {
           {banners.length > 1 && (
             <div className="flex items-center justify-center gap-1.5 mt-3">
               {banners.map((_, i) => (
-                <div key={i} className={`rounded-full transition-all ${i === bannerIdx ? "w-5 h-1.5 bg-primary-500" : "w-1.5 h-1.5 bg-gray-300"}`} />
+                <div key={i} className={`rounded-full transition-all duration-300 ${i === bannerIdx ? "w-6 h-2 bg-primary-500" : "w-2 h-2 bg-gray-300"}`} />
               ))}
             </div>
           )}
@@ -375,9 +376,14 @@ export default function Home() {
       {/* Yangiliklar */}
       {newsItems.length > 0 && (
         <section className="mt-6">
-          <div className="flex justify-between items-center mb-3 px-5">
-            <h3 className="text-base font-bold text-gray-900">Yangiliklar</h3>
-            <button onClick={() => navigate("/news")} className="text-sm text-primary-500 font-medium">Barchasi</button>
+          <div className="flex justify-between items-center mb-3.5 px-5">
+            <div className="flex items-center gap-2.5">
+              <span className="w-1 h-5 bg-primary-500 rounded-full" />
+              <h3 className="text-lg font-extrabold text-gray-900 tracking-tight">Yangiliklar</h3>
+            </div>
+            <button onClick={() => navigate("/news")} className="text-xs text-primary-500 font-semibold flex items-center gap-0.5 bg-primary-50 px-3 py-1.5 rounded-full active:bg-primary-100 transition-colors">
+              Barchasi <ChevronRight size={13} />
+            </button>
           </div>
           <div
             className="flex items-start gap-3 overflow-x-auto pb-2 px-5 scrollbar-hide"
@@ -410,9 +416,9 @@ export default function Home() {
                     setSelectedNews(item);
                   }
                 }}
-                className="shrink-0 w-32 flex flex-col text-left"
+                className="shrink-0 w-32 flex flex-col text-left group"
               >
-                <div className="w-full h-44 bg-gray-800 rounded-xl flex items-center justify-center relative overflow-hidden shrink-0">
+                <div className="w-full h-44 bg-gray-800 rounded-2xl flex items-center justify-center relative overflow-hidden shrink-0 shadow-md shadow-black/10 group-active:scale-[0.97] transition-transform">
                   {(() => {
                     const thumb = item.imageUrl || (item.type === "video" && item.videoUrl ? getYouTubeThumbnail(item.videoUrl) : "");
                     return thumb ? (
@@ -424,13 +430,15 @@ export default function Home() {
                     );
                   })()}
                   {item.type === "video" && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/20">
-                      <Play size={20} className="text-white" fill="white" />
+                    <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-t from-black/50 to-transparent">
+                      <div className="w-10 h-10 rounded-full bg-white/95 backdrop-blur-sm flex items-center justify-center shadow-lg">
+                        <Play size={16} className="text-primary-600 ml-0.5" fill="currentColor" />
+                      </div>
                     </div>
                   )}
-                  {item.duration && <span className="absolute bottom-1.5 right-2 text-[10px] text-white bg-black/60 px-1.5 py-0.5 rounded">{item.duration}</span>}
+                  {item.duration && <span className="absolute bottom-2 right-2 text-[10px] font-medium text-white bg-black/70 backdrop-blur-sm px-2 py-0.5 rounded-full">{item.duration}</span>}
                 </div>
-                <p className="text-xs text-gray-700 font-medium mt-1.5 break-words [overflow-wrap:anywhere] whitespace-normal">{item.title}</p>
+                <p className="text-xs text-gray-700 font-semibold mt-2 leading-snug break-words [overflow-wrap:anywhere] whitespace-normal">{item.title}</p>
               </button>
             ))}
           </div>
@@ -444,17 +452,26 @@ export default function Home() {
 
       {/* Kurslar */}
       <section className="mt-6 px-5">
-        <div className="flex justify-between items-center mb-3">
-          <h3 className="text-base font-bold text-gray-900">Kurslar</h3>
-          <Link to="/courses" className="text-sm text-primary-500 font-medium">Barchasi</Link>
+        <div className="flex justify-between items-center mb-3.5">
+          <div className="flex items-center gap-2.5">
+            <span className="w-1 h-5 bg-primary-500 rounded-full" />
+            <h3 className="text-lg font-extrabold text-gray-900 tracking-tight">Kurslar</h3>
+          </div>
+          <Link to="/courses" className="text-xs text-primary-500 font-semibold flex items-center gap-0.5 bg-primary-50 px-3 py-1.5 rounded-full active:bg-primary-100 transition-colors">
+            Barchasi <ChevronRight size={13} />
+          </Link>
         </div>
         {courses.length > 0 ? (
-        <div className="space-y-4">
+        <div className="space-y-5">
           {courses.map((c: any, i: number) => (
-            <Link to={`/course/${c.id}`} key={i} className="block border border-gray-100 rounded-2xl overflow-hidden hover:shadow-md transition-shadow bg-white">
+            <Link
+              to={`/course/${c.id}`}
+              key={i}
+              className="block rounded-3xl overflow-hidden bg-white shadow-sm shadow-black/5 ring-1 ring-gray-100 hover:shadow-lg hover:shadow-black/5 hover:ring-primary-200 active:scale-[0.99] transition-all duration-200"
+            >
               {/* Muqova rasmi */}
               {c.coverImage ? (
-                <div className="h-40 overflow-hidden relative">
+                <div className="h-44 overflow-hidden relative">
                   <img
                     src={c.coverImage}
                     alt={c.title}
@@ -462,76 +479,82 @@ export default function Home() {
                     loading="lazy"
                     style={{ objectFit: c.coverFit || "cover", objectPosition: c.coverPosition || "50% 50%" }}
                   />
+                  {/* Gradient overlay */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
                   {c.isPremium && (
-                    <span className="absolute top-2 right-2 bg-yellow-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow">
+                    <span className="absolute top-3 right-3 bg-gradient-to-r from-amber-400 to-yellow-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1 shadow-lg">
                       👑 Premium
+                    </span>
+                  )}
+                  {c.category && (
+                    <span className="absolute bottom-3 left-3 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-white/90 backdrop-blur-sm text-gray-700 shadow-sm">
+                      {c.category}
                     </span>
                   )}
                 </div>
               ) : (
-                <div className="h-32 bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center relative">
-                  <svg className="w-10 h-10 text-white/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <div className="h-36 bg-gradient-to-br from-primary-400 via-primary-500 to-primary-700 flex items-center justify-center relative overflow-hidden">
+                  {/* Dekorativ doiralar */}
+                  <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-white/10" />
+                  <div className="absolute -bottom-10 -left-6 w-28 h-28 rounded-full bg-white/5" />
+                  <svg className="w-12 h-12 text-white/80 relative z-10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                     <path d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                   </svg>
                   {c.isPremium && (
-                    <span className="absolute top-2 right-2 bg-yellow-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow">
+                    <span className="absolute top-3 right-3 bg-gradient-to-r from-amber-400 to-yellow-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-full flex items-center gap-1 shadow-lg">
                       👑 Premium
+                    </span>
+                  )}
+                  {c.category && (
+                    <span className="absolute bottom-3 left-3 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-white/90 backdrop-blur-sm text-gray-700 shadow-sm">
+                      {c.category}
                     </span>
                   )}
                 </div>
               )}
 
               <div className="p-4">
-                {/* Statistika */}
-                <div className="flex items-start justify-between mb-3">
-                  <div className="w-12 h-12 bg-primary-500 rounded-xl flex items-center justify-center shadow-sm">
-                    <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M9 12l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
-                      <circle cx="12" cy="12" r="9" />
-                    </svg>
-                  </div>
-                  <div className="text-right space-y-0.5">
-                    <div className="flex items-center justify-end gap-2">
-                      {c.category && (
-                        <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-600">
-                          {c.category}
-                        </span>
-                      )}
-                      <p className="text-xs text-gray-500 flex items-center gap-1">
-                        👥 Kursdagi o'quvchilar: <span className="font-semibold text-gray-700">{c.studentCount || 0}</span>
-                      </p>
-                    </div>
-                    <p className="text-xs flex items-center justify-end gap-1">
-                      <span className="w-2 h-2 bg-green-500 rounded-full inline-block" />
-                      <span className="text-green-600 font-medium">Hozir onlayn: {c.onlineNow || 0}</span>
-                    </p>
-                  </div>
-                </div>
-
                 {/* Kurs nomi */}
-                <div className="mb-2">
-                  <h3 className="text-lg font-bold text-gray-900 leading-tight">{c.title}</h3>
-                </div>
+                <h3 className="text-lg font-bold text-gray-900 leading-snug tracking-tight">{c.title}</h3>
 
                 {/* Tavsif */}
                 {c.description && (
-                  <p className="text-sm text-gray-500 leading-relaxed line-clamp-2 mb-3">{c.description}</p>
+                  <p className="text-[13px] text-gray-500 leading-relaxed line-clamp-2 mt-1.5">{c.description}</p>
                 )}
 
+                {/* Statistika chiplari */}
+                <div className="flex items-center gap-2 mt-3 flex-wrap">
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-gray-600 bg-gray-50 px-2.5 py-1.5 rounded-xl">
+                    <span className="text-xs">📖</span>
+                    {c.topicCount || 0} mavzu
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-gray-600 bg-gray-50 px-2.5 py-1.5 rounded-xl">
+                    <span className="text-xs">👥</span>
+                    {c.studentCount || 0} o'quvchi
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-green-600 bg-green-50 px-2.5 py-1.5 rounded-xl">
+                    <span className="relative flex w-1.5 h-1.5">
+                      <span className="absolute inline-flex w-full h-full rounded-full bg-green-400 opacity-75 animate-ping" />
+                      <span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-green-500" />
+                    </span>
+                    {c.onlineNow || 0} onlayn
+                  </span>
+                </div>
+
                 {/* Progress */}
-                <div>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs text-gray-500 flex items-center gap-1">
-                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <circle cx="12" cy="12" r="10" />
-                        <path d="M12 6v6l4 2" />
-                      </svg>
+                <div className="mt-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[11px] font-medium text-gray-500 flex items-center gap-1.5">
+                      <Clock size={12} className="text-gray-400" />
                       {(c.progress || 0) > 0 ? "Jarayonda" : "Boshlang"}
                     </span>
-                    <span className="text-sm font-bold text-primary-500">{Math.min(100, c.progress || 0)}%</span>
+                    <span className="text-sm font-extrabold text-primary-500 tabular-nums">{Math.min(100, c.progress || 0)}%</span>
                   </div>
-                  <div className="h-2 bg-gray-100 rounded-full">
-                    <div className="h-full bg-primary-500 rounded-full transition-all" style={{ width: `${Math.min(100, c.progress || 0)}%` }} />
+                  <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-primary-400 to-primary-600 rounded-full transition-all duration-500"
+                      style={{ width: `${Math.min(100, c.progress || 0)}%` }}
+                    />
                   </div>
                 </div>
               </div>
@@ -539,9 +562,11 @@ export default function Home() {
           ))}
         </div>
         ) : (
-          <div className="text-center py-8 border border-gray-100 rounded-xl">
-            <p className="text-3xl mb-2">📚</p>
-            <p className="text-sm text-gray-500">Hozircha kurslar mavjud emas</p>
+          <div className="text-center py-12 rounded-3xl bg-gradient-to-b from-gray-50 to-white ring-1 ring-gray-100">
+            <div className="w-16 h-16 mx-auto rounded-2xl bg-white shadow-sm flex items-center justify-center mb-3">
+              <span className="text-3xl">📚</span>
+            </div>
+            <p className="text-sm font-semibold text-gray-600">Hozircha kurslar mavjud emas</p>
             <p className="text-xs text-gray-400 mt-1">Tez orada yangi kurslar qo'shiladi</p>
           </div>
         )}
@@ -550,7 +575,10 @@ export default function Home() {
       {/* Davom etayotgan darslar */}
       {continueItems.length > 0 && (
         <section className="mt-6 px-5">
-          <h3 className="text-base font-bold text-gray-900 mb-3">Davom etayotgan darslar</h3>
+          <div className="flex items-center gap-2.5 mb-3.5">
+            <span className="w-1 h-5 bg-primary-500 rounded-full" />
+            <h3 className="text-lg font-extrabold text-gray-900 tracking-tight">Davom etayotgan darslar</h3>
+          </div>
           <div className="space-y-3">
             {continueItems.map((item) => (
               <button
@@ -562,18 +590,19 @@ export default function Home() {
                     navigate(`/course/${item.course.id}`);
                   }
                 }}
-                className="w-full bg-gray-50 border border-gray-100 rounded-xl p-4 flex items-center gap-3 text-left active:bg-gray-100"
+                className="w-full bg-white ring-1 ring-gray-100 rounded-2xl p-3.5 flex items-center gap-3.5 text-left shadow-sm shadow-black/5 active:scale-[0.99] hover:ring-primary-200 transition-all duration-200"
               >
-                <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center shrink-0">
-                  <span>📖</span>
+                <div className="w-11 h-11 bg-gradient-to-br from-primary-400 to-primary-600 rounded-2xl flex items-center justify-center shrink-0 shadow-sm">
+                  <span className="text-lg">📖</span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">
+                  <p className="text-[10px] font-bold text-primary-500 uppercase tracking-wider">So'nggi dars</p>
+                  <p className="text-sm font-semibold text-gray-900 truncate mt-0.5">
                     {item.currentTopic?.title || item.course.title}
                   </p>
-                  <p className="text-[10px] text-gray-500 mt-0.5">SO'NGGI DARS · {item.course.title}</p>
+                  <p className="text-[11px] text-gray-400 truncate">{item.course.title}</p>
                 </div>
-                <div className="w-8 h-8 bg-primary-500 rounded-full flex items-center justify-center shrink-0">
+                <div className="w-9 h-9 bg-primary-500 rounded-full flex items-center justify-center shrink-0 shadow-md shadow-primary-500/30">
                   <Play size={14} className="text-white ml-0.5" fill="white" />
                 </div>
               </button>
@@ -583,23 +612,38 @@ export default function Home() {
       )}
 
       {/* Kunlik motivatsiya */}
-      <div className="mx-5 mt-6 bg-primary-500 rounded-2xl p-5 text-center">
-        <span className="text-2xl">⭐</span>
-        <p className="text-white font-bold mt-2">"{motivationPhrase}"</p>
-        <p className="text-white/60 text-xs mt-2">— Muvaffaqiyat formulasi</p>
+      <div className="mx-5 mt-6 bg-gradient-to-br from-primary-500 via-primary-600 to-indigo-600 rounded-3xl p-6 text-center relative overflow-hidden shadow-lg shadow-primary-500/20">
+        {/* Dekorativ elementlar */}
+        <div className="absolute -top-10 -right-10 w-36 h-36 rounded-full bg-white/10" />
+        <div className="absolute -bottom-12 -left-8 w-32 h-32 rounded-full bg-white/5" />
+
+        <div className="relative z-10">
+          <div className="w-12 h-12 mx-auto rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-lg">
+            <span className="text-2xl">⭐</span>
+          </div>
+          <p className="text-white font-bold text-[15px] leading-relaxed mt-3.5">"{motivationPhrase}"</p>
+          <div className="flex items-center justify-center gap-2 mt-3.5">
+            <span className="w-6 h-px bg-white/30" />
+            <p className="text-white/70 text-[11px] font-medium">Muvaffaqiyat formulasi</p>
+            <span className="w-6 h-px bg-white/30" />
+          </div>
+        </div>
       </div>
 
       {/* Foydalanuvchi otzivlari */}
       {testimonials.length > 0 && (
         <section className="mt-6">
-          <div className="flex justify-between items-center mb-3 px-5">
-            <h3 className="text-base font-bold text-gray-900">O'quvchilar fikri</h3>
-            <div className="flex items-center gap-1 text-[11px] text-gray-400">
-              <Star size={12} className="text-yellow-400 fill-yellow-400" />
-              <span className="font-semibold text-gray-600">
+          <div className="flex justify-between items-center mb-3.5 px-5">
+            <div className="flex items-center gap-2.5">
+              <span className="w-1 h-5 bg-primary-500 rounded-full" />
+              <h3 className="text-lg font-extrabold text-gray-900 tracking-tight">O'quvchilar fikri</h3>
+            </div>
+            <div className="flex items-center gap-1 text-[11px] bg-amber-50 px-2.5 py-1.5 rounded-full">
+              <Star size={12} className="text-amber-400 fill-amber-400" />
+              <span className="font-bold text-amber-700">
                 {(testimonials.reduce((s, t) => s + t.rating, 0) / testimonials.length).toFixed(1)}
               </span>
-              <span>({testimonials.length})</span>
+              <span className="text-amber-500/70">({testimonials.length})</span>
             </div>
           </div>
           <div
@@ -626,29 +670,29 @@ export default function Home() {
             {testimonials.map((t) => (
               <div
                 key={t.id}
-                className="shrink-0 w-64 border border-gray-200 rounded-2xl p-4 relative overflow-hidden flex flex-col"
+                className="shrink-0 w-64 ring-1 ring-gray-100 rounded-3xl p-4 relative overflow-hidden flex flex-col shadow-sm shadow-black/5"
                 style={{ backgroundColor: 'var(--theme-card-bg)' }}
               >
-                <svg className="absolute top-3 right-3 w-7 h-7 text-primary-100" viewBox="0 0 24 24" fill="currentColor"><path d="M9.983 3v7.391c0 5.704-3.731 9.57-8.983 10.609l-.995-2.151c2.432-.917 3.995-3.638 3.995-5.849h-4v-10h9.983zm14.017 0v7.391c0 5.704-3.748 9.571-9 10.609l-.996-2.151c2.433-.917 3.996-3.638 3.996-5.849h-3.983v-10h9.983z"/></svg>
-                <div className="flex items-center gap-0.5 mb-2">
+                <svg className="absolute -top-1 right-2 w-12 h-12 text-primary-50" viewBox="0 0 24 24" fill="currentColor"><path d="M9.983 3v7.391c0 5.704-3.731 9.57-8.983 10.609l-.995-2.151c2.432-.917 3.995-3.638 3.995-5.849h-4v-10h9.983zm14.017 0v7.391c0 5.704-3.748 9.571-9 10.609l-.996-2.151c2.433-.917 3.996-3.638 3.996-5.849h-3.983v-10h9.983z"/></svg>
+                <div className="flex items-center gap-0.5 mb-2.5 relative z-10">
                   {[1, 2, 3, 4, 5].map((s) => (
-                    <Star key={s} size={13} className={s <= t.rating ? "text-yellow-400 fill-yellow-400" : "text-gray-200 fill-gray-200"} />
+                    <Star key={s} size={13} className={s <= t.rating ? "text-amber-400 fill-amber-400" : "text-gray-200 fill-gray-200"} />
                   ))}
                 </div>
                 <p className="text-[13px] text-gray-700 leading-relaxed flex-1 line-clamp-4 relative z-10">"{t.text}"</p>
-                <div className="flex items-center gap-2.5 mt-3 pt-3 border-t border-gray-200">
-                  <div className="w-9 h-9 rounded-full overflow-hidden bg-gray-200 border-2 border-white shadow shrink-0">
+                <div className="flex items-center gap-2.5 mt-3.5 pt-3.5 border-t border-gray-100">
+                  <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-200 ring-2 ring-white shadow-md shrink-0">
                     {t.avatarUrl ? (
                       <img src={t.avatarUrl} alt="" className="w-full h-full object-cover" />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-primary-500 text-white text-xs font-bold">
+                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary-400 to-primary-600 text-white text-sm font-bold">
                         {t.name.charAt(0).toUpperCase()}
                       </div>
                     )}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs font-semibold text-gray-900 truncate">{t.name}</p>
-                    {t.role && <p className="text-[10px] text-gray-500 truncate">{t.role}</p>}
+                    <p className="text-xs font-bold text-gray-900 truncate">{t.name}</p>
+                    {t.role && <p className="text-[10px] text-gray-400 truncate mt-0.5">{t.role}</p>}
                   </div>
                 </div>
               </div>
@@ -660,20 +704,22 @@ export default function Home() {
       {/* Ijtimoiy tarmoqlar */}
       {socialLinks.length > 0 && (
         <section className="mt-6 px-5 pb-6">
-          <h3 className="text-base font-bold text-gray-900 mb-3">Ijtimoiy tarmoqlar</h3>
-          <div className="flex flex-wrap justify-center gap-3">
-            {socialLinks.map((link) => (
-              <a
-                key={link.id}
-                href={link.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                title={link.label}
-                className="w-11 h-11 flex items-center justify-center bg-white border border-gray-100 rounded-full hover:shadow-md active:bg-gray-50 transition-all"
-              >
-                <SocialIcon platform={link.platform} iconUrl={link.iconUrl} />
-              </a>
-            ))}
+          <div className="rounded-3xl bg-gradient-to-b from-gray-50 to-white ring-1 ring-gray-100 p-5">
+            <h3 className="text-sm font-bold text-gray-700 mb-4 text-center">Biz bilan bog'laning</h3>
+            <div className="flex flex-wrap justify-center gap-3">
+              {socialLinks.map((link) => (
+                <a
+                  key={link.id}
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={link.label}
+                  className="w-12 h-12 flex items-center justify-center bg-white ring-1 ring-gray-100 rounded-2xl shadow-sm hover:shadow-md hover:-translate-y-0.5 active:scale-95 transition-all duration-200"
+                >
+                  <SocialIcon platform={link.platform} iconUrl={link.iconUrl} />
+                </a>
+              ))}
+            </div>
           </div>
         </section>
       )}
@@ -754,12 +800,14 @@ function NewsDetailModal({ item, onClose }: { item: NewsItem; onClose: () => voi
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white w-full max-w-md max-h-[85vh] rounded-2xl overflow-hidden flex flex-col shadow-xl" onClick={(e) => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn" onClick={onClose}>
+      <div className="bg-white w-full max-w-md max-h-[85vh] rounded-3xl overflow-hidden flex flex-col shadow-2xl" onClick={(e) => e.stopPropagation()}>
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 shrink-0">
-          <h2 className="font-bold text-gray-900 truncate">{item.title}</h2>
-          <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600 text-lg">✕</button>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
+          <h2 className="font-bold text-gray-900 truncate pr-2">{item.title}</h2>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 text-gray-400 hover:bg-gray-200 hover:text-gray-600 transition-colors shrink-0">
+            <X size={16} />
+          </button>
         </div>
 
         {/* Content */}
@@ -793,8 +841,8 @@ function NewsDetailModal({ item, onClose }: { item: NewsItem; onClose: () => voi
           )}
 
           {/* Ma'lumot */}
-          <div className="px-5 py-3 border-t border-gray-100">
-            <p className="text-[10px] text-gray-400">
+          <div className="px-5 py-3.5 border-t border-gray-100 bg-gray-50/50">
+            <p className="text-[11px] text-gray-400 font-medium">
               {new Date(item.createdAt).toLocaleDateString("uz-UZ", { year: "numeric", month: "long", day: "numeric" })}
               {item.duration && ` · ⏱ ${item.duration}`}
             </p>
