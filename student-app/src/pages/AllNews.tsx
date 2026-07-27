@@ -34,7 +34,7 @@ export default function AllNews() {
   return (
     <div className="page-content pb-24 bg-gray-50 min-h-screen">
       <header className="bg-white px-5 pt-4 pb-4 border-b border-gray-100 flex items-center gap-3">
-        <Link to="/" className="text-gray-500"><ChevronLeft size={22} /></Link>
+        <Link to="/" className="text-gray-500 flex items-center"><ChevronLeft size={22} /></Link>
         <h1 className="text-lg font-bold text-gray-900">Yangiliklar</h1>
       </header>
 
