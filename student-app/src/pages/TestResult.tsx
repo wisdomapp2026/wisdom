@@ -176,7 +176,11 @@ export default function TestResult() {
     <div className="page-content pb-24">
       <header className="px-5 pt-4 flex justify-between items-center">
         <h1 className="text-xl font-bold">Test natijalari</h1>
-        <Link to="/tests" className="w-10 h-10 flex items-center justify-center text-gray-500 rounded-xl" aria-label="Yopish">
+        <Link
+          to={resultData?.courseId ? `/course/${resultData.courseId}` : "/tests"}
+          className="w-10 h-10 flex items-center justify-center text-gray-500 rounded-xl"
+          aria-label="Yopish"
+        >
           <X size={20} />
         </Link>
       </header>

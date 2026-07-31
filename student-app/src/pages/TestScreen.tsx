@@ -223,7 +223,11 @@ export default function TestScreen() {
       awardTestXpLocal(courseId, xpEarned);
     }
 
-    navigate(`/test-result?score=${score}&correct=${correct}&total=${questions.length}&time=${timeTaken}&resultId=${resultData.testId}`);
+    // replace — natijadan orqaga qaytganda tugagan testga qaytmasligi uchun
+    navigate(
+      `/test-result?score=${score}&correct=${correct}&total=${questions.length}&time=${timeTaken}&resultId=${resultData.testId}`,
+      { replace: true }
+    );
   }
 
   function goPrev() {

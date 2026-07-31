@@ -12,6 +12,24 @@ interface StudentNotif {
   body: string;
   isRead: boolean;
   createdAt: number;
+  /** Aniq foydalanuvchiga tegishli bo'lsa — uning ID si. Bo'sh bo'lsa umumiy (broadcast). */
+  userId?: string;
+}
+
+/** Umumiy (broadcast) bildirishnomalarning o'qilgan ID lari — har user uchun alohida */
+function getReadBroadcasts(userId: string): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(`edukids_read_broadcasts_${userId}`) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function addReadBroadcast(userId: string, notifId: string) {
+  const list = getReadBroadcasts(userId);
+  if (!list.includes(notifId)) {
+    localStorage.setItem(`edukids_read_broadcasts_${userId}`, JSON.stringify([...list, notifId]));
+  }
 }
 
 const typeConfig: Record<string, { icon: React.ReactNode; bg: string }> = {
@@ -36,11 +54,19 @@ export default function StudentNotifications() {
 
   async function loadNotifications() {
     try {
-      // Foydalanuvchiga tegishli bildirishnomalar
       const snap = await getDocs(collection(db, "studentNotifications"));
       const all = snap.docs.map((d) => ({ id: d.id, ...d.data() } as StudentNotif));
-      // Barcha umumiy + shu userga tegishlilar
-      setNotifications(all.sort((a, b) => b.createdAt - a.createdAt));
+
+      // Faqat shu foydalanuvchiga tegishli (userId mos) yoki umumiy (userId yo'q) bildirishnomalar
+      const mine = all.filter((n) => !n.userId || n.userId === user!.uid);
+
+      // Umumiy bildirishnomalar uchun o'qilgan holati localStorage da (har user uchun alohida)
+      const readBroadcasts = getReadBroadcasts(user!.uid);
+      const normalized = mine.map((n) =>
+        n.userId ? n : { ...n, isRead: readBroadcasts.includes(n.id) }
+      );
+
+      setNotifications(normalized.sort((a, b) => b.createdAt - a.createdAt));
     } catch (err) {
       console.error(err);
     } finally {
@@ -49,15 +75,30 @@ export default function StudentNotifications() {
   }
 
   async function markAsRead(id: string) {
+    const notif = notifications.find((n) => n.id === id);
+    if (!notif || !user) return;
     try {
-      await updateDoc(doc(db, "studentNotifications", id), { isRead: true });
+      if (notif.userId) {
+        // Shaxsiy bildirishnoma — Firestore da belgilanadi
+        await updateDoc(doc(db, "studentNotifications", id), { isRead: true });
+      } else {
+        // Umumiy bildirishnoma — localStorage da (boshqa userlarga ta'sir qilmasligi uchun)
+        addReadBroadcast(user.uid, id);
+      }
       setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, isRead: true } : n));
     } catch {}
   }
 
   async function markAllRead() {
+    if (!user) return;
     for (const n of notifications.filter((x) => !x.isRead)) {
-      await updateDoc(doc(db, "studentNotifications", n.id), { isRead: true });
+      try {
+        if (n.userId) {
+          await updateDoc(doc(db, "studentNotifications", n.id), { isRead: true });
+        } else {
+          addReadBroadcast(user.uid, n.id);
+        }
+      } catch {}
     }
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
   }
