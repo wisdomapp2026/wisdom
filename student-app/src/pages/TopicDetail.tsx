@@ -85,6 +85,9 @@ export default function TopicDetail() {
 
   useEffect(() => {
     if (!courseId || !topicId) return;
+    // Yangi mavzu — o'qilgan misollar hisobini tozalash (keyin saqlangan progress tiklanadi)
+    viewedRef.current = new Set<string>();
+    setViewedCount(0);
     Promise.all([getTopicById(courseId, topicId), getProblemsByTopic(courseId, topicId), getTestsByCourse(courseId)])
       .then(([t, p, allTests]) => {
         setTopic(t);
@@ -100,6 +103,44 @@ export default function TopicDetail() {
     // Dars ichidagi motivatsion frazani yuklash
     loadMotivation();
   }, [courseId, topicId]);
+
+  /**
+   * Saqlangan progressni tiklash — mavzuga qayta kirganda 0% dan boshlanmasligi uchun.
+   * Avval o'qilgan misollar viewedRef ga qaytariladi.
+   * Mavzu allaqachon tugallangan bo'lsa (completedTopics) — barcha misollar o'qilgan hisoblanadi.
+   */
+  useEffect(() => {
+    if (!courseId || !topicId || problems.length === 0) return;
+
+    let cancelled = false;
+
+    async function restoreProgress() {
+      try {
+        const saved = user
+          ? await getUserProgress(user.uid, courseId!)
+          : getLocalCourseProgress(courseId!);
+        if (cancelled || !saved) return;
+
+        const problemIds = problems.map((p) => p.id);
+        const topicDone = (saved.completedTopics || []).includes(topicId!);
+
+        const restored = topicDone
+          ? problemIds
+          : problemIds.filter((pid) => (saved.completedProblems || []).includes(pid));
+
+        if (restored.length === 0) return;
+
+        // Mavjud (shu sessiyada ko'rilgan) misollar bilan birlashtiramiz
+        for (const pid of restored) viewedRef.current.add(pid);
+        setViewedCount(viewedRef.current.size);
+      } catch (err) {
+        console.error("Progressni tiklashda xatolik:", err);
+      }
+    }
+
+    restoreProgress();
+    return () => { cancelled = true; };
+  }, [courseId, topicId, problems, user?.uid]);
 
   // Topic presence — hozir shu mavzuni o'qiyotgan userlar
   useEffect(() => {

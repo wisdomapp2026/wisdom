@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import { Play, X, Check, ListOrdered, ChevronDown, ChevronUp } from "lucide-react";
 import { getTestResultsByUser, getAllCourses, getTestsByCourse, getTopicsByCourse, getProblemsByTopic } from "@shared/repositories";
 import type { Test, TestResult as TestResultType, Question, Problem } from "@shared/types";
@@ -12,6 +12,7 @@ const LOCAL_TEST_RESULTS_KEY = "edukids_local_test_results";
 
 export default function TestResult() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [params] = useSearchParams();
   const score = Number(params.get("score") || 0);
   const correct = Number(params.get("correct") || 0);
@@ -37,6 +38,28 @@ export default function TestResult() {
   useEffect(() => {
     loadResult();
   }, [user]);
+
+  // Orqaga qaytish manzili — kurs ma'lum bo'lsa kursga, aks holda testlar sahifasiga.
+  // Ref ishlatamiz: popstate handler doim eng oxirgi qiymatni ko'radi.
+  const backTargetRef = useRef("/tests");
+  useEffect(() => {
+    backTargetRef.current = resultData?.courseId ? `/course/${resultData.courseId}` : "/tests";
+  }, [resultData?.courseId]);
+
+  /**
+   * Brauzer "orqaga" tugmasi tugagan testga qaytarmasligi kerak.
+   * Tarixga qo'shimcha yozuv qo'yamiz va popstate da aniq manzilga yo'naltiramiz.
+   */
+  useEffect(() => {
+    window.history.pushState({ testResult: true }, "");
+
+    function handlePopState() {
+      navigate(backTargetRef.current, { replace: true });
+    }
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [navigate]);
 
   async function loadResult() {
     try {
