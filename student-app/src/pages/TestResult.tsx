@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { Play, X, Check } from "lucide-react";
+import { Play, X, Check, ListOrdered, ChevronDown, ChevronUp } from "lucide-react";
 import { getTestResultsByUser, getAllCourses, getTestsByCourse, getTopicsByCourse, getProblemsByTopic } from "@shared/repositories";
 import type { Test, TestResult as TestResultType, Question, Problem } from "@shared/types";
 import { useAuth } from "../hooks/useAuth";
@@ -24,10 +24,13 @@ export default function TestResult() {
   const [selectedQuestion, setSelectedQuestion] = useState<number | null>(null);
   const [testData, setTestData] = useState<Test | null>(null);
   const [resultData, setResultData] = useState<TestResultType | null>(null);
-  // Kurs ichidagi barcha misollar — video yechim topish uchun
+  // Kurs ichidagi barcha misollar — video va bosqichli yechim topish uchun
   const [courseProblems, setCourseProblems] = useState<Problem[]>([]);
+  const [problemsLoading, setProblemsLoading] = useState(true);
   // Video modal
   const [videoModalUrl, setVideoModalUrl] = useState<string | null>(null);
+  // Bosqichma-bosqich yechim ochilgan savollar
+  const [openSolutions, setOpenSolutions] = useState<Record<number, boolean>>({});
 
   const grade = score >= 90 ? "A" : score >= 80 ? "B" : score >= 70 ? "C" : score >= 60 ? "D" : "F";
 
@@ -83,12 +86,19 @@ export default function TestResult() {
   async function loadTestData(testId: string) {
     try {
       const courses = await cachedFetch("all-courses", getAllCourses);
-      for (const course of courses) {
-        const tests = await cachedFetch(`tests-${course.id}`, () => getTestsByCourse(course.id));
+      // Barcha kurslarning testlarini parallel yuklash (ketma-ket emas — ancha tezroq)
+      const testsByCourse = await Promise.all(
+        courses.map(async (course) => ({
+          course,
+          tests: await cachedFetch(`tests-${course.id}`, () => getTestsByCourse(course.id)),
+        }))
+      );
+
+      for (const { course, tests } of testsByCourse) {
         const found = tests.find((t) => t.id === testId);
         if (found) {
           setTestData(found);
-          // Shu kurs ichidagi barcha misollarni yuklash (video yechim topish uchun)
+          // Shu kurs ichidagi barcha misollarni yuklash (video + bosqichli yechim uchun)
           loadCourseProblems(course.id);
           break;
         }
@@ -99,37 +109,56 @@ export default function TestResult() {
   }
 
   async function loadCourseProblems(courseId: string) {
+    setProblemsLoading(true);
     try {
       const topics = await cachedFetch(`topics-${courseId}`, () => getTopicsByCourse(courseId));
-      const allProblems: Problem[] = [];
-      for (const topic of topics) {
-        const problems = await getProblemsByTopic(courseId, topic.id);
-        allProblems.push(...problems);
-      }
-      setCourseProblems(allProblems);
+      // Barcha mavzularning misollarini parallel yuklash (ketma-ket emas)
+      const problemGroups = await Promise.all(
+        topics.map((topic) =>
+          cachedFetch(`problems-${courseId}-${topic.id}`, () => getProblemsByTopic(courseId, topic.id)).catch(() => [] as Problem[])
+        )
+      );
+      setCourseProblems(problemGroups.flat());
     } catch (err) {
       console.error("Misollarni yuklashda xatolik:", err);
+    } finally {
+      setProblemsLoading(false);
     }
   }
 
-  /** Savol uchun mos video yechimni topish (content bo'yicha match) */
+  /** Savol uchun mos misolni topish (content bo'yicha match) — video va bosqichli yechim uchun */
+  function findProblemForQuestion(question: Question): Problem | null {
+    const qContent = question.content.trim();
+    // 1. To'liq mos kelish
+    const exact = courseProblems.find((p) => p.content.trim() === qContent);
+    if (exact) return exact;
+    // 2. Qisman match (content boshi bir xil)
+    const partial = courseProblems.find((p) => {
+      const pContent = p.content.trim();
+      return pContent.startsWith(qContent.slice(0, 20)) || qContent.startsWith(pContent.slice(0, 20));
+    });
+    return partial || null;
+  }
+
+  /** Savol uchun mos video yechimni topish */
   function findVideoForQuestion(question: Question): string | null {
     // 1. Avval savolning o'zida videoUrl bormi
     if (question.videoUrl) return question.videoUrl;
-    // 2. Kurs misollaridan content bo'yicha topish
-    const matchedProblem = courseProblems.find((p) => 
-      p.videoUrl && p.content.trim() === question.content.trim()
-    );
-    if (matchedProblem) return matchedProblem.videoUrl!;
-    // 3. Qisman match (content boshi bir xil)
-    const partialMatch = courseProblems.find((p) =>
-      p.videoUrl && (
-        p.content.trim().startsWith(question.content.trim().slice(0, 20)) ||
-        question.content.trim().startsWith(p.content.trim().slice(0, 20))
-      )
-    );
-    if (partialMatch) return partialMatch.videoUrl!;
-    return null;
+    // 2. Mos misoldan olish
+    const problem = findProblemForQuestion(question);
+    return problem?.videoUrl || null;
+  }
+
+  /** Savol uchun bosqichma-bosqich yechimni topish */
+  function findSolutionForQuestion(question: Question) {
+    const problem = findProblemForQuestion(question);
+    return problem?.solution && problem.solution.length > 0 ? problem.solution : null;
+  }
+
+  /** Savol uchun yechim rasmini topish */
+  function findSolutionImageForQuestion(question: Question): string | null {
+    const problem = findProblemForQuestion(question);
+    return problem?.solutionImage || null;
   }
 
   const questions = testData?.questions || [];
@@ -282,8 +311,16 @@ export default function TestResult() {
             }
           </div>
 
-          {/* Noto'g'ri javob bo'lsa — video yechim tavsiyasi */}
-          {!answers[selectedQuestion]?.isCorrect && (() => {
+          {/* Yechimlar yuklanmoqda */}
+          {problemsLoading && (
+            <div className="mt-4 flex items-center gap-2 px-3 py-2.5 bg-gray-50 rounded-xl">
+              <div className="w-4 h-4 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+              <span className="text-xs text-gray-500">Yechimlar yuklanmoqda...</span>
+            </div>
+          )}
+
+          {/* Video yechim — to'g'ri va xato javoblar uchun ham */}
+          {!problemsLoading && (() => {
             const videoUrl = findVideoForQuestion(questions[selectedQuestion]);
             if (!videoUrl) return null;
             return (
@@ -296,33 +333,90 @@ export default function TestResult() {
                 </div>
                 <div className="flex-1 min-w-0 text-left">
                   <p className="text-sm font-semibold text-purple-800">Video yechimni ko'rish</p>
-                  <p className="text-xs text-purple-600 mt-0.5">Bu savolning batafsil yechimi</p>
+                  <p className="text-xs text-purple-600 mt-0.5">
+                    {answers[selectedQuestion]?.isCorrect ? "Yechimingizni solishtiring" : "Bu savolning batafsil yechimi"}
+                  </p>
                 </div>
               </button>
+            );
+          })()}
+
+          {/* Bosqichma-bosqich yechim */}
+          {!problemsLoading && (() => {
+            const steps = findSolutionForQuestion(questions[selectedQuestion]);
+            const solutionImage = findSolutionImageForQuestion(questions[selectedQuestion]);
+            if (!steps && !solutionImage) return null;
+            const isOpen = openSolutions[selectedQuestion] === true;
+
+            return (
+              <div className="mt-3">
+                <button
+                  onClick={() => setOpenSolutions((prev) => ({ ...prev, [selectedQuestion]: !isOpen }))}
+                  className="w-full flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-xl active:bg-blue-100"
+                >
+                  <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center shrink-0">
+                    <ListOrdered size={16} className="text-white" />
+                  </div>
+                  <div className="flex-1 min-w-0 text-left">
+                    <p className="text-sm font-semibold text-blue-800">Bosqichma-bosqich yechim</p>
+                    <p className="text-xs text-blue-600 mt-0.5">
+                      {steps ? `${steps.length} qadamli yechim` : "Yechim rasmi"}
+                    </p>
+                  </div>
+                  {isOpen ? <ChevronUp size={18} className="text-blue-500 shrink-0" /> : <ChevronDown size={18} className="text-blue-500 shrink-0" />}
+                </button>
+
+                {isOpen && (
+                  <div className="mt-3 space-y-3 animate-fadeIn">
+                    {steps?.map((step) => (
+                      <div key={step.stepNumber} className="flex gap-3">
+                        <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center shrink-0">
+                          {step.stepNumber}
+                        </div>
+                        <div className="flex-1 min-w-0 pt-0.5">
+                          {step.category && (
+                            <p className="text-[10px] font-bold text-blue-500 uppercase tracking-wide mb-1">{step.category}</p>
+                          )}
+                          <div className="text-sm text-gray-700 leading-relaxed break-words [overflow-wrap:anywhere]">
+                            <LatexText text={step.text} />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                    {solutionImage && (
+                      <img src={solutionImage} alt="Yechim" className="w-full rounded-xl border border-gray-100" />
+                    )}
+                  </div>
+                )}
+              </div>
             );
           })()}
         </div>
       )}
 
-      {/* Pastda umumiy video tavsiyalar — faqat noto'g'ri javoblar uchun */}
-      {(() => {
-        const wrongWithVideo = answers
+      {/* Pastda umumiy video yechimlar — barcha savollar uchun (to'g'ri + xato) */}
+      {!problemsLoading && (() => {
+        const withVideo = answers
           .map((ans, i) => ({ ans, question: questions[i], index: i }))
-          .filter(({ ans, question }) => {
-            if (!ans || ans.isCorrect || !question) return false;
+          .filter(({ question }) => {
+            if (!question) return false;
             return !!findVideoForQuestion(question);
           });
 
-        if (wrongWithVideo.length === 0) return null;
+        if (withVideo.length === 0) return null;
+
+        const wrongCount = withVideo.filter(({ ans }) => ans && !ans.isCorrect).length;
 
         return (
           <section className="px-5 mt-6">
             <div className="flex justify-between items-center mb-3">
               <h3 className="font-bold flex items-center gap-2">🎬 Video yechimlar</h3>
-              <span className="text-xs text-gray-500">{wrongWithVideo.length} ta xato savol</span>
+              <span className="text-xs text-gray-500">
+                {withVideo.length} ta savol{wrongCount > 0 ? ` · ${wrongCount} xato` : ""}
+              </span>
             </div>
             <div className="space-y-2">
-              {wrongWithVideo.map(({ question, index }) => {
+              {withVideo.map(({ ans, question, index }) => {
                 const videoUrl = findVideoForQuestion(question)!;
                 const isYouTube = videoUrl.includes("youtube") || videoUrl.includes("youtu.be");
                 const thumbnail = isYouTube
@@ -331,6 +425,7 @@ export default function TestResult() {
                       return match ? `https://img.youtube.com/vi/${match[1]}/mqdefault.jpg` : "";
                     })()
                   : "";
+                const isCorrect = ans?.isCorrect === true;
 
                 return (
                   <button
@@ -350,7 +445,11 @@ export default function TestResult() {
                       <p className="text-sm font-medium text-gray-900">Savol #{index + 1} — Video yechim</p>
                       <p className="text-xs text-gray-500 truncate mt-0.5">{question.content.slice(0, 50)}...</p>
                     </div>
-                    <span className="text-xs bg-red-50 text-red-600 px-2 py-1 rounded-lg font-medium shrink-0">Xato</span>
+                    <span className={`text-xs px-2 py-1 rounded-lg font-medium shrink-0 ${
+                      isCorrect ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"
+                    }`}>
+                      {isCorrect ? "To'g'ri" : "Xato"}
+                    </span>
                   </button>
                 );
               })}
