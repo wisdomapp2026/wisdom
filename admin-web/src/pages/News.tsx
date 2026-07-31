@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
-import { MessageCircle, Send, Loader2, Check, User, X, Megaphone } from "lucide-react";
-import { getAllMessages, markMessageAsRead, sendMessage } from "@shared/repositories";
+import { MessageCircle, Send, Loader2, Check, User, X, Megaphone, Phone, ExternalLink } from "lucide-react";
+import { getAllMessages, markMessageAsRead, sendMessage, getUserById } from "@shared/repositories";
 import { setDoc, doc } from "firebase/firestore";
 import { db } from "@shared/firebase";
-import type { Message } from "@shared/types";
+import type { Message, User as UserType } from "@shared/types";
 import LoadingButton from "../components/LoadingButton";
 
 // O'quvchilarni guruhlash
@@ -282,24 +282,80 @@ function ChatModal({ thread, allMessages, replyText, setReplyText, sending, onRe
   onReply: () => void;
   onClose: () => void;
 }) {
+  const [studentData, setStudentData] = useState<UserType | null>(null);
+  const [showStudentDetail, setShowStudentDetail] = useState(false);
+
+  useEffect(() => {
+    getUserById(thread.userId).then((u) => setStudentData(u)).catch(() => {});
+  }, [thread.userId]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="bg-white rounded-2xl w-full max-w-lg shadow-xl max-h-[80vh] flex flex-col">
-        {/* Header */}
+        {/* Header — bosilganda o'quvchi detail ochiladi */}
         <div className="flex items-center justify-between p-5 border-b border-gray-100 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
-              <User className="w-5 h-5 text-primary-600" />
+          <button
+            onClick={() => setShowStudentDetail(!showStudentDetail)}
+            className="flex items-center gap-3 hover:bg-gray-50 rounded-xl px-2 py-1 -ml-2 transition-colors"
+          >
+            {studentData?.avatar ? (
+              <div className="w-10 h-10 rounded-full overflow-hidden border-2 border-primary-100 shrink-0">
+                <img src={studentData.avatar} alt="" className="w-full h-full object-cover" />
+              </div>
+            ) : (
+              <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center shrink-0">
+                <User className="w-5 h-5 text-primary-600" />
+              </div>
+            )}
+            <div className="text-left">
+              <p className="font-bold text-gray-900">{studentData?.name || thread.name}</p>
+              <p className="text-xs text-gray-500">
+                {studentData?.phone || `${thread.messages.length} ta habar`}
+              </p>
             </div>
-            <div>
-              <p className="font-bold text-gray-900">{thread.name}</p>
-              <p className="text-xs text-gray-500">{thread.messages.length} ta habar</p>
-            </div>
-          </div>
+          </button>
           <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-600">
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {/* O'quvchi detail panel — bosilganda ochiladi */}
+        {showStudentDetail && studentData && (
+          <div className="px-5 py-4 bg-blue-50 border-b border-blue-100 space-y-2 animate-fadeIn">
+            <div className="flex items-center gap-3">
+              {studentData.avatar ? (
+                <img src={studentData.avatar} alt="" className="w-14 h-14 rounded-full object-cover border-2 border-white shadow" />
+              ) : (
+                <div className="w-14 h-14 rounded-full bg-primary-500 flex items-center justify-center text-white text-xl font-bold">
+                  {studentData.name?.charAt(0)?.toUpperCase() || "?"}
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-gray-900 text-base">{studentData.name}</p>
+                <div className="flex items-center gap-1.5 text-sm text-gray-600 mt-0.5">
+                  <Phone size={13} className="text-gray-400" />
+                  <span>{studentData.phone}</span>
+                </div>
+                {studentData.grade && (
+                  <p className="text-xs text-gray-500 mt-0.5">{studentData.grade}</p>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap text-xs">
+              <span className="bg-white px-2 py-1 rounded-full border border-gray-200 text-gray-600">
+                ID: {studentData.id?.slice(0, 12)}...
+              </span>
+              <span className="bg-white px-2 py-1 rounded-full border border-gray-200 text-gray-600">
+                Ro'yxatdan: {new Date(studentData.createdAt).toLocaleDateString("uz")}
+              </span>
+              {studentData.isBanned && (
+                <span className="bg-red-100 px-2 py-1 rounded-full border border-red-200 text-red-700 font-medium">
+                  🚫 Banlangan
+                </span>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-5 space-y-3 bg-gray-50">
