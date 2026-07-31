@@ -48,6 +48,8 @@ export default function TopicDetail() {
   const viewedRef = useRef(new Set<string>());
   const [topicOnlineUsers, setTopicOnlineUsers] = useState<Array<{ avatar?: string; name?: string }>>([]);
   const presenceRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [visibleProblemsCount, setVisibleProblemsCount] = useState(10);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
 
   /**
    * Orqaga qaytish — mavzu modul (papka) ichida bo'lsa modulga, aks holda kursga.
@@ -60,6 +62,26 @@ export default function TopicDetail() {
       navigate(`/course/${courseId}`);
     }
   }
+
+  // Lazy loading — pastga scroll qilganda ko'proq misollarni ko'rsatish
+  useEffect(() => {
+    if (!loadMoreRef.current) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setVisibleProblemsCount((prev) => prev + 10);
+        }
+      },
+      { rootMargin: "200px" }
+    );
+    observer.observe(loadMoreRef.current);
+    return () => observer.disconnect();
+  }, [problems.length]);
+
+  // Yangi mavzu ochilganda misollar sonini reset qilish
+  useEffect(() => {
+    setVisibleProblemsCount(10);
+  }, [topicId]);
 
   useEffect(() => {
     if (!courseId || !topicId) return;
@@ -481,11 +503,11 @@ export default function TopicDetail() {
       {/* Misollar */}
       <div className="px-5 mt-6 flex justify-between items-center mb-4">
         <h3 className="font-bold text-gray-900">Misollar</h3>
-        <button className="text-sm text-primary-500 font-medium">Barchasi →</button>
+        <span className="text-sm text-gray-400">{problems.length} ta</span>
       </div>
 
       <div className="px-5 space-y-4">
-        {problems.map((p, i) => {
+        {problems.slice(0, visibleProblemsCount).map((p, i) => {
           const isPremium = p.isPremium === true;
 
           return (
@@ -503,6 +525,14 @@ export default function TopicDetail() {
             />
           );
         })}
+
+        {/* Lazy load sentinel — ko'ringanida yana 10 ta misol qo'shiladi */}
+        {visibleProblemsCount < problems.length && (
+          <div ref={loadMoreRef} className="flex items-center justify-center py-6">
+            <div className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+            <span className="ml-2 text-sm text-gray-400">Yuklanmoqda...</span>
+          </div>
+        )}
       </div>
 
       {/* Modul testlari — admin qo'shgan testlar */}
