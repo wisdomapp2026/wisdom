@@ -221,45 +221,54 @@ export default function CreateProblemModal({ open, courseId, topicId, existingCo
             ]);
 
             const courseName = course?.title || "Kurs";
-            const moduleName = topic?.folderId
-              ? (courseFolders.find((f) => f.id === topic.folderId)?.title || "Modulsiz")
-              : "Modulsiz";
             const topicName = topic?.title || "Mavzu";
 
             const existingFolders = await getAllTBFolders();
 
-            /** Papkani topish yoki yaratish (parentId bo'yicha ierarxiya) */
+            /** Papkani topish yoki yaratish (refKey asosida — unikal identifikator) */
             async function ensureFolder(
               name: string,
               parentId: string | null,
               refKey: string
             ): Promise<any> {
-              let f = existingFolders.find(
-                (x: any) => x.refKey === refKey || (x.name === name && (x.parentId ?? null) === parentId)
-              );
-              if (!f) {
-                f = {
-                  id: `tbf-${refKey}`,
-                  name,
-                  parentId: parentId ?? null,
-                  refKey,
-                  questionIds: [],
-                };
-                await saveTBFolder(f);
-                existingFolders.push(f);
+              // Faqat refKey bo'yicha izlash — nomi o'zgarsa ham bir xil papka
+              let f = existingFolders.find((x: any) => x.refKey === refKey);
+              if (f) {
+                // Nomi o'zgargan bo'lsa yangilash
+                if (f.name !== name) {
+                  f.name = name;
+                  await saveTBFolder(f);
+                }
+                return f;
               }
+              f = {
+                id: `tbf-${refKey}`,
+                name,
+                parentId: parentId ?? null,
+                refKey,
+                questionIds: [],
+              };
+              await saveTBFolder(f);
+              existingFolders.push(f);
               return f;
             }
 
-            // 1. Kurs papkasi
+            // 1. Kurs papkasi (root)
             const courseFolder = await ensureFolder(courseName, null, `c-${courseId}`);
-            // 2. Modul papkasi (kurs ichida)
-            const moduleRefKey = topic?.folderId ? `m-${courseId}-${topic.folderId}` : `m-${courseId}-none`;
-            const moduleFolder = await ensureFolder(moduleName, courseFolder.id, moduleRefKey);
-            // 3. Mavzu papkasi (modul ichida) — test shu papkaga tushadi
-            const topicFolder = await ensureFolder(topicName, moduleFolder.id, `t-${courseId}-${topicId}`);
 
-            // Savol obyekti — mavzu papkasiga biriktiriladi
+            let targetFolder: any;
+
+            if (topic?.folderId) {
+              // Mavzu modul ichida — 3 darajali: Kurs → Modul → Mavzu
+              const moduleName = courseFolders.find((f) => f.id === topic.folderId)?.title || "Modul";
+              const moduleFolder = await ensureFolder(moduleName, courseFolder.id, `m-${courseId}-${topic.folderId}`);
+              targetFolder = await ensureFolder(topicName, moduleFolder.id, `t-${courseId}-${topicId}`);
+            } else {
+              // Mavzu modulsiz — 2 darajali: Kurs → Mavzu
+              targetFolder = await ensureFolder(topicName, courseFolder.id, `t-${courseId}-${topicId}`);
+            }
+
+            // Savol obyekti — manzil papkasiga biriktiriladi
             const newQ = {
               id: testQuestion.id,
               content,
@@ -267,7 +276,7 @@ export default function CreateProblemModal({ open, courseId, topicId, existingCo
               time: `${estimatedMinutes} min`,
               tags: tagList,
               order: Date.now(),
-              folderId: topicFolder.id,
+              folderId: targetFolder.id,
               options: testQuestion.options,
               correctAnswer,
               // Misol bilan bog'lanish va yechimlar — testga import qilinganda ko'chadi
@@ -280,17 +289,17 @@ export default function CreateProblemModal({ open, courseId, topicId, existingCo
 
             await saveTBQuestion(newQ);
 
-            // Mavzu papkasiga questionId qo'shish
-            if (!topicFolder.questionIds?.includes(testQuestion.id)) {
-              topicFolder.questionIds = [...(topicFolder.questionIds || []), testQuestion.id];
-              await saveTBFolder(topicFolder);
+            // Papkaga questionId qo'shish
+            if (!targetFolder.questionIds?.includes(testQuestion.id)) {
+              targetFolder.questionIds = [...(targetFolder.questionIds || []), testQuestion.id];
+              await saveTBFolder(targetFolder);
             }
 
             // localStorage sync (fallback uchun)
             const tbQuestions = JSON.parse(localStorage.getItem("tb_questions") || "[]");
             const tbFolders = JSON.parse(localStorage.getItem("tb_folders") || "[]");
             tbQuestions.push(newQ);
-            for (const f of [courseFolder, moduleFolder, topicFolder]) {
+            for (const f of existingFolders) {
               const idx = tbFolders.findIndex((x: any) => x.id === f.id);
               if (idx >= 0) tbFolders[idx] = f;
               else tbFolders.push(f);
