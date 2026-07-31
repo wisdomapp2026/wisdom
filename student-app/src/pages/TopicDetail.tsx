@@ -49,6 +49,18 @@ export default function TopicDetail() {
   const [topicOnlineUsers, setTopicOnlineUsers] = useState<Array<{ avatar?: string; name?: string }>>([]);
   const presenceRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
+  /**
+   * Orqaga qaytish — mavzu modul (papka) ichida bo'lsa modulga, aks holda kursga.
+   * Brauzer tarixida orqa sahifa bo'lsa undan foydalanamiz (back tugmasi bilan bir xil xatti-harakat).
+   */
+  function handleBack() {
+    if (topic?.folderId) {
+      navigate(`/course/${courseId}/folder/${topic.folderId}`);
+    } else {
+      navigate(`/course/${courseId}`);
+    }
+  }
+
   useEffect(() => {
     if (!courseId || !topicId) return;
     Promise.all([getTopicById(courseId, topicId), getProblemsByTopic(courseId, topicId), getTestsByCourse(courseId)])
@@ -406,7 +418,7 @@ export default function TopicDetail() {
       {/* Header */}
       <header className="bg-white px-5 pt-4 pb-4 border-b border-gray-100 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0 flex-1">
-          <Link to={`/course/${courseId}`} className="text-gray-500 shrink-0 self-center"><ChevronLeft size={22} /></Link>
+          <button onClick={handleBack} className="text-gray-500 shrink-0 self-center" aria-label="Orqaga"><ChevronLeft size={22} /></button>
           <h1 className="text-base font-bold text-gray-900 leading-tight line-clamp-2">{topic ? cleanTopicTitle(topic.title) : "Mavzu"}</h1>
         </div>
         <button

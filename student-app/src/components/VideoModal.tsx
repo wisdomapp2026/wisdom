@@ -20,16 +20,24 @@ export default function VideoModal({ open, videoUrl, onClose }: Props) {
   useEffect(() => {
     if (!open) return;
 
-    // History state qo'shish — back bosilganda popup yopilsin
+    // History state qo'shish — back bosilganda video yopilsin (sahifa o'zgarmasin)
     window.history.pushState({ videoOpen: true }, "");
+    // Popstate orqali yopilganini belgilash — cleanup da qo'shimcha back qilmaslik uchun
+    let closedByPop = false;
 
-    function handlePopState(e: PopStateEvent) {
+    function handlePopState() {
+      closedByPop = true;
       onClose();
     }
 
     window.addEventListener("popstate", handlePopState);
     return () => {
       window.removeEventListener("popstate", handlePopState);
+      // Video X tugmasi bilan yopilgan bo'lsa — qo'shilgan history yozuvini tozalash.
+      // Aks holda tarixda ortiqcha yozuv qolib, keyingi "back" sahifani o'zgartirmaydi.
+      if (!closedByPop && window.history.state?.videoOpen) {
+        window.history.back();
+      }
     };
   }, [open, onClose]);
 
@@ -65,13 +73,48 @@ export default function VideoModal({ open, videoUrl, onClose }: Props) {
 
   if (!open || !videoUrl) return null;
 
-  // YouTube URL ni embed formatga o'girish — kontrollar yoqilgan
+  /**
+   * YouTube URL ni embed formatga o'girish — kontrollar yoqilgan.
+   * Admin belgilagan start/end (boshlanish va tugash vaqti) saqlanadi.
+   */
   function getEmbedUrl(url: string): string {
-    const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/);
-    if (match) {
-      return `https://www.youtube-nocookie.com/embed/${match[1]}?autoplay=1&controls=1&modestbranding=1&rel=0&playsinline=1&fs=1`;
+    const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([\w-]+)/);
+    if (!match) return url;
+
+    const videoId = match[1];
+
+    // URL dagi start/end (yoki t) parametrlarini o'qish
+    const params = new URLSearchParams(url.includes("?") ? url.slice(url.indexOf("?") + 1) : "");
+    const startRaw = params.get("start") || params.get("t");
+    const endRaw = params.get("end");
+
+    // "90", "90s", "1m30s" kabi qiymatlarni soniyaga o'girish
+    function toSeconds(value: string | null): number | null {
+      if (!value) return null;
+      if (/^\d+$/.test(value)) return Number(value);
+      const m = value.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/);
+      if (m && (m[1] || m[2] || m[3])) {
+        return Number(m[1] || 0) * 3600 + Number(m[2] || 0) * 60 + Number(m[3] || 0);
+      }
+      return null;
     }
-    return url;
+
+    const start = toSeconds(startRaw);
+    const end = toSeconds(endRaw);
+
+    const embedParams = new URLSearchParams({
+      autoplay: "1",
+      controls: "1",
+      modestbranding: "1",
+      rel: "0",
+      playsinline: "1",
+      fs: "1",
+    });
+    if (start != null) embedParams.set("start", String(start));
+    // end faqat start dan katta bo'lsa mantiqiy
+    if (end != null && (start == null || end > start)) embedParams.set("end", String(end));
+
+    return `https://www.youtube-nocookie.com/embed/${videoId}?${embedParams.toString()}`;
   }
 
   function isYouTube(url: string): boolean {
@@ -80,12 +123,8 @@ export default function VideoModal({ open, videoUrl, onClose }: Props) {
 
   function handleClose() {
     setIsLandscape(false);
-    // History state ni orqaga qaytarish
-    if (window.history.state?.videoOpen) {
-      window.history.back();
-    } else {
-      onClose();
-    }
+    // Tarix tozalash cleanup effektida bajariladi — bu yerda faqat yopamiz
+    onClose();
   }
 
   function toggleLandscape() {
