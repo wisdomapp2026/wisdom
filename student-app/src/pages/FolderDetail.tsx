@@ -61,8 +61,6 @@ export default function FolderDetail() {
   // Papka ochilganda — onlayn presence belgilash (heartbeat)
   useEffect(() => {
     if (!courseId || !folderId || !user?.uid) return;
-    const isLocked = folder?.isPremium && !hasSubscription;
-    if (isLocked) return;
 
     let cancelled = false;
     async function beat() {
@@ -164,22 +162,20 @@ export default function FolderDetail() {
   // Davom etish uchun keyingi tugatilmagan mavzu (yoki birinchi mavzu)
   const topicItems = items.filter((it) => it.type === "topic") as Array<{ type: "topic"; data: Topic; order: number }>;
   const nextTopic =
-    topicItems.find((it) => !isTopicCompleted(it.data.id) && !(it.data.isPremium && !hasSubscription))?.data ||
+    topicItems.find((it) => !isTopicCompleted(it.data.id))?.data ||
     topicItems[0]?.data ||
     null;
   const currentTopicTitle = nextTopic ? cleanTopicTitle(nextTopic.title) : "";
-  const continueLink = nextTopic
-    ? (nextTopic.isPremium && !hasSubscription ? `/premium-gate?course=${courseId}` : `/course/${courseId}/topic/${nextTopic.id}`)
-    : null;
+  const continueLink = nextTopic ? `/course/${courseId}/topic/${nextTopic.id}` : null;
 
   function renderItem(item: FolderItem, itemIndex: number) {
     if (item.type === "topic") {
       const topic = item.data as Topic;
-      const premiumLocked = topic.isPremium && !hasSubscription;
+      // Premium mavzuga kirish mumkin — obuna faqat premium misollarni ko'rishda talab qilinadi
 
       // Sequential mode: oldingi mavzu tugatilmaguncha keyingisi qulflangan
       let sequenceLocked = false;
-      if (unlockMode === "sequential" && itemIndex > 0 && !premiumLocked) {
+      if (unlockMode === "sequential" && itemIndex > 0) {
         const prevTopics = items.slice(0, itemIndex).filter((it) => it.type === "topic");
         const lastPrevTopic = prevTopics[prevTopics.length - 1];
         if (lastPrevTopic) {
@@ -190,7 +186,7 @@ export default function FolderDetail() {
         }
       }
 
-      const isLocked = premiumLocked || sequenceLocked;
+      const isLocked = sequenceLocked;
       const totalP = topicProblemCounts[topic.id] || 0;
       const completedP = completedProblems.filter((pid) => pid.startsWith(`p-${topic.id.replace("topic-", "")}`)).length;
       const isDoneFlag = completedTopics.includes(topic.id);
@@ -200,7 +196,7 @@ export default function FolderDetail() {
 
       return (
         <Link
-          to={isLocked ? (premiumLocked ? `/premium-gate?course=${courseId}` : "#") : `/course/${courseId}/topic/${topic.id}`}
+          to={isLocked ? "#" : `/course/${courseId}/topic/${topic.id}`}
           onClick={(e) => {
             if (sequenceLocked) {
               e.preventDefault();

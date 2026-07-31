@@ -298,16 +298,11 @@ export default function CourseDetail() {
   const onlineNow = courseOnlineCount > 0 ? courseOnlineCount : (course?.onlineNow || 0);
 
   // "Davom etish" tugmasi manzili — keyingi tugatilmagan mavzu (yoki birinchi mavzu)
-  const nextTopic =
-    topics.find((t) => !isTopicCompleted(t.id) && !(t.isPremium && !hasSubscription)) ||
-    topics[0] ||
-    null;
+  const nextTopic = topics.find((t) => !isTopicCompleted(t.id)) || topics[0] || null;
   const continueTarget = nextTopic
-    ? (nextTopic.isPremium && !hasSubscription
-        ? `/premium-gate?course=${courseId}`
-        : (nextTopic.folderId
-            ? `/course/${courseId}/folder/${nextTopic.folderId}`
-            : `/course/${courseId}/topic/${nextTopic.id}`))
+    ? (nextTopic.folderId
+        ? `/course/${courseId}/folder/${nextTopic.folderId}`
+        : `/course/${courseId}/topic/${nextTopic.id}`)
     : null;
 
   // Bitta element (modul/test/maslahat) ni render qilish
@@ -315,28 +310,28 @@ export default function CourseDetail() {
   function renderItem(item: RenderableItem) {
     if (item.type === "topic") {
       const topic = item.data as Topic;
-      const isLocked = topic.isPremium && !hasSubscription;
+      // Premium mavzuga kirish mumkin — obuna faqat premium misollarni ko'rishda talab qilinadi
       const totalP = topicProblemCounts[topic.id] || 0;
       const completedP = completedProblems.filter((pid) => pid.startsWith(`p-${topic.id.replace("topic-", "")}`)).length;
       const isTopicCompleted = completedTopics.includes(topic.id);
-      const topicProgress = isLocked ? 0 : (isTopicCompleted ? 100 : (totalP > 0 ? Math.round((completedP / totalP) * 100) : 0));
-      const isDone = !isLocked && (isTopicCompleted || topicProgress === 100);
-      const isProgress = !isLocked && !isDone && topicProgress > 0;
+      const topicProgress = isTopicCompleted ? 100 : (totalP > 0 ? Math.round((completedP / totalP) * 100) : 0);
+      const isDone = isTopicCompleted || topicProgress === 100;
+      const isProgress = !isDone && topicProgress > 0;
 
       return (
         <Link
-          to={isLocked ? `/premium-gate?course=${courseId}` : `/course/${courseId}/topic/${topic.id}`}
+          to={`/course/${courseId}/topic/${topic.id}`}
           key={`topic-${topic.id}`}
           className="flex items-center border border-gray-100 rounded-xl p-4 gap-3 hover:shadow-sm transition-shadow"
         >
           <div className="w-11 h-11 bg-primary-50 rounded-xl flex items-center justify-center shrink-0">
             {isDone && <CheckCircle size={20} className="text-primary-500" />}
             {isProgress && <Clock size={20} className="text-primary-500" />}
-            {isLocked && <Lock size={18} className="text-gray-400" />}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <p className="font-semibold text-gray-900 text-sm truncate">{cleanTopicTitle(topic.title)}</p>
+              {topic.isPremium && <span className="shrink-0 text-yellow-500 text-xs">👑</span>}
               {isDone && <span className="text-green-500 text-xs">✓</span>}
             </div>
             <p className="text-xs text-gray-500 truncate">{topic.description}</p>
@@ -681,7 +676,6 @@ export default function CourseDetail() {
                     key={folder.id}
                     folder={folder}
                     folderItems={folderItems}
-                    hasSubscription={hasSubscription}
                     sequenceLocked={sequenceLocked}
                     progress={getFolderProgress(folder.id)}
                     onlineCount={folderOnlineCounts[folder.id] || 0}
@@ -888,7 +882,6 @@ type FolderItem = { type: "topic"; data: Topic; order: number } | { type: "test"
 function FolderBlock({
   folder,
   folderItems,
-  hasSubscription,
   sequenceLocked,
   progress,
   onlineCount,
@@ -896,13 +889,14 @@ function FolderBlock({
 }: {
   folder: Folder;
   folderItems: FolderItem[];
-  hasSubscription: boolean;
   sequenceLocked?: boolean;
   progress: number;
   onlineCount: number;
   courseId: string;
 }) {
-  const isLocked = (folder.isPremium && !hasSubscription) || !!sequenceLocked;
+  // Premium modul ichiga kirish mumkin — faqat premium misollar obuna talab qiladi.
+  // Qulflash faqat ketma-ket rejimda (oldingi modul tugatilmagan) qo'llanadi.
+  const isLocked = !!sequenceLocked;
   const totalTopics = folderItems.filter((it) => it.type === "topic").length;
 
   const [showLockMsg, setShowLockMsg] = useState(false);
@@ -910,7 +904,7 @@ function FolderBlock({
   return (
     <>
     <Link
-      to={isLocked ? (sequenceLocked ? "#" : `/premium-gate?course=${courseId}`) : `/course/${courseId}/folder/${folder.id}`}
+      to={isLocked ? "#" : `/course/${courseId}/folder/${folder.id}`}
       onClick={(e) => {
         if (sequenceLocked) {
           e.preventDefault();
