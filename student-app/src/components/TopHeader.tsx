@@ -64,7 +64,7 @@ export default function TopHeader() {
           </button>
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          <button onClick={() => navigate("/courses")} className="w-10 h-10 flex items-center justify-center text-gray-500 rounded-xl active:bg-gray-100 transition-colors" aria-label="Qidirish">
+          <button onClick={() => navigate("/search")} className="w-10 h-10 flex items-center justify-center text-gray-500 rounded-xl active:bg-gray-100 transition-colors" aria-label="Qidirish">
             <Search size={20} />
           </button>
           <NotificationBell />

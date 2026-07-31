@@ -27,6 +27,7 @@ import PaymentHistory from "./pages/PaymentHistory";
 import AllNews from "./pages/AllNews";
 import PromoPage from "./pages/PromoPage";
 import StudentNotifications from "./pages/StudentNotifications";
+import Search from "./pages/Search";
 import BannedScreen from "./components/BannedScreen";
 import DeviceLimitScreen from "./components/DeviceLimitScreen";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -157,6 +158,7 @@ export default function App() {
         <Route path="/profile/promo" element={<PromoPage />} />
         <Route path="/messages" element={<Messages />} />
         <Route path="/notifications" element={<StudentNotifications />} />
+        <Route path="/search" element={<Search />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/course/:courseId" element={<CourseDetail />} />
