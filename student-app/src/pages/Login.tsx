@@ -1,10 +1,14 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useState } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@shared/firebase";
+import { getAuthPath, getSafeReturnTo } from "../utils/authRedirect";
 
 export default function Login() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnTo = getSafeReturnTo(searchParams.get("returnTo"));
+  const registerPath = getAuthPath("/register", returnTo);
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -21,7 +25,7 @@ export default function Login() {
 
     try {
       await signInWithEmailAndPassword(auth, email, password);
-      navigate("/");
+      navigate(returnTo, { replace: true });
     } catch (err: any) {
       if (err.code === "auth/invalid-credential" || err.code === "auth/user-not-found") {
         setError("Telefon raqam yoki parol noto'g'ri. Ro'yxatdan o'ting.");
@@ -112,10 +116,10 @@ export default function Login() {
 
       {/* Register link */}
       <p className="text-sm text-gray-500">Hisobingiz yo'qmi?</p>
-      <Link to="/register" className="text-base font-bold text-primary-500 mt-1">Ro'yxatdan o'tish</Link>
+      <Link to={registerPath} className="text-base font-bold text-primary-500 mt-1">Ro'yxatdan o'tish</Link>
 
       {/* Mehmon sifatida kirish */}
-      <Link to="/" className="mt-6 text-sm text-gray-400 font-medium">Mehmon sifatida kirish →</Link>
+      <Link to={returnTo} className="mt-6 text-sm text-gray-400 font-medium">Mehmon sifatida kirish →</Link>
     </div>
   );
 }

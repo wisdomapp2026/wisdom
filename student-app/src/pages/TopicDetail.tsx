@@ -501,7 +501,7 @@ export default function TopicDetail() {
           <div>
             <p className="text-xs font-semibold text-amber-800">Siz mehmon sifatida kirgansiz</p>
             <p className="text-[11px] text-amber-700 mt-0.5 leading-relaxed">Akkauntga kirmasdan darslarni o'rganishingiz mumkin, lekin natijalaringiz saqlanmaydi!</p>
-            <Link to="/login" className="inline-block mt-2 text-[11px] font-semibold text-primary-600 bg-primary-50 px-3 py-1.5 rounded-lg">Akkauntga kirish</Link>
+            <Link to={`/login?returnTo=${encodeURIComponent(window.location.pathname + window.location.search + window.location.hash)}`} className="inline-block mt-2 text-[11px] font-semibold text-primary-600 bg-primary-50 px-3 py-1.5 rounded-lg">Akkauntga kirish</Link>
           </div>
         </div>
       )}

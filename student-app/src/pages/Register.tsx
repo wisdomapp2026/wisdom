@@ -1,11 +1,15 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useState } from "react";
 import { createUserWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@shared/firebase";
 import { createUser } from "@shared/repositories";
+import { getAuthPath, getSafeReturnTo } from "../utils/authRedirect";
 
 export default function Register() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnTo = getSafeReturnTo(searchParams.get("returnTo"));
+  const loginPath = getAuthPath("/login", returnTo);
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -33,7 +37,7 @@ export default function Register() {
         updatedAt: Date.now(),
       });
 
-      navigate("/");
+      navigate(returnTo, { replace: true });
     } catch (err: any) {
       if (err.code === "auth/email-already-in-use") {
         setError("Bu telefon raqam allaqachon ro'yxatdan o'tgan. Kirish sahifasiga o'ting.");
@@ -51,7 +55,7 @@ export default function Register() {
     <div className="min-h-screen px-5 pt-4 bg-white">
       {/* Header */}
       <div className="flex items-center gap-3 mb-4">
-        <Link to="/login" className="w-11 h-11 flex items-center justify-center rounded-xl text-2xl text-gray-600 hover:bg-gray-100 active:bg-gray-200" aria-label="Orqaga">‹</Link>
+        <Link to={loginPath} className="w-11 h-11 flex items-center justify-center rounded-xl text-2xl text-gray-600 hover:bg-gray-100 active:bg-gray-200" aria-label="Orqaga">‹</Link>
         <h1 className="text-lg font-bold">Ro'yxatdan o'tish</h1>
       </div>
       <div className="h-1 bg-primary-500 -mx-5 mb-8" />
@@ -122,7 +126,7 @@ export default function Register() {
 
       {/* Login link */}
       <p className="text-center mt-6 text-sm text-gray-500">Profilingiz bormi?</p>
-      <p className="text-center"><Link to="/login" className="font-bold text-primary-500">Kirish</Link></p>
+      <p className="text-center"><Link to={loginPath} className="font-bold text-primary-500">Kirish</Link></p>
 
       {/* Security */}
       <div className="mt-8 bg-blue-50 border border-blue-100 rounded-xl p-4">

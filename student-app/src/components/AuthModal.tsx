@@ -1,21 +1,21 @@
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
+import { getAuthPath } from "../utils/authRedirect";
 
 interface Props {
   open: boolean;
   onClose: () => void;
 }
 
-/**
- * Auth Required Modal — skrinshotdan (visily-videostream-auth-required-modal.png)
- * Login talab qilinayotganda modal oyna
- */
+/** Login talab qilinayotganda modal oyna. */
 export default function AuthModal({ open, onClose }: Props) {
+  const location = useLocation();
   if (!open) return null;
+
+  const returnTo = `${location.pathname}${location.search}${location.hash}`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 px-6">
       <div className="bg-white rounded-3xl w-full max-w-sm p-8 text-center shadow-xl">
-        {/* Shield icon */}
         <div className="mx-auto w-14 h-14 bg-primary-100 rounded-full flex items-center justify-center">
           <span className="text-primary-500 text-2xl">🛡️</span>
         </div>
@@ -25,9 +25,8 @@ export default function AuthModal({ open, onClose }: Props) {
           Eksklyuziv videolarni ko'rish va barcha imkoniyatlardan foydalanish uchun hisobingizga kiring.
         </p>
 
-        {/* Buttons */}
         <Link
-          to="/login"
+          to={getAuthPath("/login", returnTo)}
           onClick={onClose}
           className="w-full bg-primary-500 text-white font-bold py-3.5 rounded-xl mt-6 flex items-center justify-center gap-2"
         >
@@ -35,7 +34,7 @@ export default function AuthModal({ open, onClose }: Props) {
         </Link>
 
         <Link
-          to="/register"
+          to={getAuthPath("/register", returnTo)}
           onClick={onClose}
           className="w-full border-2 border-gray-900 text-gray-900 font-bold py-3.5 rounded-xl mt-3 flex items-center justify-center gap-2"
         >
