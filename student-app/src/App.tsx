@@ -34,10 +34,11 @@ import { useAuth } from "./hooks/useAuth";
 import { useActivityTracker } from "./hooks/useActivityTracker";
 import { useDeviceSession } from "./hooks/useDeviceSession";
 import { getUserById } from "@shared/repositories";
+import { signOut } from "firebase/auth";
+import { auth, db } from "@shared/firebase";
 import { syncLocalProgressToDb, hasLocalProgress } from "./hooks/useLocalProgress";
 import type { User } from "@shared/types";
 import { doc, getDoc } from "firebase/firestore";
-import { db } from "@shared/firebase";
 
 export default function App() {
   const { user, loading: authLoading } = useAuth();
@@ -48,7 +49,14 @@ export default function App() {
     if (user) {
       setCheckingBan(true);
       getUserById(user.uid)
-        .then((u) => setUserData(u))
+        .then((u) => {
+          if (!u) {
+            // User Firestore dan o'chirilgan — tizimdan chiqarish
+            signOut(auth);
+            return;
+          }
+          setUserData(u);
+        })
         .catch(console.error)
         .finally(() => setCheckingBan(false));
 
