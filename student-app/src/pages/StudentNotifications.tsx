@@ -27,6 +27,7 @@ export default function StudentNotifications() {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<StudentNotif[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
     if (user) loadNotifications();
@@ -109,7 +110,10 @@ export default function StudentNotifications() {
               return (
                 <button
                   key={notif.id}
-                  onClick={() => !notif.isRead && markAsRead(notif.id)}
+                  onClick={() => {
+                    if (!notif.isRead) markAsRead(notif.id);
+                    setExpandedId(expandedId === notif.id ? null : notif.id);
+                  }}
                   className={`w-full flex items-start gap-3 p-4 rounded-xl text-left transition-colors ${
                     !notif.isRead ? "bg-blue-50/50 border border-blue-100" : "bg-white border border-gray-100"
                   }`}
@@ -122,7 +126,7 @@ export default function StudentNotifications() {
                       <p className={`text-sm ${!notif.isRead ? "font-semibold text-gray-900" : "text-gray-700"}`}>{notif.title}</p>
                       {!notif.isRead && <span className="w-2 h-2 bg-primary-500 rounded-full shrink-0" />}
                     </div>
-                    <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{notif.body}</p>
+                    <p className={`text-xs text-gray-500 mt-0.5 whitespace-pre-wrap break-words ${expandedId === notif.id ? "" : "line-clamp-2"}`}>{notif.body}</p>
                     <p className="text-[10px] text-gray-400 mt-1">{timeAgo}</p>
                   </div>
                 </button>
