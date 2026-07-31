@@ -18,6 +18,11 @@ interface LibQuestion {
   correctAnswer?: string;
   videoUrl?: string;
   videoType?: "youtube" | "upload";
+  /** Misol bilan bog'lanish */
+  problemId?: string;
+  /** Bosqichma-bosqich yechim */
+  solution?: { stepNumber: number; text: string; category?: string }[];
+  solutionImage?: string;
 }
 
 interface LibFolder {
@@ -193,6 +198,10 @@ export default function ImportTestModal({ open, courseId, existingTestIds, folde
         tags: q.tags,
         ...(q.videoUrl ? { videoUrl: q.videoUrl } : {}),
         ...(q.videoType ? { videoType: q.videoType } : {}),
+        // Misol bog'lanishi va yechimlar — test natijasida ko'rsatish uchun
+        ...(q.problemId ? { problemId: q.problemId } : {}),
+        ...(q.solution ? { solution: q.solution } : {}),
+        ...(q.solutionImage ? { solutionImage: q.solutionImage } : {}),
       }));
 
       const test: Test = {
@@ -254,6 +263,10 @@ export default function ImportTestModal({ open, courseId, existingTestIds, folde
           tags: q.tags,
           ...(q.videoUrl ? { videoUrl: q.videoUrl } : {}),
           ...(q.videoType ? { videoType: q.videoType } : {}),
+          // Misol bog'lanishi va yechimlar — test natijasida ko'rsatish uchun
+          ...(q.problemId ? { problemId: q.problemId } : {}),
+          ...(q.solution ? { solution: q.solution } : {}),
+          ...(q.solutionImage ? { solutionImage: q.solutionImage } : {}),
         }));
 
         const listTotalTime = testQuestions.reduce((sum, q) => sum + q.estimatedMinutes, 0);

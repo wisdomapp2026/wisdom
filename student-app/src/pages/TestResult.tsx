@@ -126,13 +126,21 @@ export default function TestResult() {
     }
   }
 
-  /** Savol uchun mos misolni topish (content bo'yicha match) — video va bosqichli yechim uchun */
+  /**
+   * Savol uchun mos misolni topish.
+   * 1. problemId bo'yicha (aniq bog'lanish — misolga variant qo'shilganda yoziladi)
+   * 2. Eski savollar uchun zaxira: content bo'yicha taqqoslash
+   */
   function findProblemForQuestion(question: Question): Problem | null {
+    // 1. Aniq bog'lanish
+    if (question.problemId) {
+      const byId = courseProblems.find((p) => p.id === question.problemId);
+      if (byId) return byId;
+    }
+    // 2. Zaxira — matn bo'yicha
     const qContent = question.content.trim();
-    // 1. To'liq mos kelish
     const exact = courseProblems.find((p) => p.content.trim() === qContent);
     if (exact) return exact;
-    // 2. Qisman match (content boshi bir xil)
     const partial = courseProblems.find((p) => {
       const pContent = p.content.trim();
       return pContent.startsWith(qContent.slice(0, 20)) || qContent.startsWith(pContent.slice(0, 20));
@@ -140,23 +148,23 @@ export default function TestResult() {
     return partial || null;
   }
 
-  /** Savol uchun mos video yechimni topish */
+  /** Savol uchun mos video yechimni topish — savolning o'zi ustuvor */
   function findVideoForQuestion(question: Question): string | null {
-    // 1. Avval savolning o'zida videoUrl bormi
     if (question.videoUrl) return question.videoUrl;
-    // 2. Mos misoldan olish
     const problem = findProblemForQuestion(question);
     return problem?.videoUrl || null;
   }
 
-  /** Savol uchun bosqichma-bosqich yechimni topish */
+  /** Savol uchun bosqichma-bosqich yechimni topish — savolning o'zi ustuvor */
   function findSolutionForQuestion(question: Question) {
+    if (question.solution && question.solution.length > 0) return question.solution;
     const problem = findProblemForQuestion(question);
     return problem?.solution && problem.solution.length > 0 ? problem.solution : null;
   }
 
-  /** Savol uchun yechim rasmini topish */
+  /** Savol uchun yechim rasmini topish — savolning o'zi ustuvor */
   function findSolutionImageForQuestion(question: Question): string | null {
+    if (question.solutionImage) return question.solutionImage;
     const problem = findProblemForQuestion(question);
     return problem?.solutionImage || null;
   }
@@ -311,8 +319,8 @@ export default function TestResult() {
             }
           </div>
 
-          {/* Yechimlar yuklanmoqda */}
-          {problemsLoading && (
+          {/* Yechimlar yuklanmoqda — faqat savolning o'zida yechim bo'lmasa kutamiz */}
+          {problemsLoading && !questions[selectedQuestion].videoUrl && !questions[selectedQuestion].solution && (
             <div className="mt-4 flex items-center gap-2 px-3 py-2.5 bg-gray-50 rounded-xl">
               <div className="w-4 h-4 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
               <span className="text-xs text-gray-500">Yechimlar yuklanmoqda...</span>
@@ -320,7 +328,7 @@ export default function TestResult() {
           )}
 
           {/* Video yechim — to'g'ri va xato javoblar uchun ham */}
-          {!problemsLoading && (() => {
+          {(() => {
             const videoUrl = findVideoForQuestion(questions[selectedQuestion]);
             if (!videoUrl) return null;
             return (
@@ -342,7 +350,7 @@ export default function TestResult() {
           })()}
 
           {/* Bosqichma-bosqich yechim */}
-          {!problemsLoading && (() => {
+          {(() => {
             const steps = findSolutionForQuestion(questions[selectedQuestion]);
             const solutionImage = findSolutionImageForQuestion(questions[selectedQuestion]);
             if (!steps && !solutionImage) return null;
@@ -395,7 +403,7 @@ export default function TestResult() {
       )}
 
       {/* Pastda umumiy video yechimlar — barcha savollar uchun (to'g'ri + xato) */}
-      {!problemsLoading && (() => {
+      {(() => {
         const withVideo = answers
           .map((ans, i) => ({ ans, question: questions[i], index: i }))
           .filter(({ question }) => {

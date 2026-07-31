@@ -259,6 +259,12 @@ export interface Question {
   /** Video yechim — noto'g'ri javob berilganda tavsiya qilinadi */
   videoUrl?: string;
   videoType?: "youtube" | "upload";
+  /** Savol qaysi misoldan yaratilgan (misol → test savoli bog'lanishi) */
+  problemId?: string;
+  /** Bosqichma-bosqich yechim — misoldan ko'chiriladi */
+  solution?: SolutionStep[];
+  /** Yechim rasmi — misoldan ko'chiriladi */
+  solutionImage?: string;
 }
 
 export interface QuestionOption {

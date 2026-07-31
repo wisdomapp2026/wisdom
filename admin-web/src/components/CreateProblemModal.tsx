@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { X, Upload } from "lucide-react";
-import { createProblem, updateProblem, saveTestToLibrary, saveTBQuestion, saveTBFolder, getAllTBFolders, getCourseById, getTopicById, getFoldersByCourse } from "@shared/repositories";
+import { createProblem, updateProblem, saveTestToLibrary, saveTBQuestion, saveTBFolder, getAllTBFolders, getAllTBQuestions, getCourseById, getTopicById, getFoldersByCourse } from "@shared/repositories";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { storage } from "@shared/firebase";
 import type { Problem, Test, Question } from "@shared/types";
@@ -116,6 +116,30 @@ export default function CreateProblemModal({ open, courseId, topicId, existingCo
           solution: finalSolution,
           solutionImage: solutionImage || undefined,
         });
+
+        // Test bazasidagi bog'langan savolni ham yangilash (video + yechim mos qolishi uchun)
+        try {
+          const tbQuestions = await getAllTBQuestions();
+          const linked = tbQuestions.find(
+            (q: any) => q.problemId === editData.id || q.id === `q-${editData.id}`
+          );
+          if (linked) {
+            await saveTBQuestion({
+              ...linked,
+              content,
+              difficulty,
+              time: `${estimatedMinutes} min`,
+              tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
+              problemId: editData.id,
+              videoUrl: finalVideoUrl ?? null,
+              videoType: finalVideoType ?? null,
+              solution: finalSolution ?? null,
+              solutionImage: solutionImage || null,
+            });
+          }
+        } catch (err) {
+          console.error("Test bazasidagi savolni yangilashda xatolik:", err);
+        }
       } else {
         // CREATE mode
         const order = existingCount + 1;
@@ -158,6 +182,12 @@ export default function CreateProblemModal({ open, courseId, topicId, existingCo
             estimatedMinutes,
             difficulty,
             tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
+            // Misol bilan bog'lanish va yechimlar — test natijasida ko'rsatiladi
+            problemId: id,
+            ...(finalVideoUrl ? { videoUrl: finalVideoUrl } : {}),
+            ...(finalVideoType ? { videoType: finalVideoType } : {}),
+            ...(finalSolution ? { solution: finalSolution } : {}),
+            ...(solutionImage ? { solutionImage } : {}),
           };
 
           const testEntry: Test = {
@@ -240,6 +270,12 @@ export default function CreateProblemModal({ open, courseId, topicId, existingCo
               folderId: topicFolder.id,
               options: testQuestion.options,
               correctAnswer,
+              // Misol bilan bog'lanish va yechimlar — testga import qilinganda ko'chadi
+              problemId: id,
+              ...(finalVideoUrl ? { videoUrl: finalVideoUrl } : {}),
+              ...(finalVideoType ? { videoType: finalVideoType } : {}),
+              ...(finalSolution ? { solution: finalSolution } : {}),
+              ...(solutionImage ? { solutionImage } : {}),
             };
 
             await saveTBQuestion(newQ);
