@@ -78,13 +78,16 @@ export default function TestBuilder() {
   async function loadFromFirestore() {
     setLoadingData(true);
     try {
-      // 1. "Umumiy" va guruhlanmagan savollarni avtomatik Kurs -> Modul -> Mavzu papkalariga ko'chirish
-      await organizeGeneralTestLibrary().catch((e) => console.error("Organize err:", e));
-
+      // 1. Dastlab darhol Firestore dagi savollar va papkalarni olish
       const [dbQuestions, dbFolders] = await Promise.all([
         getAllTBQuestions(),
         getAllTBFolders(),
       ]);
+
+      // 2. "Umumiy" papkasini orqa fonda (asinxron, non-blocking) qayta guruhlash
+      organizeGeneralTestLibrary()
+        .then(() => getAllTBFolders().then((f) => setFolders(f as Folder[])))
+        .catch((e) => console.error("Organize err:", e));
 
       if (dbQuestions.length > 0 || dbFolders.length > 0) {
         // Firestore dan olish

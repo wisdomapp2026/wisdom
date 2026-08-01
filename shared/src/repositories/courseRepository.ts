@@ -434,141 +434,93 @@ export async function deleteTBFolder(folderId: string): Promise<void> {
  * Kurs -> Modul -> Mavzu 3-darajali papkalar iyerarxiyasiga joylashtirish migration funksiyasi.
  */
 export async function organizeGeneralTestLibrary(): Promise<{ movedCount: number }> {
-  const folders = await getAllTBFolders();
-  const questions = await getAllTBQuestions();
-  const courses = await getAllCourses();
+  try {
+    const folders = await getAllTBFolders();
+    const questions = await getAllTBQuestions();
+    const courses = await getAllCourses();
 
-  const courseTopicsMap: Record<string, { topic: Topic; folderId?: string }[]> = {};
-  const topicCourseMap: Record<string, { courseId: string; folderId?: string; topic: Topic }> = {};
-  const problemMap: Record<string, { courseId: string; folderId?: string; topicId: string }> = {};
-
-  for (const c of courses) {
-    const [tList, fList] = await Promise.all([
-      getTopicsByCourse(c.id),
-      getFoldersByCourse(c.id),
-    ]);
-    courseTopicsMap[c.id] = tList.map((t) => ({ topic: t, folderId: t.folderId }));
-
-    for (const t of tList) {
-      topicCourseMap[t.id] = { courseId: c.id, folderId: t.folderId, topic: t };
-      const probs = await getProblemsByTopic(c.id, t.id);
-      for (const p of probs) {
-        problemMap[p.id] = { courseId: c.id, folderId: t.folderId, topicId: t.id };
-      }
+    if (courses.length === 0 || questions.length === 0) {
+      return { movedCount: 0 };
     }
-  }
 
-  const folderMap = new Map<string, any>(folders.map((f) => [f.id, { ...f }]));
+    const folderMap = new Map<string, any>(folders.map((f) => [f.id, { ...f }]));
 
-  async function ensureFolder(name: string, parentId: string | null, refKey: string): Promise<any> {
-    const id = `tbf-${refKey}`;
-    let f = folderMap.get(id);
-    if (!f) {
-      for (const existing of folderMap.values()) {
-        if (
-          existing.refKey === refKey ||
-          ((existing.parentId ?? null) === parentId && existing.name?.trim().toLowerCase() === name.trim().toLowerCase())
-        ) {
-          f = existing;
-          break;
+    async function ensureFolder(name: string, parentId: string | null, refKey: string): Promise<any> {
+      const id = `tbf-${refKey}`;
+      let f = folderMap.get(id);
+      if (!f) {
+        for (const existing of folderMap.values()) {
+          if (
+            existing.refKey === refKey ||
+            ((existing.parentId ?? null) === parentId && existing.name?.trim().toLowerCase() === name.trim().toLowerCase())
+          ) {
+            f = existing;
+            break;
+          }
+        }
+      }
+
+      if (f) {
+        let updated = false;
+        if (!f.refKey) { f.refKey = refKey; updated = true; }
+        if ((f.parentId ?? null) !== parentId) { f.parentId = parentId; updated = true; }
+        if (f.name !== name) { f.name = name; updated = true; }
+        if (updated) {
+          folderMap.set(f.id, f);
+          await saveTBFolder(f);
+        }
+        return f;
+      }
+
+      const newF = {
+        id,
+        name,
+        parentId: parentId ?? null,
+        refKey,
+        questionIds: [],
+      };
+      folderMap.set(id, newF);
+      await saveTBFolder(newF);
+      return newF;
+    }
+
+    let movedCount = 0;
+    const defaultCourse = courses[0];
+    const courseFolder = await ensureFolder(defaultCourse.title || "Kurs", null, `c-${defaultCourse.id}`);
+
+    for (const q of questions) {
+      const qCourseId = q.courseId || defaultCourse.id;
+      const targetCourse = courses.find((c) => c.id === qCourseId) || defaultCourse;
+
+      let cFolder = courseFolder;
+      if (targetCourse.id !== defaultCourse.id) {
+        cFolder = await ensureFolder(targetCourse.title || "Kurs", null, `c-${targetCourse.id}`);
+      }
+
+      // Har doim cFolder (Course Folder) ga biriktiramiz
+      if (cFolder) {
+        const qIds: string[] = cFolder.questionIds || [];
+        if (!qIds.includes(q.id)) {
+          cFolder.questionIds = [...qIds, q.id];
+          await saveTBFolder(cFolder);
+          folderMap.set(cFolder.id, cFolder);
+          movedCount++;
         }
       }
     }
 
-    if (f) {
-      let updated = false;
-      if (!f.refKey) { f.refKey = refKey; updated = true; }
-      if ((f.parentId ?? null) !== parentId) { f.parentId = parentId; updated = true; }
-      if (f.name !== name) { f.name = name; updated = true; }
-      if (updated) {
-        folderMap.set(f.id, f);
-        await saveTBFolder(f);
+    // "Umumiy" deb nomlangan ortiqcha bo'sh papkani o'chirish
+    for (const f of folderMap.values()) {
+      if (f.name?.trim().toLowerCase() === "umumiy" || f.refKey === "general") {
+        await deleteTBFolder(f.id);
       }
-      return f;
     }
 
-    const newF = {
-      id,
-      name,
-      parentId: parentId ?? null,
-      refKey,
-      questionIds: [],
-    };
-    folderMap.set(id, newF);
-    await saveTBFolder(newF);
-    return newF;
+    return { movedCount };
+  } catch (err) {
+    console.error("organizeGeneralTestLibrary error:", err);
+    return { movedCount: 0 };
   }
-
-  let movedCount = 0;
-
-  for (const q of questions) {
-    let targetCourseId = q.courseId;
-    let targetTopicId = q.topicId;
-    let targetFolderId = q.folderId;
-
-    if (q.problemId && problemMap[q.problemId]) {
-      const pm = problemMap[q.problemId];
-      targetCourseId = pm.courseId;
-      targetFolderId = pm.folderId;
-      targetTopicId = pm.topicId;
-    }
-
-    if (!targetCourseId && targetTopicId && topicCourseMap[targetTopicId]) {
-      const tm = topicCourseMap[targetTopicId];
-      targetCourseId = tm.courseId;
-      targetFolderId = tm.folderId;
-    }
-
-    if (!targetCourseId && courses.length > 0) {
-      targetCourseId = courses[0].id;
-      const firstTopic = courseTopicsMap[targetCourseId]?.[0];
-      if (firstTopic) {
-        targetTopicId = firstTopic.topic.id;
-        targetFolderId = firstTopic.folderId;
-      }
-    }
-
-    if (!targetCourseId) continue;
-
-    const course = courses.find((c) => c.id === targetCourseId);
-    const courseName = course?.title || "Kurs";
-
-    const courseFolder = await ensureFolder(courseName, null, `c-${targetCourseId}`);
-
-    let targetFolder: any;
-    if (targetTopicId) {
-      const tm = topicCourseMap[targetTopicId];
-      const topicName = tm?.topic.title || "Mavzu";
-      if (targetFolderId) {
-        const courseFolders = await getFoldersByCourse(targetCourseId);
-        const moduleName = courseFolders.find((f) => f.id === targetFolderId)?.title || "Modul";
-        const moduleFolder = await ensureFolder(moduleName, courseFolder.id, `m-${targetCourseId}-${targetFolderId}`);
-        targetFolder = await ensureFolder(topicName, moduleFolder.id, `t-${targetCourseId}-${targetTopicId}`);
-      } else {
-        targetFolder = await ensureFolder(topicName, courseFolder.id, `t-${targetCourseId}-${targetTopicId}`);
-      }
-    } else {
-      targetFolder = courseFolder;
-    }
-
-    if (targetFolder) {
-      const qIds: string[] = targetFolder.questionIds || [];
-      if (!qIds.includes(q.id)) {
-        targetFolder.questionIds = [...qIds, q.id];
-        await saveTBFolder(targetFolder);
-        folderMap.set(targetFolder.id, targetFolder);
-        movedCount++;
-      }
-    }
-  }
-
-  for (const f of folderMap.values()) {
-    if (f.name?.trim().toLowerCase() === "umumiy" || f.refKey === "general") {
-      await deleteTBFolder(f.id);
-    }
-  }
-
-  return { movedCount };
 }
 
 // ============ ADVICE (Maslahat bloklari) ============
