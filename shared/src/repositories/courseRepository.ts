@@ -435,12 +435,63 @@ export async function deleteTBFolder(folderId: string): Promise<void> {
  */
 export async function organizeGeneralTestLibrary(): Promise<{ movedCount: number }> {
   try {
-    const folders = await getAllTBFolders();
-    const questions = await getAllTBQuestions();
-    const courses = await getAllCourses();
+    const [folders, questions, courses] = await Promise.all([
+      getAllTBFolders(),
+      getAllTBQuestions(),
+      getAllCourses(),
+    ]);
 
     if (courses.length === 0 || questions.length === 0) {
       return { movedCount: 0 };
+    }
+
+    // Barcha kurslar ichidagi modullar, mavzular va misollarni o'qish
+    type ProblemMeta = {
+      courseId: string;
+      courseTitle: string;
+      folderId?: string;
+      moduleTitle?: string;
+      topicId: string;
+      topicTitle: string;
+    };
+
+    const problemByIdMap = new Map<string, ProblemMeta>();
+    const problemByContentMap = new Map<string, ProblemMeta>();
+    const topicByIdMap = new Map<string, ProblemMeta>();
+
+    for (const course of courses) {
+      const [tList, mList] = await Promise.all([
+        getTopicsByCourse(course.id),
+        getFoldersByCourse(course.id),
+      ]);
+
+      const moduleMap = new Map(mList.map((m) => [m.id, m.title]));
+
+      for (const topic of tList) {
+        const moduleTitle = topic.folderId ? moduleMap.get(topic.folderId) : undefined;
+        const meta: ProblemMeta = {
+          courseId: course.id,
+          courseTitle: course.title,
+          folderId: topic.folderId,
+          moduleTitle,
+          topicId: topic.id,
+          topicTitle: topic.title,
+        };
+
+        topicByIdMap.set(topic.id, meta);
+
+        try {
+          const problems = await getProblemsByTopic(course.id, topic.id);
+          for (const prob of problems) {
+            problemByIdMap.set(prob.id, meta);
+            if (prob.content) {
+              problemByContentMap.set(prob.content.trim().toLowerCase(), meta);
+            }
+          }
+        } catch {
+          // Ignore topic problems error
+        }
+      }
     }
 
     const folderMap = new Map<string, any>(folders.map((f) => [f.id, { ...f }]));
@@ -485,31 +536,83 @@ export async function organizeGeneralTestLibrary(): Promise<{ movedCount: number
     }
 
     let movedCount = 0;
-    const defaultCourse = courses[0];
-    const courseFolder = await ensureFolder(defaultCourse.title || "Kurs", null, `c-${defaultCourse.id}`);
 
     for (const q of questions) {
-      const qCourseId = q.courseId || defaultCourse.id;
-      const targetCourse = courses.find((c) => c.id === qCourseId) || defaultCourse;
+      const cleanContent = q.content ? q.content.trim().toLowerCase() : "";
+      
+      // 1. Meta topish: problemId -> content match -> topicId
+      let meta: ProblemMeta | undefined =
+        (q.problemId ? problemByIdMap.get(q.problemId) : undefined) ||
+        problemByContentMap.get(cleanContent) ||
+        (q.topicId ? topicByIdMap.get(q.topicId) : undefined);
 
-      let cFolder = courseFolder;
-      if (targetCourse.id !== defaultCourse.id) {
-        cFolder = await ensureFolder(targetCourse.title || "Kurs", null, `c-${targetCourse.id}`);
+      // Agar topilmasa: 1-kurs va 1-mavzugacha fallback
+      if (!meta && courses.length > 0) {
+        const firstCourse = courses[0];
+        const firstTopicMeta = Array.from(topicByIdMap.values())[0];
+        if (firstTopicMeta) {
+          meta = firstTopicMeta;
+        } else {
+          meta = {
+            courseId: firstCourse.id,
+            courseTitle: firstCourse.title,
+            topicId: "default-topic",
+            topicTitle: "Mavzu 1",
+          };
+        }
       }
 
-      // Har doim cFolder (Course Folder) ga biriktiramiz
-      if (cFolder) {
-        const qIds: string[] = cFolder.questionIds || [];
-        if (!qIds.includes(q.id)) {
-          cFolder.questionIds = [...qIds, q.id];
-          await saveTBFolder(cFolder);
-          folderMap.set(cFolder.id, cFolder);
-          movedCount++;
+      if (!meta) continue;
+
+      // 1-daraja: Kurs papkasi
+      const courseFolder = await ensureFolder(meta.courseTitle, null, `c-${meta.courseId}`);
+
+      let targetFolder = courseFolder;
+
+      // 2 va 3-daraja: Modul va Mavzu papkalari
+      if (meta.topicTitle) {
+        if (meta.folderId && meta.moduleTitle) {
+          const moduleFolder = await ensureFolder(
+            meta.moduleTitle,
+            courseFolder.id,
+            `m-${meta.courseId}-${meta.folderId}`
+          );
+          targetFolder = await ensureFolder(
+            meta.topicTitle,
+            moduleFolder.id,
+            `t-${meta.courseId}-${meta.topicId}`
+          );
+        } else {
+          targetFolder = await ensureFolder(
+            meta.topicTitle,
+            courseFolder.id,
+            `t-${meta.courseId}-${meta.topicId}`
+          );
         }
+      }
+
+      // Savolga targetFolder.id biriktirish
+      let qUpdated = false;
+      if (q.folderId !== targetFolder.id) {
+        q.folderId = targetFolder.id;
+        qUpdated = true;
+      }
+
+      const qIds: string[] = targetFolder.questionIds || [];
+      if (!qIds.includes(q.id)) {
+        targetFolder.questionIds = [...qIds, q.id];
+        await saveTBFolder(targetFolder);
+        folderMap.set(targetFolder.id, targetFolder);
+        qUpdated = true;
+      }
+
+      if (qUpdated) {
+        await saveTBQuestion(q);
+        movedCount++;
       }
     }
 
-    // "Umumiy" deb nomlangan ortiqcha bo'sh papkani o'chirish
+    // "Umumiy" deb nomlangan ortiqcha bo'sh papkalardan ko'chirilgan questionId larni tozalash va papkani o'chirish
     for (const f of folderMap.values()) {
       if (f.name?.trim().toLowerCase() === "umumiy" || f.refKey === "general") {
         await deleteTBFolder(f.id);

@@ -86,7 +86,12 @@ export default function TestBuilder() {
 
       // 2. "Umumiy" papkasini orqa fonda (asinxron, non-blocking) qayta guruhlash
       organizeGeneralTestLibrary()
-        .then(() => getAllTBFolders().then((f) => setFolders(f as Folder[])))
+        .then(async () => {
+          const [updatedQ, updatedF] = await Promise.all([getAllTBQuestions(), getAllTBFolders()]);
+          setQuestions(updatedQ as Question[]);
+          setFolders(updatedF as Folder[]);
+          setExpandedFolders(updatedF.map((f: any) => f.id));
+        })
         .catch((e) => console.error("Organize err:", e));
 
       if (dbQuestions.length > 0 || dbFolders.length > 0) {
