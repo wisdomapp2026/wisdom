@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import { createTopic } from "@shared/repositories";
 import type { Topic } from "@shared/types";
@@ -9,15 +9,22 @@ interface Props {
   courseId: string;
   existingCount: number;
   folderId?: string; // qaysi papkaga qo'shilmoqda
+  isFolderPremium?: boolean; // modul premium bo'lsa default isPremium=true bo'lishi uchun
   onClose: () => void;
   onCreated: () => void;
 }
 
-export default function CreateTopicModal({ open, courseId, existingCount, folderId, onClose, onCreated }: Props) {
+export default function CreateTopicModal({ open, courseId, existingCount, folderId, isFolderPremium, onClose, onCreated }: Props) {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [isPremium, setIsPremium] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setIsPremium(!!isFolderPremium);
+    }
+  }, [open, isFolderPremium]);
 
   if (!open) return null;
 

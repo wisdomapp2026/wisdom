@@ -1,4 +1,4 @@
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
 import {
   getFolderById,
@@ -11,13 +11,15 @@ import {
   markFolderPresence,
   clearFolderPresence,
   getFolderOnlineCount,
+  enrollUserInCourse,
 } from "@shared/repositories";
 import type { Topic, Test, Advice, Folder, UserProgress } from "@shared/types";
 import { ChevronLeft, ChevronRight, CheckCircle, Circle, Lock, FileText, MessageSquare, Play, BookOpen } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { useCourseAccess } from "../hooks/useCourseAccess";
-import { getLocalCourseProgress } from "../hooks/useLocalProgress";
+import { getLocalCourseProgress, enrollLocalCourse } from "../hooks/useLocalProgress";
 import { CourseDetailLoader } from "../components/PageLoader";
+import JoinCourseModal from "../components/JoinCourseModal";
 
 type FolderItem =
   | { type: "topic"; data: Topic; order: number }
@@ -40,23 +42,27 @@ function cleanTopicTitle(title: string): string {
 
 export default function FolderDetail() {
   const { courseId, folderId } = useParams<{ courseId: string; folderId: string }>();
+  const navigate = useNavigate();
   const { user } = useAuth();
-  const { hasAccess: hasSubscription } = useCourseAccess(courseId);
+  const { hasAccess: hasSubscription, loading: accessLoading } = useCourseAccess(courseId);
 
   const [folder, setFolder] = useState<Folder | null>(null);
   const [unlockMode, setUnlockMode] = useState<"sequential" | "open">("open");
   const [items, setItems] = useState<FolderItem[]>([]);
   const [lockToast, setLockToast] = useState<string | null>(null);
-  const [topicProblemCounts, setTopicProblemCounts] = useState<Record<string, number>>({});
-  const [userProgress, setUserProgress] = useState<UserProgress | null>(null);
   const [onlineCount, setOnlineCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [showJoinModal, setShowJoinModal] = useState(false);
+  const [pendingTargetUrl, setPendingTargetUrl] = useState<string | null>(null);
+  const [courseTitle, setCourseTitle] = useState("Kurs");
+  const [topicProblemCounts, setTopicProblemCounts] = useState<Record<string, number>>({});
+  const [userProgress, setUserProgress] = useState<UserProgress | null>(null);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     if (!courseId || !folderId) return;
     loadData();
-  }, [courseId, folderId, user]);
+  }, [courseId, folderId, user, hasSubscription, accessLoading]);
 
   // Papka ochilganda — onlayn presence belgilash (heartbeat)
   useEffect(() => {
@@ -93,9 +99,17 @@ export default function FolderDetail() {
       ]);
       setFolder(f);
       setUnlockMode(course?.unlockMode || "open");
+      if (course?.title) setCourseTitle(course.title);
 
       const topics = allTopics.filter((t) => !t.isHidden && t.folderId === folderId);
       const advices = allAdvices.filter((a) => a.folderId === folderId);
+
+      // Agar papka premium bo'lsa va unda birorta ham bepul dars bo'lmasa, hamda o'quvchida obuna bo'lmasa — obuna sotib olish sahifasiga yo'naltiramiz
+      const hasFreeTopic = topics.some((t) => !t.isPremium);
+      if (f?.isPremium && !hasFreeTopic && !hasSubscription && !accessLoading) {
+        navigate(`/premium-gate?course=${courseId}`, { replace: true });
+        return;
+      }
 
       const combined: FolderItem[] = [];
       for (const topic of topics) combined.push({ type: "topic", data: topic, order: topic.order });
@@ -149,13 +163,11 @@ export default function FolderDetail() {
   const completedProblems = userProgress?.completedProblems || [];
 
   function isTopicCompleted(topicId: string): boolean {
-    // Topic "tugatilgan" = o'quvchi shu topikka kirgan (completedTopics da bor)
-    // TopicDetail.saveProgress() topikka har kirganda uni completedTopics ga qo'shadi.
     return completedTopics.includes(topicId);
   }
 
   const totalTopics = items.filter((it) => it.type === "topic").length;
-  const totalTests = 0; // Testlar faqat mavzu ichida ko'rinadi
+  const totalTests = items.filter((it) => it.type === "test").length;
   const doneTopics = items.filter((it) => it.type === "topic" && isTopicCompleted((it.data as Topic).id)).length;
   const progress = totalTopics > 0 ? Math.round((doneTopics / totalTopics) * 100) : 0;
 
@@ -171,9 +183,8 @@ export default function FolderDetail() {
   function renderItem(item: FolderItem, itemIndex: number) {
     if (item.type === "topic") {
       const topic = item.data as Topic;
-      // Premium mavzuga kirish mumkin — obuna faqat premium misollarni ko'rishda talab qilinadi
+      const topicPremiumLocked = topic.isPremium && !hasSubscription;
 
-      // Sequential mode: oldingi mavzu tugatilmaguncha keyingisi qulflangan
       let sequenceLocked = false;
       if (unlockMode === "sequential" && itemIndex > 0) {
         const prevTopics = items.slice(0, itemIndex).filter((it) => it.type === "topic");
@@ -186,7 +197,7 @@ export default function FolderDetail() {
         }
       }
 
-      const isLocked = sequenceLocked;
+      const isLocked = topicPremiumLocked || sequenceLocked;
       const totalP = topicProblemCounts[topic.id] || 0;
       const completedP = completedProblems.filter((pid) => pid.startsWith(`p-${topic.id.replace("topic-", "")}`)).length;
       const isDoneFlag = completedTopics.includes(topic.id);
@@ -194,22 +205,33 @@ export default function FolderDetail() {
       const isDone = !isLocked && (isDoneFlag || topicProgress === 100);
       const isProgress = !isLocked && !isDone && topicProgress > 0;
 
+      const isEnrolled = !!(userProgress && (userProgress.isJoined || userProgress.completedTopics?.length || userProgress.enrolledAt));
+
       return (
         <Link
-          to={isLocked ? "#" : `/course/${courseId}/topic/${topic.id}`}
+          to={topicPremiumLocked ? `/premium-gate?course=${courseId}` : sequenceLocked ? "#" : `/course/${courseId}/topic/${topic.id}`}
           onClick={(e) => {
-            if (sequenceLocked) {
+            if (!topicPremiumLocked && !sequenceLocked && !isEnrolled) {
+              e.preventDefault();
+              setPendingTargetUrl(`/course/${courseId}/topic/${topic.id}`);
+              setShowJoinModal(true);
+              return;
+            }
+            if (sequenceLocked && !topicPremiumLocked) {
               e.preventDefault();
               setLockToast("Avvalgi mavzuni tugatmasdan keyingisiga o'tib bo'lmaydi");
               setTimeout(() => setLockToast(null), 3000);
             }
           }}
           key={`topic-${topic.id}`}
-          className="flex items-center bg-white border border-gray-100 rounded-2xl p-3 gap-3 hover:shadow-sm transition-shadow shadow-sm"
+          className={`flex items-center border rounded-2xl p-3 gap-3 hover:shadow-sm transition-shadow shadow-sm ${
+            topicPremiumLocked ? "bg-yellow-50/40 border-yellow-200" : "bg-white border-gray-100"
+          }`}
         >
-          {/* Ikonka */}
-          <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${isProgress ? "bg-orange-50" : "bg-primary-50"}`}>
-            {isLocked ? (
+          <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${topicPremiumLocked ? "bg-yellow-100" : isProgress ? "bg-orange-50" : "bg-primary-50"}`}>
+            {topicPremiumLocked ? (
+              <Lock size={18} className="text-yellow-600" />
+            ) : isLocked ? (
               <Lock size={18} className="text-gray-400" />
             ) : isDone ? (
               <CheckCircle size={20} className="text-primary-500" />
@@ -220,7 +242,6 @@ export default function FolderDetail() {
             )}
           </div>
 
-          {/* Matn + progress */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
               <p className="font-semibold text-gray-900 text-sm leading-snug truncate">{cleanTopicTitle(topic.title)}</p>
@@ -234,9 +255,12 @@ export default function FolderDetail() {
             </div>
           </div>
 
-          {/* O'ng tomon: bajarilgan bo'lsa ✓ + %, jarayonda bo'lsa dumaloq progress */}
           <div className="shrink-0 flex items-center gap-1.5">
-            {isDone ? (
+            {topicPremiumLocked ? (
+              <span className="text-[11px] font-semibold text-white bg-yellow-500 px-2.5 py-1 rounded-lg flex items-center gap-1">
+                <Lock size={12} /> Premium
+              </span>
+            ) : isDone ? (
               <div className="flex flex-col items-end">
                 <span className="text-green-500 text-sm leading-none">✓</span>
                 <span className="text-[11px] font-semibold text-gray-600 mt-0.5">100%</span>
@@ -312,9 +336,8 @@ export default function FolderDetail() {
 
   return (
     <div className="page-content">
-      {/* Header — orqaga + nom + bajarildi badge */}
       <header className="px-5 pt-4 pb-2 flex items-center gap-3">
-        <Link to={`/course/${courseId}`} className="text-gray-500 shrink-0"><ChevronLeft size={22} /></Link>
+        <Link to={`/course/${courseId}`} className="text-gray-500 shrink-0 flex items-center justify-center"><ChevronLeft size={22} /></Link>
         <h1 className="text-lg font-bold text-gray-900 flex-1 leading-tight">{folder.title}</h1>
         <div className="shrink-0 flex items-center gap-1.5 bg-white border border-gray-200 rounded-full px-3 py-1.5 shadow-sm">
           <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 36 36">
@@ -330,10 +353,8 @@ export default function FolderDetail() {
         </div>
       </header>
 
-      {/* Davom eting kartasi — mijoz dizayni */}
       <div className="mx-5 mt-3 bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
         <div className="flex gap-4 items-center">
-          {/* Muqova / illustratsiya */}
           <div className="w-24 h-24 rounded-2xl overflow-hidden shrink-0 bg-gradient-to-br from-blue-50 to-primary-50 flex items-center justify-center">
             {folder.coverImage ? (
               <img src={folder.coverImage} alt={folder.title} className="w-full h-full object-cover" />
@@ -341,25 +362,18 @@ export default function FolderDetail() {
               <span className="text-4xl">{folder.icon || "📚"}</span>
             )}
           </div>
-
-          {/* Ma'lumot */}
           <div className="flex-1 min-w-0">
-            {/* DAVOM ETING badge */}
             <div className="inline-flex items-center gap-1.5 bg-primary-50 text-primary-600 rounded-md px-2 py-1 mb-2">
               <Play className="w-3 h-3 fill-current" />
               <span className="text-[10px] font-bold uppercase tracking-wide">Davom eting</span>
             </div>
-
-            {/* Joriy mavzu nomi */}
             <h2 className="text-base font-bold text-gray-900 leading-snug">
               {currentTopicTitle || folder.title}
             </h2>
-
             <p className="text-xs text-gray-400 mt-1">Siz to'xtagan joyingizdan davom eting</p>
           </div>
         </div>
 
-        {/* Progress bar + davom etish tugmasi */}
         <div className="mt-4 flex items-center gap-3">
           <div className="flex-1 min-w-0">
             <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
@@ -373,6 +387,14 @@ export default function FolderDetail() {
           {continueLink && (
             <Link
               to={continueLink}
+              onClick={(e) => {
+                 const isEnrolled = !!(userProgress && (userProgress.isJoined || userProgress.completedTopics?.length || userProgress.enrolledAt));
+                 if (!isEnrolled) {
+                   e.preventDefault();
+                   setPendingTargetUrl(continueLink);
+                   setShowJoinModal(true);
+                 }
+              }}
               className="shrink-0 flex items-center gap-1.5 bg-primary-500 text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-sm active:scale-[0.97] transition-transform"
             >
               <Play className="w-4 h-4 fill-current" />
@@ -382,7 +404,6 @@ export default function FolderDetail() {
         </div>
       </div>
 
-      {/* Statistika konteyneri — darslar, testlar, onlayn userlar */}
       <div className="mx-5 mt-3 bg-white border border-gray-100 rounded-2xl px-4 py-3 shadow-sm">
         <div className="flex items-center justify-around">
           <div className="flex flex-col items-center gap-0.5">
@@ -405,7 +426,6 @@ export default function FolderDetail() {
         </div>
       </div>
 
-      {/* Mavzular sarlavhasi */}
       <div className="px-5 mt-5 flex items-center">
         <div className="flex items-center gap-2">
           <BookOpen className="w-4 h-4 text-primary-500" />
@@ -413,7 +433,6 @@ export default function FolderDetail() {
         </div>
       </div>
 
-      {/* Ichidagi darslar/testlar */}
       <div className="px-5 mt-3 space-y-2.5">
         {items.length === 0 ? (
           <p className="text-center text-sm text-gray-400 py-10">Bu bo'lim hozircha bo'sh</p>
@@ -422,13 +441,33 @@ export default function FolderDetail() {
         )}
       </div>
 
-      {/* Lock toast */}
       {lockToast && (
         <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white text-xs font-medium px-4 py-3 rounded-xl shadow-lg flex items-center gap-2 max-w-[85%] animate-fadeIn">
           <Lock size={14} className="shrink-0 text-yellow-400" />
           <span>{lockToast}</span>
         </div>
       )}
+
+      <JoinCourseModal
+        open={showJoinModal}
+        courseTitle={courseTitle}
+        onClose={() => setShowJoinModal(false)}
+        onConfirm={async () => {
+          if (!courseId) return;
+          if (user) {
+            await enrollUserInCourse(user.uid, courseId);
+          } else {
+            enrollLocalCourse(courseId);
+          }
+          setUserProgress((prev) => prev ? { ...prev, isJoined: true } : { id: `prog_${user?.uid || "guest"}_${courseId}`, userId: user?.uid || "guest", courseId, completedTopics: [], completedProblems: [], progressPercent: 0, totalXP: 0, streak: 0, weeklyMinutes: [0, 0, 0, 0, 0, 0, 0], lastAccessedAt: Date.now(), isJoined: true });
+          setShowJoinModal(false);
+          if (pendingTargetUrl) {
+            const url = pendingTargetUrl;
+            setPendingTargetUrl(null);
+            navigate(url);
+          }
+        }}
+      />
     </div>
   );
 }

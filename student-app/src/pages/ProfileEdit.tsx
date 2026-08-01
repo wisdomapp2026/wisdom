@@ -89,7 +89,7 @@ export default function ProfileEdit() {
   return (
     <div className="page-content pb-24">
       <header className="px-5 pt-4 flex items-center gap-3">
-        <Link to="/profile" className="text-gray-500"><ChevronLeft size={22} /></Link>
+        <Link to="/profile" className="text-gray-500 shrink-0 flex items-center justify-center"><ChevronLeft size={22} /></Link>
         <h1 className="text-xl font-bold">Shaxsiy ma'lumotlar</h1>
       </header>
 

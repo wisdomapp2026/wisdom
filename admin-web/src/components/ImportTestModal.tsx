@@ -28,6 +28,7 @@ interface LibQuestion {
 interface LibFolder {
   id: string;
   name: string;
+  parentId?: string | null;
   questionIds: string[];
 }
 
@@ -379,44 +380,138 @@ export default function ImportTestModal({ open, courseId, existingTestIds, folde
                 </div>
               )}
 
-              {folders.map((folder) => {
-                const folderQuestions = getQuestionsInFolder(folder.id).filter(matchesSearch);
-                const isExpanded = expandedFolders.has(folder.id);
-                const allSelected = folderQuestions.length > 0 && folderQuestions.every((q) => selectedIds.has(q.id));
+              {(() => {
+                /** Papka va uning ost-papkalaridagi barcha savollarni olish */
+                function collectQuestionsDeep(fid: string): LibQuestion[] {
+                  const direct = getQuestionsInFolder(fid);
+                  const children = folders.filter((f) => (f.parentId ?? null) === fid);
+                  const childQuestions = children.flatMap((c) => collectQuestionsDeep(c.id));
+                  return [...direct, ...childQuestions];
+                }
+
+                function renderTree(parentId: string | null, depth: number): React.ReactNode {
+                  const children = folders.filter((f) => (f.parentId ?? null) === parentId);
+                  if (children.length === 0) return null;
+
+                  return children.map((folder) => {
+                    const isExpanded = expandedFolders.has(folder.id);
+                    const folderQuestions = getQuestionsInFolder(folder.id).filter(matchesSearch);
+                    const deepQuestions = collectQuestionsDeep(folder.id).filter(matchesSearch);
+                    const subFolders = folders.filter((f) => (f.parentId ?? null) === folder.id);
+                    const allSelected = deepQuestions.length > 0 && deepQuestions.every((q) => selectedIds.has(q.id));
+                    const icon = depth === 0 ? "📚" : depth === 1 ? "📁" : "📄";
+
+                    return (
+                      <div key={folder.id} className="border border-gray-100 rounded-xl overflow-hidden mb-2" style={{ marginLeft: depth > 0 ? `${depth * 12}px` : 0 }}>
+                        <div
+                          className="flex items-center gap-2 p-3 bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
+                          onClick={() => toggleFolder(folder.id)}
+                        >
+                          {isExpanded ? <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />}
+                          <span className="shrink-0">{icon}</span>
+                          <span className={`truncate text-sm ${depth === 0 ? "font-bold text-gray-900" : depth === 1 ? "font-semibold text-gray-800" : "font-medium text-gray-700"}`}>
+                            {folder.name}
+                          </span>
+                          <span className="text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full shrink-0">
+                            {deepQuestions.length}
+                          </span>
+                          {deepQuestions.length > 0 && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleSelectAll(deepQuestions);
+                              }}
+                              className={`ml-auto text-xs px-2 py-1 rounded shrink-0 ${
+                                allSelected ? "bg-primary-100 text-primary-700 font-semibold" : "bg-white text-gray-500 border border-gray-200 hover:bg-gray-50"
+                              }`}
+                            >
+                              {allSelected ? "Bekor qilish" : "Barchasini tanlash"}
+                            </button>
+                          )}
+                        </div>
+
+                        {isExpanded && (
+                          <div className="p-2 space-y-2 bg-white">
+                            {/* Ost-papkalar */}
+                            {renderTree(folder.id, depth + 1)}
+
+                            {/* Shu papkadagi savollar */}
+                            {folderQuestions.length > 0 && (
+                              <div className="divide-y divide-gray-50 border border-gray-100 rounded-lg overflow-hidden mt-1">
+                                {folderQuestions.map((q) => (
+                                  <QuestionRow
+                                    key={q.id}
+                                    question={q}
+                                    isSelected={selectedIds.has(q.id)}
+                                    isPreview={previewId === q.id}
+                                    onToggle={() => toggleSelect(q.id)}
+                                    onPreview={() => setPreviewId(previewId === q.id ? null : q.id)}
+                                  />
+                                ))}
+                              </div>
+                            )}
+
+                            {subFolders.length === 0 && folderQuestions.length === 0 && (
+                              <p className="text-xs text-gray-400 text-center py-2 italic">Ushbu papka bo'sh</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  });
+                }
+
+                // Faqat top-level (parentId == null) papkalarni chiqarish
+                const rootFolders = folders.filter((f) => !f.parentId);
 
                 return (
-                  <div key={folder.id} className="border border-gray-100 rounded-xl overflow-hidden">
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 cursor-pointer hover:bg-gray-100" onClick={() => toggleFolder(folder.id)}>
-                      {isExpanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
-                      <span>📁</span>
-                      <span className="font-medium text-gray-700 text-sm">{folder.name}</span>
-                      <span className="text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full">{folderQuestions.length}</span>
-                      {folderQuestions.length > 0 && (
-                        <button onClick={(e) => { e.stopPropagation(); toggleSelectAll(folderQuestions); }} className={`ml-auto text-xs px-2 py-1 rounded ${allSelected ? "bg-primary-100 text-primary-700" : "bg-white text-gray-500 border border-gray-200"}`}>
-                          {allSelected ? "Bekor" : "Barchasini"}
-                        </button>
-                      )}
-                    </div>
-                    {isExpanded && (
-                      <div className="divide-y divide-gray-50">
-                        {folderQuestions.length === 0 && <p className="text-xs text-gray-400 text-center py-3 italic">Bo'sh</p>}
-                        {folderQuestions.map((q) => (
-                          <QuestionRow key={q.id} question={q} isSelected={selectedIds.has(q.id)} isPreview={previewId === q.id} onToggle={() => toggleSelect(q.id)} onPreview={() => setPreviewId(previewId === q.id ? null : q.id)} />
-                        ))}
-                      </div>
+                  <>
+                    {rootFolders.length > 0 ? (
+                      renderTree(null, 0)
+                    ) : (
+                      // Ierarxiyasiz eski papkalar bo'lsa
+                      folders.map((folder) => {
+                        const folderQuestions = getQuestionsInFolder(folder.id).filter(matchesSearch);
+                        const isExpanded = expandedFolders.has(folder.id);
+                        const allSelected = folderQuestions.length > 0 && folderQuestions.every((q) => selectedIds.has(q.id));
+
+                        return (
+                          <div key={folder.id} className="border border-gray-100 rounded-xl overflow-hidden mb-2">
+                            <div className="flex items-center gap-3 p-3 bg-gray-50 cursor-pointer hover:bg-gray-100" onClick={() => toggleFolder(folder.id)}>
+                              {isExpanded ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+                              <span>📁</span>
+                              <span className="font-medium text-gray-700 text-sm">{folder.name}</span>
+                              <span className="text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full">{folderQuestions.length}</span>
+                              {folderQuestions.length > 0 && (
+                                <button onClick={(e) => { e.stopPropagation(); toggleSelectAll(folderQuestions); }} className={`ml-auto text-xs px-2 py-1 rounded ${allSelected ? "bg-primary-100 text-primary-700" : "bg-white text-gray-500 border border-gray-200"}`}>
+                                  {allSelected ? "Bekor" : "Barchasini"}
+                                </button>
+                              )}
+                            </div>
+                            {isExpanded && (
+                              <div className="divide-y divide-gray-50">
+                                {folderQuestions.length === 0 && <p className="text-xs text-gray-400 text-center py-3 italic">Bo'sh</p>}
+                                {folderQuestions.map((q) => (
+                                  <QuestionRow key={q.id} question={q} isSelected={selectedIds.has(q.id)} isPreview={previewId === q.id} onToggle={() => toggleSelect(q.id)} onPreview={() => setPreviewId(previewId === q.id ? null : q.id)} />
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
                     )}
-                  </div>
+                  </>
                 );
-              })}
+              })()}
 
               {(() => {
                 const uncategorized = getUncategorizedQuestions().filter(matchesSearch);
                 if (uncategorized.length === 0) return null;
                 return (
-                  <div className="border border-gray-100 rounded-xl overflow-hidden">
+                  <div className="border border-gray-100 rounded-xl overflow-hidden mt-3">
                     <div className="flex items-center gap-3 p-3 bg-gray-50">
                       <span>📋</span>
-                      <span className="font-medium text-gray-700 text-sm">Boshqa savollar</span>
+                      <span className="font-medium text-gray-700 text-sm">Boshqa papkasiz savollar</span>
                       <span className="text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded-full">{uncategorized.length}</span>
                       <button onClick={() => toggleSelectAll(uncategorized)} className={`ml-auto text-xs px-2 py-1 rounded ${uncategorized.every((q) => selectedIds.has(q.id)) ? "bg-primary-100 text-primary-700" : "bg-white text-gray-500 border border-gray-200"}`}>
                         {uncategorized.every((q) => selectedIds.has(q.id)) ? "Bekor" : "Barchasini"}

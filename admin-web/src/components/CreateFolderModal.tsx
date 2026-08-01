@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { X, FolderPlus, Upload, ImageIcon } from "lucide-react";
-import { createFolder, updateFolder } from "@shared/repositories";
+import { createFolder, updateFolder, getTopicsByCourse, updateTopic } from "@shared/repositories";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { storage } from "@shared/firebase";
 import LoadingButton from "./LoadingButton";
@@ -68,6 +68,15 @@ export default function CreateFolderModal({ open, courseId, existingCount, editF
           isPremium,
           ...(coverImage ? { coverImage } : {}),
         });
+
+        // Agar modul premium deb belgilangan bo'lsa, ichidagi barcha mavzularni ham avtomatik premium qilamiz
+        if (isPremium) {
+          const allTopics = await getTopicsByCourse(courseId);
+          const folderTopics = allTopics.filter((t) => t.folderId === editFolder.id);
+          await Promise.all(
+            folderTopics.map((t) => updateTopic(courseId, t.id, { isPremium: true }))
+          );
+        }
       } else {
         const order = existingCount + 1;
         const folder: Folder = {

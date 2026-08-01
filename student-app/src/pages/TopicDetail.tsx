@@ -4,7 +4,9 @@ import { getTopicById, getProblemsByTopic, getUserProgress, setUserProgress, get
 import type { Topic, Problem, UserProgress, Test } from "@shared/types";
 import { ChevronLeft, Star, Play, Lock, CheckCircle, ChevronDown, ChevronUp, FileText, Download } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
+import { useCourseAccess } from "../hooks/useCourseAccess";
 import { getLocalCourseProgress, setLocalCourseProgress } from "../hooks/useLocalProgress";
+import { calculateUserXP } from "../utils/xpCalculator";
 import { invalidateCache, invalidateCacheByPrefix } from "../hooks/useCache";
 import AuthModal from "../components/AuthModal";
 import VideoModal from "../components/VideoModal";
@@ -34,6 +36,7 @@ export default function TopicDetail() {
   const { courseId, topicId } = useParams<{ courseId: string; topicId: string }>();
   const navigate = useNavigate();
   const { user, isLoggedIn } = useAuth();
+  const { hasAccess: hasSubscription, loading: accessLoading } = useCourseAccess(courseId);
   const [topic, setTopic] = useState<Topic | null>(null);
   const [problems, setProblems] = useState<Problem[]>([]);
   const [topicTests, setTopicTests] = useState<Test[]>([]);
@@ -90,6 +93,10 @@ export default function TopicDetail() {
     setViewedCount(0);
     Promise.all([getTopicById(courseId, topicId), getProblemsByTopic(courseId, topicId), getTestsByCourse(courseId)])
       .then(([t, p, allTests]) => {
+        if (t?.isPremium && !hasSubscription && !accessLoading) {
+          navigate(`/premium-gate?course=${courseId}`, { replace: true });
+          return;
+        }
         setTopic(t);
         setProblems(p.filter(x => !x.isHidden));
         // Faqat shu modulga tegishli (afterTopicOrder === topic.order) va published testlarni ko'rsatish
@@ -102,7 +109,7 @@ export default function TopicDetail() {
 
     // Dars ichidagi motivatsion frazani yuklash
     loadMotivation();
-  }, [courseId, topicId]);
+  }, [courseId, topicId, hasSubscription, accessLoading]);
 
   /**
    * Saqlangan progressni tiklash — mavzuga qayta kirganda 0% dan boshlanmasligi uchun.
@@ -262,17 +269,28 @@ export default function TopicDetail() {
             ? Math.min(100, Math.round((completedTopics.length / allTopics.length) * 100))
             : 0;
 
+          const updatedTotalXP = calculateUserXP({
+            ...existing,
+            completedTopics,
+          });
+
           await setUserProgress({
             ...existing,
             completedTopics,
             currentTopicId: topicId,
             progressPercent,
+            totalXP: updatedTotalXP,
             lastAccessedAt: Date.now(),
           });
         } else {
           const progressPercent = allTopics.length > 0
             ? Math.min(100, Math.round((1 / allTopics.length) * 100))
             : 0;
+
+          const updatedTotalXP = calculateUserXP({
+            completedTopics: [topicId],
+            completedProblems: [],
+          });
 
           await setUserProgress({
             id: progressId,
@@ -282,8 +300,7 @@ export default function TopicDetail() {
             completedProblems: [],
             currentTopicId: topicId,
             progressPercent,
-            // Modulni ochish o'z-o'zidan XP bermaydi — reyting faqat test natijalariga bog'liq
-            totalXP: 0,
+            totalXP: updatedTotalXP,
             streak: 1,
             weeklyMinutes: [0, 0, 0, 0, 0, 0, 0],
             lastAccessedAt: Date.now(),
@@ -312,17 +329,28 @@ export default function TopicDetail() {
           ? Math.min(100, Math.round((completedTopics.length / allTopics.length) * 100))
           : 0;
 
+        const updatedTotalXP = calculateUserXP({
+          ...existing,
+          completedTopics,
+        });
+
         setLocalCourseProgress(courseId, {
           ...existing,
           completedTopics,
           currentTopicId: topicId,
           progressPercent,
+          totalXP: updatedTotalXP,
           lastAccessedAt: Date.now(),
         });
       } else {
         const progressPercent = allTopics.length > 0
           ? Math.min(100, Math.round((1 / allTopics.length) * 100))
           : 0;
+
+        const updatedTotalXP = calculateUserXP({
+          completedTopics: [topicId],
+          completedProblems: [],
+        });
 
         setLocalCourseProgress(courseId, {
           id: `local_${courseId}`,
@@ -332,8 +360,7 @@ export default function TopicDetail() {
           completedProblems: [],
           currentTopicId: topicId,
           progressPercent,
-          // Modulni ochish o'z-o'zidan XP bermaydi — reyting faqat test natijalariga bog'liq
-          totalXP: 0,
+          totalXP: updatedTotalXP,
           streak: 1,
           weeklyMinutes: [0, 0, 0, 0, 0, 0, 0],
           lastAccessedAt: Date.now(),
@@ -472,7 +499,7 @@ export default function TopicDetail() {
     if (!isLoggedIn) {
       setShowAuthModal(true);
     } else {
-      navigate("/subscription");
+      navigate(`/premium-gate?course=${courseId}`);
     }
   }
 

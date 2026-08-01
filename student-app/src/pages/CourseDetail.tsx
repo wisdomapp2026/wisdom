@@ -1,6 +1,6 @@
-import { Link, useParams, useLocation, useNavigate } from "react-router-dom";
+import { Link, useParams, useNavigate } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
-import { getCourseById, getTopicsByCourse, getTestsByCourse, getUserProgress, setUserProgress, getProblemsByTopic, getAllProgressByCourse, getAdviceByCourse, getMotivationPhrases, getMotivationSettings, getActiveCourseLinks, getFoldersByCourse, getFolderOnlineCount, markCoursePresence, clearCoursePresence, getCourseOnlineCount, getUserById } from "@shared/repositories";
+import { getCourseById, getTopicsByCourse, getTestsByCourse, getUserProgress, setUserProgress, getProblemsByTopic, getAllProgressByCourse, getAdviceByCourse, getMotivationPhrases, getMotivationSettings, getActiveCourseLinks, getFoldersByCourse, getFolderOnlineCount, markCoursePresence, clearCoursePresence, getCourseOnlineCount, getUserById, enrollUserInCourse } from "@shared/repositories";
 import type { Course, Topic, Test, UserProgress, Advice, MotivationalPhrase, MotivationSettings, SocialLink, Folder } from "@shared/types";
 import { CheckCircle, Clock, Lock, FileText, Play, ChevronDown, ChevronUp, ChevronRight, MessageSquare, ExternalLink, Users, UserPlus, Download, ArrowLeft, BookOpen, Star, Trophy } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
@@ -8,8 +8,10 @@ import { useCourseAccess } from "../hooks/useCourseAccess";
 import { CourseDetailLoader } from "../components/PageLoader";
 import { getLocalCourseProgress, enrollLocalCourse, setLocalCourseProgress } from "../hooks/useLocalProgress";
 import { cachedFetch } from "../hooks/useCache";
+import { calculateUserXP } from "../utils/xpCalculator";
 import LatexText from "../components/LatexText";
 import VideoModal from "../components/VideoModal";
+import JoinCourseModal from "../components/JoinCourseModal";
 
 /** Topic title dan "N-modul:" qismini olib tashlab, "N-mavzu: Nom" formatida qaytaradi */
 function cleanTopicTitle(title: string): string {
@@ -27,7 +29,6 @@ function cleanTopicTitle(title: string): string {
 
 export default function CourseDetail() {
   const { courseId } = useParams<{ courseId: string }>();
-  const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { hasAccess: hasSubscription, loading: subLoading } = useCourseAccess(courseId);
@@ -54,11 +55,13 @@ export default function CourseDetail() {
   const presenceRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [videoUrl, setVideoUrl] = useState("");
   const [showVideoModal, setShowVideoModal] = useState(false);
+  const [showJoinModal, setShowJoinModal] = useState(false);
+  const [pendingTargetUrl, setPendingTargetUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!courseId) return;
     loadData();
-  }, [courseId, user, location.key]);
+  }, [courseId, user]);
 
   // Kurs ochilganda — onlayn presence belgilash (heartbeat)
   useEffect(() => {
@@ -120,28 +123,44 @@ export default function CourseDetail() {
   async function loadData() {
     if (!courseId) return;
     try {
+      // 1. Asosiy ma'lumotlarni parallel va kesh bilan yuklash (tez)
       const [c, t, te] = await Promise.all([
         cachedFetch(`course-${courseId}`, () => getCourseById(courseId)),
-        getTopicsByCourse(courseId), // Keshsiz — har safar yangi topiklar soni olinishi uchun
+        cachedFetch(`topics-${courseId}`, () => getTopicsByCourse(courseId)),
         cachedFetch(`tests-${courseId}`, () => getTestsByCourse(courseId)),
       ]);
       setCourse(c);
-      setTopics((t || []).filter(x => !x.isHidden));
+      const visibleTopics = (t || []).filter(x => !x.isHidden);
+      setTopics(visibleTopics);
       setTests(te.filter(x => x.status === "published"));
 
-      // Maslahat bloklarini yuklash
-      const adv = await getAdviceByCourse(courseId);
+      // 2. User progress — HAR SAFAR yangi olish (keshsiz, chunki TopicDetail o'zgartiradi)
+      if (user) {
+        const prog = await getUserProgress(user.uid, courseId);
+        setUserProgressState(prog);
+        setIsEnrolled(!!prog);
+        setEnrollChecked(true);
+      } else {
+        const localProg = getLocalCourseProgress(courseId);
+        setUserProgressState(localProg);
+        setIsEnrolled(!!localProg);
+        setEnrollChecked(true);
+      }
+
+      // 3. Loading'ni shu yerda yopish — foydalanuvchi sahifani ko'rishi mumkin
+      setLoading(false);
+
+      // 4. Qolgan ma'lumotlarni fonda yuklash (sahifani bloklaydi)
+      const [adv, slinks, fdrs] = await Promise.all([
+        cachedFetch(`advices-${courseId}`, () => getAdviceByCourse(courseId), (d) => setAdvices(d)),
+        cachedFetch(`course-links-${courseId}`, () => getActiveCourseLinks(courseId), (d) => setCourseSocialLinks(d)),
+        cachedFetch(`folders-${courseId}`, () => getFoldersByCourse(courseId), (d) => setFolders(d.filter(f => !f.isHidden))),
+      ]);
       setAdvices(adv);
-
-      // Kurs ijtimoiy tarmoqlarini yuklash
-      const slinks = await getActiveCourseLinks(courseId);
       setCourseSocialLinks(slinks);
-
-      // Papkalarni yuklash (yashirilganlarni chiqarib tashlash)
-      const fdrs = await getFoldersByCourse(courseId);
       setFolders(fdrs.filter(f => !f.isHidden));
 
-      // Papkalardagi onlayn userlar sonini yuklash
+      // Papkalardagi onlayn sonlar (keshsiz, real-time)
       const onlineCounts: Record<string, number> = {};
       await Promise.all(
         fdrs.map(async (f) => {
@@ -150,74 +169,55 @@ export default function CourseDetail() {
       );
       setFolderOnlineCounts(onlineCounts);
 
-      // User progress — HAR SAFAR yangi olish (cache'siz, chunki TopicDetail o'zgartiradi)
+      // 5. Reyting va avatarlar (kesh bilan)
+      const allProgress = await cachedFetch(
+        `course-progress-${courseId}`,
+        () => getAllProgressByCourse(courseId),
+        300_000
+      );
+      setTotalStudentsInCourse(allProgress.length);
+
+      const topUsers = allProgress.slice(0, 3);
+      const avatars = await Promise.all(
+        topUsers.map(async (p) => {
+          try {
+            const u = await cachedFetch(`user-${p.userId}`, () => getUserById(p.userId), 300_000);
+            return { avatar: u?.avatar, name: u?.name };
+          } catch { return { avatar: undefined, name: undefined }; }
+        })
+      );
+      setStudentAvatars(avatars);
+
       if (user) {
         const prog = await getUserProgress(user.uid, courseId);
-        setUserProgressState(prog);
-        setIsEnrolled(!!prog);
-        setEnrollChecked(true);
-
-        // Reyting hisoblash: kurs ichidagi barcha o'quvchilar progressini olish
-        const allProgress = await getAllProgressByCourse(courseId);
-        setTotalStudentsInCourse(allProgress.length);
-
-        // Birinchi 3 o'quvchining avatarini yuklash
-        const topUsers = allProgress.slice(0, 3);
-        const avatars = await Promise.all(
-          topUsers.map(async (p) => {
-            try {
-              const u = await getUserById(p.userId);
-              return { avatar: u?.avatar, name: u?.name };
-            } catch { return { avatar: undefined, name: undefined }; }
-          })
-        );
-        setStudentAvatars(avatars);
-
         if (prog && allProgress.length > 0) {
-          // XP bo'yicha tartiblash (kattadan kichikka)
-          const sorted = [...allProgress].sort((a, b) => (b.totalXP || 0) - (a.totalXP || 0));
+          const sorted = [...allProgress].sort((a, b) => calculateUserXP(b) - calculateUserXP(a));
           const rank = sorted.findIndex((p) => p.userId === user.uid) + 1;
           setUserRank(rank > 0 ? rank : allProgress.length);
         } else {
           setUserRank(allProgress.length > 0 ? allProgress.length + 1 : 1);
         }
-      } else {
-        // Login qilmagan — local progress tekshirish
-        const localProg = getLocalCourseProgress(courseId);
-        setUserProgressState(localProg);
-        setIsEnrolled(!!localProg);
-        setEnrollChecked(true);
-
-        // Reyting uchun barcha progressni olish
-        const allProgress = await getAllProgressByCourse(courseId);
-        setTotalStudentsInCourse(allProgress.length);
-
-        // Birinchi 3 o'quvchining avatarini yuklash
-        const topUsers = allProgress.slice(0, 3);
-        const avatars = await Promise.all(
-          topUsers.map(async (p) => {
-            try {
-              const u = await getUserById(p.userId);
-              return { avatar: u?.avatar, name: u?.name };
-            } catch { return { avatar: undefined, name: undefined }; }
-          })
-        );
-        setStudentAvatars(avatars);
       }
 
-      // Har bir moduldagi misol sonini olish (progress hisoblash uchun)
+      // 6. Har bir mavzudagi misollar soni (kesh bilan)
       const counts: Record<string, number> = {};
-      for (const topic of t) {
-        const problems = await getProblemsByTopic(courseId, topic.id);
-        counts[topic.id] = problems.length;
-      }
+      await Promise.all(
+        visibleTopics.map(async (topic) => {
+          const problems = await cachedFetch(
+            `problems-${courseId}-${topic.id}`,
+            () => getProblemsByTopic(courseId, topic.id),
+            300_000
+          );
+          counts[topic.id] = problems.length;
+        })
+      );
       setTopicProblemCounts(counts);
 
-      // Motivatsion fraza yuklash
+      // 7. Motivatsion fraza (kesh bilan)
       try {
         const [phrases, settings] = await Promise.all([
-          getMotivationPhrases("course"),
-          getMotivationSettings("course"),
+          cachedFetch("motivation-course", () => getMotivationPhrases("course")),
+          cachedFetch("motivation-settings-course", () => getMotivationSettings("course")),
         ]);
         const activePhrases = phrases.filter((p) => p.isActive);
         if (activePhrases.length > 0) {
@@ -227,18 +227,16 @@ export default function CourseDetail() {
             const idx = Math.floor(Math.random() * activePhrases.length);
             setMotivationPhrase(activePhrases[idx].text);
           } else {
-            // Ketma-ket: soatga qarab qaysi fraza ko'rinishini hisoblash
             const hoursSinceEpoch = Math.floor(Date.now() / (1000 * 60 * 60));
             const idx = Math.floor(hoursSinceEpoch / hours) % activePhrases.length;
             setMotivationPhrase(activePhrases[idx].text);
           }
         }
-      } catch (err) {
-        // Motivatsion frazalar ixtiyoriy — xatolik bo'lsa o'tkazib yuboramiz
+      } catch {
+        // Ixtiyoriy — xatolik bo'lsa o'tkazib yuboramiz
       }
     } catch (err) {
       console.error(err);
-    } finally {
       setLoading(false);
     }
   }
@@ -310,7 +308,7 @@ export default function CourseDetail() {
   function renderItem(item: RenderableItem) {
     if (item.type === "topic") {
       const topic = item.data as Topic;
-      // Premium mavzuga kirish mumkin — obuna faqat premium misollarni ko'rishda talab qilinadi
+      const topicPremiumLocked = topic.isPremium && !hasSubscription;
       const totalP = topicProblemCounts[topic.id] || 0;
       const completedP = completedProblems.filter((pid) => pid.startsWith(`p-${topic.id.replace("topic-", "")}`)).length;
       const isTopicCompleted = completedTopics.includes(topic.id);
@@ -320,19 +318,35 @@ export default function CourseDetail() {
 
       return (
         <Link
-          to={`/course/${courseId}/topic/${topic.id}`}
+          to={topicPremiumLocked ? `/premium-gate?course=${courseId}` : `/course/${courseId}/topic/${topic.id}`}
+          onClick={(e) => {
+            if (!topicPremiumLocked && !isEnrolled) {
+              e.preventDefault();
+              setPendingTargetUrl(`/course/${courseId}/topic/${topic.id}`);
+              setShowJoinModal(true);
+            }
+          }}
           key={`topic-${topic.id}`}
-          className="flex items-center border border-gray-100 rounded-xl p-4 gap-3 hover:shadow-sm transition-shadow"
+          className={`flex items-center border rounded-xl p-4 gap-3 hover:shadow-sm transition-shadow ${
+            topicPremiumLocked ? "bg-yellow-50/40 border-yellow-200" : "border-gray-100"
+          }`}
         >
-          <div className="w-11 h-11 bg-primary-50 rounded-xl flex items-center justify-center shrink-0">
-            {isDone && <CheckCircle size={20} className="text-primary-500" />}
-            {isProgress && <Clock size={20} className="text-primary-500" />}
+          <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${topicPremiumLocked ? "bg-yellow-100" : "bg-primary-50"}`}>
+            {topicPremiumLocked ? (
+              <Lock size={18} className="text-yellow-600" />
+            ) : isDone ? (
+              <CheckCircle size={20} className="text-primary-500" />
+            ) : isProgress ? (
+              <Clock size={20} className="text-primary-500" />
+            ) : (
+              <BookOpen size={20} className="text-primary-300" />
+            )}
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <p className="font-semibold text-gray-900 text-sm truncate">{cleanTopicTitle(topic.title)}</p>
               {topic.isPremium && <span className="shrink-0 text-yellow-500 text-xs">👑</span>}
-              {isDone && <span className="text-green-500 text-xs">✓</span>}
+              {!topicPremiumLocked && isDone && <span className="text-green-500 text-xs">✓</span>}
             </div>
             <p className="text-xs text-gray-500 truncate">{topic.description}</p>
             <div className="flex items-center mt-1.5">
@@ -343,7 +357,13 @@ export default function CourseDetail() {
               <span className="text-xs font-medium text-gray-600 ml-2">{topicProgress}%</span>
             </div>
           </div>
-          <span className="text-gray-400">›</span>
+          {topicPremiumLocked ? (
+            <span className="text-[11px] font-semibold text-white bg-yellow-500 px-2.5 py-1 rounded-lg flex items-center gap-1 shrink-0">
+              <Lock size={12} /> Premium
+            </span>
+          ) : (
+            <span className="text-gray-400">›</span>
+          )}
         </Link>
       );
     } else if (item.type === "test") {
@@ -428,39 +448,7 @@ export default function CourseDetail() {
 
   return (
     <div className="page-content">
-      {/* Kursga qo'shilish yoki Progress card */}
-      {!enrollChecked ? null : !isEnrolled ? (
-        <div className="mx-5 mt-4 bg-white border border-gray-200 rounded-2xl p-6 text-center">
-          {course?.coverImage && (
-            <div className="h-32 -mx-6 -mt-6 mb-4 rounded-t-2xl overflow-hidden">
-              <img src={course.coverImage} alt="" className="w-full h-full" style={{ objectFit: course.coverFit || "cover", objectPosition: course.coverPosition || "50% 50%" }} />
-            </div>
-          )}
-          <h3 className="text-lg font-bold text-gray-900 mb-1">{course?.title}</h3>
-          <p className="text-sm text-gray-500 mb-4">{course?.description}</p>
-          <div className="flex items-center justify-center gap-4 text-sm text-gray-500 mb-5">
-            <span>📚 {hasFolders ? `${folders.length} modul` : `${topics.length} mavzu`}</span>
-            <span>👥 {totalStudentsInCourse} o'quvchi</span>
-          </div>
-          <button
-            onClick={handleEnroll}
-            disabled={enrolling}
-            className="w-full bg-primary-500 text-white py-3 rounded-xl font-semibold text-sm flex items-center justify-center gap-2 hover:bg-primary-600 active:scale-95 transition-all disabled:opacity-70"
-          >
-            {enrolling ? (
-              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <>
-                <UserPlus size={18} />
-                Kursga qo'shilish
-              </>
-            )}
-          </button>
-          {!user && <p className="text-[10px] text-gray-400 mt-2">Kursga qo'shilish uchun tizimga kiring</p>}
-        </div>
-      ) : (
-      <>
-        {/* ===== Hero — to'q binafsha gradient fon ===== */}
+      {/* ===== Hero — to'q binafsha gradient fon ===== */}
         <div className="relative -mt-px bg-gradient-to-b from-[#1e1b4b] via-[#2e2a6e] to-[#3730a3] px-5 pt-4 pb-24 rounded-b-[2rem]">
           {/* Yuqori nav — orqaga */}
           <div className="flex items-center mb-5">
@@ -573,6 +561,13 @@ export default function CourseDetail() {
               {continueTarget && (
                 <Link
                   to={continueTarget}
+                  onClick={(e) => {
+                    if (!isEnrolled) {
+                      e.preventDefault();
+                      setPendingTargetUrl(continueTarget);
+                      setShowJoinModal(true);
+                    }
+                  }}
                   className="mt-3 w-full flex items-center justify-center gap-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-semibold py-2.5 rounded-xl transition-colors active:scale-[0.98]"
                 >
                   <Play className="w-4 h-4 fill-current" />
@@ -588,7 +583,7 @@ export default function CourseDetail() {
           <div className="flex items-stretch">
             <StatCell
               icon={<Star className="w-6 h-6 text-yellow-400" fill="currentColor" />}
-              value={`${userProgress?.totalXP || 0} XP`}
+              value={`${calculateUserXP(userProgress)} XP`}
               label="Umumiy ball"
             />
             <div className="w-px bg-gray-100 my-1" />
@@ -611,8 +606,6 @@ export default function CourseDetail() {
             />
           </div>
         </div>
-      </>
-      )}
 
       {/* Kursni tanishtirish */}
       {course?.introduction && course.introduction.text && (
@@ -677,6 +670,7 @@ export default function CourseDetail() {
                     folder={folder}
                     folderItems={folderItems}
                     sequenceLocked={sequenceLocked}
+                    hasSubscription={hasSubscription}
                     progress={getFolderProgress(folder.id)}
                     onlineCount={folderOnlineCounts[folder.id] || 0}
                     courseId={courseId!}
@@ -698,6 +692,29 @@ export default function CourseDetail() {
 
       {/* Video Modal */}
       <VideoModal open={showVideoModal} videoUrl={videoUrl} onClose={() => setShowVideoModal(false)} />
+
+      {/* Join Course Modal */}
+      <JoinCourseModal
+        open={showJoinModal}
+        courseTitle={course?.title || "Kurs"}
+        onClose={() => setShowJoinModal(false)}
+        onConfirm={async () => {
+          if (!courseId) return;
+          if (user) {
+            await enrollUserInCourse(user.uid, courseId);
+          } else {
+            enrollLocalCourse(courseId);
+          }
+          setIsEnrolled(true);
+          setTotalStudentsInCourse((prev) => prev + 1);
+          setShowJoinModal(false);
+          if (pendingTargetUrl) {
+            const url = pendingTargetUrl;
+            setPendingTargetUrl(null);
+            navigate(url);
+          }
+        }}
+      />
     </div>
   );
 }
@@ -883,6 +900,7 @@ function FolderBlock({
   folder,
   folderItems,
   sequenceLocked,
+  hasSubscription,
   progress,
   onlineCount,
   courseId,
@@ -890,29 +908,38 @@ function FolderBlock({
   folder: Folder;
   folderItems: FolderItem[];
   sequenceLocked?: boolean;
+  hasSubscription?: boolean;
   progress: number;
   onlineCount: number;
   courseId: string;
 }) {
-  // Premium modul ichiga kirish mumkin — faqat premium misollar obuna talab qiladi.
-  // Qulflash faqat ketma-ket rejimda (oldingi modul tugatilmagan) qo'llanadi.
-  const isLocked = !!sequenceLocked;
-  const totalTopics = folderItems.filter((it) => it.type === "topic").length;
+  // Modul premium va unda kamida 1 ta bepul dars bor-yo'qligini aniqlaymiz
+  const folderTopics = folderItems.filter((it) => it.type === "topic");
+  const hasFreeTopic = folderTopics.some((it) => !(it.data as Topic).isPremium);
+  
+  // Modul to'liq premium bo'lsa (barcha darslar premium yoki hali dars yo'q) va foydalanuvchida obuna bo'lmasa — modul qulflanadi
+  const isFolderPremium = folder.isPremium === true;
+  const folderPremiumLocked = isFolderPremium && !hasFreeTopic && !hasSubscription;
+
+  const isLocked = !!sequenceLocked || folderPremiumLocked;
+  const totalTopics = folderTopics.length;
 
   const [showLockMsg, setShowLockMsg] = useState(false);
 
   return (
     <>
     <Link
-      to={isLocked ? "#" : `/course/${courseId}/folder/${folder.id}`}
+      to={folderPremiumLocked ? `/premium-gate?course=${courseId}` : sequenceLocked ? "#" : `/course/${courseId}/folder/${folder.id}`}
       onClick={(e) => {
-        if (sequenceLocked) {
+        if (sequenceLocked && !folderPremiumLocked) {
           e.preventDefault();
           setShowLockMsg(true);
           setTimeout(() => setShowLockMsg(false), 3000);
         }
       }}
-      className="block border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm hover:shadow-md active:bg-gray-50 transition-all"
+      className={`block border rounded-2xl overflow-hidden shadow-sm hover:shadow-md active:bg-gray-50 transition-all ${
+        folderPremiumLocked ? "bg-yellow-50/40 border-yellow-200" : "bg-white border-gray-200"
+      }`}
     >
       {/* Card — muqova + ma'lumot. Bosilganda alohida sahifa ochiladi */}
       <div className="w-full flex gap-3 p-3 text-left">
@@ -971,9 +998,15 @@ function FolderBlock({
           </div>
         </div>
 
-        {/* Strelka — vertikal o'rtada */}
+        {/* Strelka / Premium nishon — vertikal o'rtada */}
         <div className="flex items-center shrink-0 self-center">
-          <ChevronRight className="w-5 h-5 text-primary-500" />
+          {folderPremiumLocked ? (
+            <span className="text-[11px] font-semibold text-white bg-yellow-500 px-3 py-1.5 rounded-lg flex items-center gap-1">
+              <Lock size={13} /> Sotib olish
+            </span>
+          ) : (
+            <ChevronRight className="w-5 h-5 text-primary-500" />
+          )}
         </div>
       </div>
     </Link>

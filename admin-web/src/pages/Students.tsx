@@ -1,19 +1,34 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Search, Loader2, Eye, Users, X, Edit, Key, BookOpen, FileText, CreditCard, Ban, Trash2, ShieldOff, Clock, Monitor } from "lucide-react";
 import { getAllStudents, getAllProgressByUser, getTestResultsByUser, getRecentPayments, getPaymentsByUser, updateUser, banUser, unbanUser, deleteUserCompletely, getTodayActiveStudents, getAllStudentActivities, getCertificatesByUser, getAllUserSubscriptions, cancelSubscription, getUserDevices, forceRemoveDevice, removeAllUserDevices } from "@shared/repositories";
 import type { User, UserProgress, TestResult, Payment, UserActivity, Certificate, Subscription } from "@shared/types";
 import LoadingButton from "../components/LoadingButton";
 
 export default function Students() {
+  const [searchParams] = useSearchParams();
+  const openId = searchParams.get("openId");
+  const tabParam = searchParams.get("tab");
   const [students, setStudents] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedStudent, setSelectedStudent] = useState<User | null>(null);
+  const [initialTab, setInitialTab] = useState<"info" | "courses" | "tests" | "payments" | "certificates" | "devices">("info");
   const [activityMap, setActivityMap] = useState<Map<string, UserActivity>>(new Map());
 
   useEffect(() => {
     loadStudents();
   }, []);
+
+  useEffect(() => {
+    if (openId && students.length > 0) {
+      const s = students.find((x) => x.id === openId);
+      if (s) {
+        setSelectedStudent(s);
+        if (tabParam) setInitialTab(tabParam as any);
+      }
+    }
+  }, [openId, students, tabParam]);
 
   async function loadStudents() {
     try {
@@ -176,6 +191,7 @@ export default function Students() {
       {selectedStudent && (
         <StudentDetailModal
           student={selectedStudent}
+          defaultTab={initialTab}
           onClose={() => setSelectedStudent(null)}
           onUpdated={loadStudents}
         />
@@ -185,8 +201,8 @@ export default function Students() {
 }
 
 // ===== Student Detail Modal =====
-function StudentDetailModal({ student, onClose, onUpdated }: { student: User; onClose: () => void; onUpdated: () => void }) {
-  const [activeTab, setActiveTab] = useState<"info" | "courses" | "tests" | "payments" | "certificates" | "devices">("info");
+function StudentDetailModal({ student, defaultTab = "info", onClose, onUpdated }: { student: User; defaultTab?: "info" | "courses" | "tests" | "payments" | "certificates" | "devices"; onClose: () => void; onUpdated: () => void }) {
+  const [activeTab, setActiveTab] = useState<"info" | "courses" | "tests" | "payments" | "certificates" | "devices">(defaultTab);
   const [zoomAvatar, setZoomAvatar] = useState(false);
   const [progress, setProgress] = useState<UserProgress[]>([]);
   const [testResults, setTestResults] = useState<TestResult[]>([]);

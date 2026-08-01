@@ -42,14 +42,16 @@ export async function registerDevice(userId: string, deviceId: string, deviceNam
   });
 }
 
-/** Qurilma heartbeat — lastSeen yangilash */
-export async function updateDeviceHeartbeat(userId: string, deviceId: string): Promise<void> {
+/** Qurilma heartbeat — lastSeen yangilash. Sessiya o'chirilgan bo'lsa false qaytaradi */
+export async function updateDeviceHeartbeat(userId: string, deviceId: string): Promise<boolean> {
   const docId = `${userId}_${deviceId}`;
   const ref = doc(db, DEVICES_COL, docId);
   const snap = await getDoc(ref);
   if (snap.exists()) {
     await setDoc(ref, { ...snap.data(), lastSeen: Date.now(), isActive: true }, { merge: true });
+    return true;
   }
+  return false;
 }
 
 /** Qurilma sessiyasini o'chirish (logout) */
@@ -75,6 +77,87 @@ export async function getActiveDeviceCount(userId: string): Promise<number> {
   const devices = await getUserDevices(userId);
   const cutoff = Date.now() - 120000; // 2 daqiqa
   return devices.filter((d) => d.lastSeen >= cutoff && d.isActive).length;
+}
+
+/**
+ * Qurilma sessiyasini yaratish yoki auto-evict (4-qurilma kirsa eng 1-qurilma sessiyasini tugatish)
+ */
+export async function registerDeviceAndEvictOldestIfNeeded(
+  userId: string,
+  deviceId: string,
+  deviceName: string
+): Promise<{ allowed: boolean; evictedOldest: boolean }> {
+  const docId = `${userId}_${deviceId}`;
+  const devices = await getUserDevices(userId);
+  const cutoff = Date.now() - 120000; // 2 daqiqa
+  const activeDevices = devices.filter((d) => d.lastSeen >= cutoff && d.isActive);
+
+  // Bu qurilma allaqachon bor bo'lsa — update heartbeat
+  const existingDevice = activeDevices.find((d) => d.id === deviceId);
+  if (existingDevice) {
+    await setDoc(
+      doc(db, DEVICES_COL, docId),
+      {
+        id: deviceId,
+        userId,
+        deviceName,
+        lastSeen: Date.now(),
+        createdAt: existingDevice.createdAt || Date.now(),
+        isActive: true,
+      },
+      { merge: true }
+    );
+    return { allowed: true, evictedOldest: false };
+  }
+
+  // Agar faol qurilmalar 3 yoki undan ko'p bo'lsa — ENG ESKI 1-qurilma sessiyasini tugatamiz (Auto-Kick)
+  let evicted = false;
+  if (activeDevices.length >= MAX_DEVICES) {
+    const sortedByCreated = [...activeDevices].sort((a, b) => a.createdAt - b.createdAt);
+    const oldestDevice = sortedByCreated[0];
+    if (oldestDevice) {
+      await deleteDoc(doc(db, DEVICES_COL, `${userId}_${oldestDevice.id}`));
+      evicted = true;
+    }
+  }
+
+  // Yangi qurilmani ro'yxatga olish
+  await setDoc(doc(db, DEVICES_COL, docId), {
+    id: deviceId,
+    userId,
+    deviceName,
+    lastSeen: Date.now(),
+    createdAt: Date.now(),
+    isActive: true,
+  });
+
+  return { allowed: true, evictedOldest: evicted };
+}
+
+/**
+ * 3 yoki undan ko'p qurilmadan bir vaqtda faol foydalanayotgan o'quvchilarni topish (Admin uchun)
+ */
+export async function getMultiDeviceUsers(): Promise<Array<{ userId: string; deviceCount: number; devices: DeviceSession[] }>> {
+  const snap = await getDocs(collection(db, DEVICES_COL));
+  const cutoff = Date.now() - 120000; // 2 daqiqa
+  const userMap: Record<string, DeviceSession[]> = {};
+
+  snap.docs.forEach((d) => {
+    const dev = d.data() as DeviceSession;
+    if (dev.lastSeen >= cutoff && dev.isActive) {
+      if (!userMap[dev.userId]) userMap[dev.userId] = [];
+      userMap[dev.userId].push(dev);
+    }
+  });
+
+  const result: Array<{ userId: string; deviceCount: number; devices: DeviceSession[] }> = [];
+  for (const [userId, devs] of Object.entries(userMap)) {
+    if (devs.length >= MAX_DEVICES) {
+      result.push({ userId, deviceCount: devs.length, devices: devs });
+    }
+  }
+
+  return result;
 }
 
 /**

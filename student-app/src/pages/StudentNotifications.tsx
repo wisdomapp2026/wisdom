@@ -120,7 +120,7 @@ export default function StudentNotifications() {
     <div className="page-content pb-24">
       <header className="px-5 pt-4 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Link to="/" className="text-gray-500"><ChevronLeft size={22} /></Link>
+          <Link to="/" className="flex items-center text-gray-500"><ChevronLeft size={22} /></Link>
           <h1 className="text-xl font-bold text-gray-900">Bildirishnomalar</h1>
         </div>
         {unreadCount > 0 && (

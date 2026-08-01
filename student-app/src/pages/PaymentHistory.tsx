@@ -44,7 +44,7 @@ export default function PaymentHistory() {
     <div className="page-content pb-24 bg-gray-50 min-h-screen">
       {/* Header */}
       <header className="bg-white px-5 pt-4 pb-4 border-b border-gray-100 flex items-center gap-3">
-        <Link to="/profile" className="text-gray-500"><ChevronLeft size={22} /></Link>
+        <Link to="/profile" className="text-gray-500 shrink-0 flex items-center justify-center"><ChevronLeft size={22} /></Link>
         <h1 className="text-lg font-bold text-gray-900 flex items-center gap-2">
           <CreditCard size={20} className="text-green-500" /> To'lovlarim
         </h1>

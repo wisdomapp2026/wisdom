@@ -183,10 +183,9 @@ export default function TestScreen() {
       completedAt: Date.now(),
     };
 
-    // Reyting (XP) faqat to'g'ri javob berilgan savollar bo'yicha hisoblanadi —
-    // har bir savolning o'ziga tegishli "points" qiymati XP sifatida qo'shiladi.
+    // Har bir to'g'ri javob berilgan savol uchun 10 XP (yoki savolning o'z points qiymati) beriladi.
     const xpEarned = questions.reduce(
-      (sum, qq) => (answers[qq.id] === qq.correctAnswer ? sum + (qq.points || 0) : sum),
+      (sum, qq) => (answers[qq.id] === qq.correctAnswer ? sum + Math.max(qq.points || 0, 10) : sum),
       0
     );
 

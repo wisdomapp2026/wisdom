@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth } from "@shared/firebase";
-import { getUnreadNotificationCount } from "@shared/repositories";
+import { getUnreadNotificationCount, getMultiDeviceUsers, getUserById } from "@shared/repositories";
 import clsx from "clsx";
 
 const sidebarItems = [
@@ -49,6 +49,7 @@ export default function AdminLayout() {
   const navigate = useNavigate();
   const [unreadCount, setUnreadCount] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [alertMultiDeviceUsers, setAlertMultiDeviceUsers] = useState<Array<{ userId: string; name: string; phone: string; count: number }>>([]);
 
   // Sahifa o'zgarganda mobile menuni yopish
   useEffect(() => {
@@ -57,8 +58,12 @@ export default function AdminLayout() {
 
   useEffect(() => {
     loadNotifCount();
+    checkMultiDevices();
     // Har 30 sekundda yangilash
-    const interval = setInterval(loadNotifCount, 30000);
+    const interval = setInterval(() => {
+      loadNotifCount();
+      checkMultiDevices();
+    }, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -67,6 +72,30 @@ export default function AdminLayout() {
       const count = await getUnreadNotificationCount();
       setUnreadCount(count);
     } catch {}
+  }
+
+  async function checkMultiDevices() {
+    try {
+      const multiDevs = await getMultiDeviceUsers();
+      if (multiDevs.length > 0) {
+        const userInfos = await Promise.all(
+          multiDevs.map(async (item) => {
+            const u = await getUserById(item.userId);
+            return {
+              userId: item.userId,
+              name: u?.name || "Noma'lum o'quvchi",
+              phone: u?.phone || "",
+              count: item.deviceCount,
+            };
+          })
+        );
+        setAlertMultiDeviceUsers(userInfos);
+      } else {
+        setAlertMultiDeviceUsers([]);
+      }
+    } catch (err) {
+      console.error("Multi-device check error:", err);
+    }
   }
 
   async function handleLogout() {
@@ -195,6 +224,38 @@ export default function AdminLayout() {
 
         {/* Page content */}
         <main className="flex-1 overflow-y-auto p-6 bg-gray-50">
+          {/* Attention Banner: 3+ qurilmadan faol foydalanayotgan o'quvchilar haqida */}
+          {alertMultiDeviceUsers.length > 0 && (
+            <div className="mb-6 space-y-2">
+              {alertMultiDeviceUsers.map((item) => (
+                <div key={item.userId} className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 flex items-center justify-between shadow-sm animate-pulse">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-amber-200 text-amber-800 rounded-xl flex items-center justify-center font-bold text-lg shrink-0">
+                      ⚠️
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-amber-950 text-sm">ATTENTION / DIQQAT!</span>
+                        <span className="bg-amber-200 text-amber-900 text-xs font-semibold px-2 py-0.5 rounded-md">
+                          {item.count} ta qurilma faol
+                        </span>
+                      </div>
+                      <p className="text-xs text-amber-800 mt-0.5">
+                        <strong className="text-amber-950">{item.name}</strong> ({item.phone}) bitta akkauntdan bir vaqtning o'zida {item.count} ta qurilmada faol ishlatmoqda!
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => navigate(`/students?openId=${item.userId}&tab=devices`)}
+                    className="shrink-0 bg-amber-600 hover:bg-amber-700 active:scale-95 text-white font-bold text-xs px-4 py-2.5 rounded-xl shadow transition-all flex items-center gap-1.5"
+                  >
+                    Seanslarni boshqarish (Student Detail) →
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
           <Outlet />
         </main>
 

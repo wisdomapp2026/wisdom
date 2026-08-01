@@ -327,6 +327,10 @@ export interface UserProgress {
   streak: number; // kunlik streak
   weeklyMinutes: number[];  // [Mon, Tue, ..., Sun]
   lastAccessedAt: number;
+  isJoined?: boolean;
+  enrolledAt?: number;
+  testXP?: number;
+  testResults?: Record<string, any>;
 }
 
 // ============================================================

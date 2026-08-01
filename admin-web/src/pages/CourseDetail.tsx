@@ -451,6 +451,7 @@ export default function CourseDetail() {
         courseId={courseId!}
         existingCount={topics.length}
         folderId={targetFolderId}
+        isFolderPremium={folders.find((f) => f.id === targetFolderId)?.isPremium}
         onClose={() => setShowTopicModal(false)}
         onCreated={() => loadData(courseId!)}
       />
@@ -1105,7 +1106,15 @@ function FolderSection({
   }
 
   async function handleToggleFolderPremium() {
-    await updateFolder(courseId, folder.id, { isPremium: !folder.isPremium });
+    const newIsPremium = !folder.isPremium;
+    await updateFolder(courseId, folder.id, { isPremium: newIsPremium });
+
+    // Modul Premium yoki Free qilinganda — uning ichidagi barcha mavzularni ham avtomatik mos holatga o'tkazamiz
+    const topicsInFolder = folderItems.filter((it) => it.type === "topic");
+    await Promise.all(
+      topicsInFolder.map((it) => updateTopic(courseId, it.data.id, { isPremium: newIsPremium }))
+    );
+
     onUpdate();
   }
 

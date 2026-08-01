@@ -77,6 +77,35 @@ export async function updateCourse(courseId: string, data: Partial<Course>): Pro
   await updateDoc(doc(db, COURSES_COL, courseId), { ...data, updatedAt: Date.now() });
 }
 
+/** Foydalanuvchini kursga a'zo qilish (totalStudents +1 va user progress isJoined=true) */
+export async function enrollUserInCourse(userId: string, courseId: string): Promise<void> {
+  const userProgRef = doc(db, "users", userId, "courseProgress", courseId);
+  const userProgSnap = await getDoc(userProgRef);
+  const progData = userProgSnap.exists() ? userProgSnap.data() : {};
+
+  // Agar allaqachon a'zo bo'lgan bo'lsa qayta totalStudents oshirilmaydi
+  if (progData?.isJoined) return;
+
+  await setDoc(
+    userProgRef,
+    {
+      ...progData,
+      userId,
+      courseId,
+      isJoined: true,
+      enrolledAt: progData?.enrolledAt || Date.now(),
+      lastStudiedAt: Date.now(),
+    },
+    { merge: true }
+  );
+
+  // Kursning totalStudents qiymatini +1 qilish
+  const courseRef = doc(db, COURSES_COL, courseId);
+  await updateDoc(courseRef, {
+    totalStudents: increment(1),
+  }).catch(() => {});
+}
+
 export async function deleteCourse(courseId: string): Promise<void> {
   // Barcha o'chiriladigan doc ref larni to'plash
   const refsToDelete: any[] = [];

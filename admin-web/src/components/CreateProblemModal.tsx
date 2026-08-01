@@ -117,29 +117,23 @@ export default function CreateProblemModal({ open, courseId, topicId, existingCo
           solutionImage: solutionImage || undefined,
         });
 
-        // Test bazasidagi bog'langan savolni ham yangilash (video + yechim mos qolishi uchun)
-        try {
-          const tbQuestions = await getAllTBQuestions();
-          const linked = tbQuestions.find(
-            (q: any) => q.problemId === editData.id || q.id === `q-${editData.id}`
-          );
-          if (linked) {
-            await saveTBQuestion({
-              ...linked,
-              content,
-              difficulty,
-              time: `${estimatedMinutes} min`,
-              tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
-              problemId: editData.id,
-              videoUrl: finalVideoUrl ?? null,
-              videoType: finalVideoType ?? null,
-              solution: finalSolution ?? null,
-              solutionImage: solutionImage || null,
-            });
-          }
-        } catch (err) {
-          console.error("Test bazasidagi savolni yangilashda xatolik:", err);
-        }
+        // Variantlar bo'lsa test bazaga ham saqlash / yangilash
+        await syncTestToLibrary(
+          editData.id,
+          content,
+          difficulty,
+          estimatedMinutes,
+          tags,
+          optionA,
+          optionB,
+          optionC,
+          optionD,
+          correctAnswer,
+          finalVideoUrl,
+          finalVideoType,
+          finalSolution,
+          solutionImage
+        );
       } else {
         // CREATE mode
         const order = existingCount + 1;
@@ -164,152 +158,23 @@ export default function CreateProblemModal({ open, courseId, topicId, existingCo
 
         await createProblem(courseId, topicId, problem);
 
-        // Agar variant to'ldirilgan bo'lsa — test bazaga ham saqlash
-        const hasOptions = optionA.trim() || optionB.trim() || optionC.trim() || optionD.trim();
-        if (hasOptions) {
-          const testQuestion: Question = {
-            id: `q-${id}`,
-            type: "multiple_choice",
-            content,
-            options: [
-              { label: "A", text: optionA.trim() },
-              { label: "B", text: optionB.trim() },
-              { label: "C", text: optionC.trim() },
-              { label: "D", text: optionD.trim() },
-            ],
-            correctAnswer,
-            points: difficulty === "hard" ? 10 : difficulty === "medium" ? 5 : 3,
-            estimatedMinutes,
-            difficulty,
-            tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
-            // Misol bilan bog'lanish va yechimlar — test natijasida ko'rsatiladi
-            problemId: id,
-            ...(finalVideoUrl ? { videoUrl: finalVideoUrl } : {}),
-            ...(finalVideoType ? { videoType: finalVideoType } : {}),
-            ...(finalSolution ? { solution: finalSolution } : {}),
-            ...(solutionImage ? { solutionImage } : {}),
-          };
-
-          const testEntry: Test = {
-            id: `tlib-${id}`,
-            courseId,
-            title: content.slice(0, 60) + (content.length > 60 ? "..." : ""),
-            description: `Modul: ${topicId} · Misol: ${id}`,
-            version: "Draft v1",
-            status: "draft",
-            passingScore: 1,
-            shuffleQuestions: false,
-            totalPoints: testQuestion.points,
-            totalTime: estimatedMinutes,
-            questions: [testQuestion],
-            createdAt: now,
-            updatedAt: now,
-            createdBy: "admin",
-          };
-
-          await saveTestToLibrary(testEntry);
-
-          // Test Builder (Content Library) — Kurs → Modul → Mavzu ierarxiyasi bilan saqlash
-          try {
-            const tagList = tags.split(",").map((t) => t.trim()).filter(Boolean);
-
-            // Kurs, modul (folder) va mavzu (topic) ma'lumotlarini olish
-            const [course, topic, courseFolders] = await Promise.all([
-              getCourseById(courseId),
-              getTopicById(courseId, topicId),
-              getFoldersByCourse(courseId),
-            ]);
-
-            const courseName = course?.title || "Kurs";
-            const topicName = topic?.title || "Mavzu";
-
-            const existingFolders = await getAllTBFolders();
-
-            /** Papkani topish yoki yaratish (refKey asosida — unikal identifikator) */
-            async function ensureFolder(
-              name: string,
-              parentId: string | null,
-              refKey: string
-            ): Promise<any> {
-              // Faqat refKey bo'yicha izlash — nomi o'zgarsa ham bir xil papka
-              let f = existingFolders.find((x: any) => x.refKey === refKey);
-              if (f) {
-                // Nomi o'zgargan bo'lsa yangilash
-                if (f.name !== name) {
-                  f.name = name;
-                  await saveTBFolder(f);
-                }
-                return f;
-              }
-              f = {
-                id: `tbf-${refKey}`,
-                name,
-                parentId: parentId ?? null,
-                refKey,
-                questionIds: [],
-              };
-              await saveTBFolder(f);
-              existingFolders.push(f);
-              return f;
-            }
-
-            // 1. Kurs papkasi (root)
-            const courseFolder = await ensureFolder(courseName, null, `c-${courseId}`);
-
-            let targetFolder: any;
-
-            if (topic?.folderId) {
-              // Mavzu modul ichida — 3 darajali: Kurs → Modul → Mavzu
-              const moduleName = courseFolders.find((f) => f.id === topic.folderId)?.title || "Modul";
-              const moduleFolder = await ensureFolder(moduleName, courseFolder.id, `m-${courseId}-${topic.folderId}`);
-              targetFolder = await ensureFolder(topicName, moduleFolder.id, `t-${courseId}-${topicId}`);
-            } else {
-              // Mavzu modulsiz — 2 darajali: Kurs → Mavzu
-              targetFolder = await ensureFolder(topicName, courseFolder.id, `t-${courseId}-${topicId}`);
-            }
-
-            // Savol obyekti — manzil papkasiga biriktiriladi
-            const newQ = {
-              id: testQuestion.id,
-              content,
-              difficulty,
-              time: `${estimatedMinutes} min`,
-              tags: tagList,
-              order: Date.now(),
-              folderId: targetFolder.id,
-              options: testQuestion.options,
-              correctAnswer,
-              // Misol bilan bog'lanish va yechimlar — testga import qilinganda ko'chadi
-              problemId: id,
-              ...(finalVideoUrl ? { videoUrl: finalVideoUrl } : {}),
-              ...(finalVideoType ? { videoType: finalVideoType } : {}),
-              ...(finalSolution ? { solution: finalSolution } : {}),
-              ...(solutionImage ? { solutionImage } : {}),
-            };
-
-            await saveTBQuestion(newQ);
-
-            // Papkaga questionId qo'shish
-            if (!targetFolder.questionIds?.includes(testQuestion.id)) {
-              targetFolder.questionIds = [...(targetFolder.questionIds || []), testQuestion.id];
-              await saveTBFolder(targetFolder);
-            }
-
-            // localStorage sync (fallback uchun)
-            const tbQuestions = JSON.parse(localStorage.getItem("tb_questions") || "[]");
-            const tbFolders = JSON.parse(localStorage.getItem("tb_folders") || "[]");
-            tbQuestions.push(newQ);
-            for (const f of existingFolders) {
-              const idx = tbFolders.findIndex((x: any) => x.id === f.id);
-              if (idx >= 0) tbFolders[idx] = f;
-              else tbFolders.push(f);
-            }
-            localStorage.setItem("tb_questions", JSON.stringify(tbQuestions));
-            localStorage.setItem("tb_folders", JSON.stringify(tbFolders));
-          } catch (err) {
-            console.error("Test bazaga saqlashda xatolik:", err);
-          }
-        }
+        // Variantlar bo'lsa test bazaga ham saqlash
+        await syncTestToLibrary(
+          id,
+          content,
+          difficulty,
+          estimatedMinutes,
+          tags,
+          optionA,
+          optionB,
+          optionC,
+          optionD,
+          correctAnswer,
+          finalVideoUrl,
+          finalVideoType,
+          finalSolution,
+          solutionImage
+        );
       }
 
       onCreated();
@@ -318,6 +183,175 @@ export default function CreateProblemModal({ open, courseId, topicId, existingCo
       console.error("Misol saqlashda xatolik:", err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  /** Misoldan avtomatik Test Builder (Content Library) ga Kurs → Modul → Mavzu ierarxiyasi bilan saqlash */
+  async function syncTestToLibrary(
+    problemId: string,
+    content: string,
+    difficulty: "easy" | "medium" | "hard",
+    estimatedMinutes: number,
+    tagsStr: string,
+    optionA: string,
+    optionB: string,
+    optionC: string,
+    optionD: string,
+    correctAnswer: string,
+    finalVideoUrl?: string,
+    finalVideoType?: "youtube" | "upload",
+    finalSolution?: any,
+    solutionImage?: string
+  ) {
+    const hasOptions = optionA.trim() || optionB.trim() || optionC.trim() || optionD.trim();
+    if (!hasOptions) return;
+
+    const tagList = tagsStr.split(",").map((t) => t.trim()).filter(Boolean);
+    const now = Date.now();
+    const testQuestionId = `q-${problemId}`;
+
+    const testQuestion: Question = {
+      id: testQuestionId,
+      type: "multiple_choice",
+      content,
+      options: [
+        { label: "A", text: optionA.trim() },
+        { label: "B", text: optionB.trim() },
+        { label: "C", text: optionC.trim() },
+        { label: "D", text: optionD.trim() },
+      ],
+      correctAnswer: correctAnswer as any,
+      points: difficulty === "hard" ? 10 : difficulty === "medium" ? 5 : 3,
+      estimatedMinutes,
+      difficulty,
+      tags: tagList,
+      problemId,
+      ...(finalVideoUrl ? { videoUrl: finalVideoUrl } : {}),
+      ...(finalVideoType ? { videoType: finalVideoType } : {}),
+      ...(finalSolution ? { solution: finalSolution } : {}),
+      ...(solutionImage ? { solutionImage } : {}),
+    };
+
+    const testEntry: Test = {
+      id: `tlib-${problemId}`,
+      courseId,
+      title: content.slice(0, 60) + (content.length > 60 ? "..." : ""),
+      description: `Modul: ${topicId} · Misol: ${problemId}`,
+      version: "Draft v1",
+      status: "draft",
+      passingScore: 1,
+      shuffleQuestions: false,
+      totalPoints: testQuestion.points,
+      totalTime: estimatedMinutes,
+      questions: [testQuestion],
+      createdAt: now,
+      updatedAt: now,
+      createdBy: "admin",
+    };
+
+    await saveTestToLibrary(testEntry);
+
+    try {
+      const [course, topic, courseFolders] = await Promise.all([
+        getCourseById(courseId),
+        getTopicById(courseId, topicId),
+        getFoldersByCourse(courseId),
+      ]);
+
+      const courseName = course?.title || "Kurs";
+      const topicName = topic?.title || "Mavzu";
+
+      const existingFolders = await getAllTBFolders();
+
+      /** Papkani topish yoki yaratish (refKey va parentId/name asosida) */
+      async function ensureFolder(
+        name: string,
+        parentId: string | null,
+        refKey: string
+      ): Promise<any> {
+        let f = existingFolders.find(
+          (x: any) =>
+            x.refKey === refKey ||
+            ((x.parentId ?? null) === parentId && x.name?.trim().toLowerCase() === name.trim().toLowerCase())
+        );
+
+        if (f) {
+          let updated = false;
+          if (!f.refKey) { f.refKey = refKey; updated = true; }
+          if ((f.parentId ?? null) !== parentId) { f.parentId = parentId; updated = true; }
+          if (f.name !== name) { f.name = name; updated = true; }
+          if (updated) await saveTBFolder(f);
+          return f;
+        }
+
+        f = {
+          id: `tbf-${refKey}`,
+          name,
+          parentId: parentId ?? null,
+          refKey,
+          questionIds: [],
+        };
+        await saveTBFolder(f);
+        existingFolders.push(f);
+        return f;
+      }
+
+      // 1. Kurs papkasi (Root)
+      const courseFolder = await ensureFolder(courseName, null, `c-${courseId}`);
+
+      let targetFolder: any;
+
+      if (topic?.folderId) {
+        // Mavzu modul ichida — 3 darajali: Kurs → Modul → Mavzu
+        const moduleName = courseFolders.find((f) => f.id === topic.folderId)?.title || "Modul";
+        const moduleFolder = await ensureFolder(moduleName, courseFolder.id, `m-${courseId}-${topic.folderId}`);
+        targetFolder = await ensureFolder(topicName, moduleFolder.id, `t-${courseId}-${topicId}`);
+      } else {
+        // Mavzu modulsiz — 2 darajali: Kurs → Mavzu
+        targetFolder = await ensureFolder(topicName, courseFolder.id, `t-${courseId}-${topicId}`);
+      }
+
+      // Savol obyekti — 3-darajali mavzu papkasiga biriktiriladi
+      const newQ = {
+        id: testQuestion.id,
+        content,
+        difficulty,
+        time: `${estimatedMinutes} min`,
+        tags: tagList,
+        order: Date.now(),
+        folderId: targetFolder.id,
+        options: testQuestion.options,
+        correctAnswer,
+        problemId,
+        ...(finalVideoUrl ? { videoUrl: finalVideoUrl } : {}),
+        ...(finalVideoType ? { videoType: finalVideoType } : {}),
+        ...(finalSolution ? { solution: finalSolution } : {}),
+        ...(solutionImage ? { solutionImage } : {}),
+      };
+
+      await saveTBQuestion(newQ);
+
+      if (!targetFolder.questionIds?.includes(testQuestion.id)) {
+        targetFolder.questionIds = [...(targetFolder.questionIds || []), testQuestion.id];
+        await saveTBFolder(targetFolder);
+      }
+
+      // LocalStorage sync (fallback)
+      const tbQuestions = JSON.parse(localStorage.getItem("tb_questions") || "[]");
+      const tbFolders = JSON.parse(localStorage.getItem("tb_folders") || "[]");
+      const qIdx = tbQuestions.findIndex((x: any) => x.id === newQ.id);
+      if (qIdx >= 0) tbQuestions[qIdx] = newQ;
+      else tbQuestions.push(newQ);
+
+      for (const f of existingFolders) {
+        const idx = tbFolders.findIndex((x: any) => x.id === f.id);
+        if (idx >= 0) tbFolders[idx] = f;
+        else tbFolders.push(f);
+      }
+      localStorage.setItem("tb_questions", JSON.stringify(tbQuestions));
+      localStorage.setItem("tb_folders", JSON.stringify(tbFolders));
+    } catch (err) {
+      console.error("Test bazaga saqlashda xatolik:", err);
     }
   }
 
