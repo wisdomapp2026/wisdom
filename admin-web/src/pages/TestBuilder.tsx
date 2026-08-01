@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { ChevronDown, ChevronRight as ChevRight, Plus, Edit, Trash2, Filter, Search, FolderPlus, X, GripVertical, Save, Loader2 } from "lucide-react";
-import { saveTestToLibrary, getAllTBQuestions, saveTBQuestion, deleteTBQuestion, getAllTBFolders, saveTBFolder, deleteTBFolder } from "@shared/repositories";
+import { saveTestToLibrary, getAllTBQuestions, saveTBQuestion, deleteTBQuestion, getAllTBFolders, saveTBFolder, deleteTBFolder, organizeGeneralTestLibrary } from "@shared/repositories";
 import type { Test, Question as TQuestion } from "@shared/types";
 import CreateQuestionModal from "../components/CreateQuestionModal";
 import LatexText from "../components/LatexText";
@@ -78,6 +78,9 @@ export default function TestBuilder() {
   async function loadFromFirestore() {
     setLoadingData(true);
     try {
+      // 1. "Umumiy" va guruhlanmagan savollarni avtomatik Kurs -> Modul -> Mavzu papkalariga ko'chirish
+      await organizeGeneralTestLibrary().catch((e) => console.error("Organize err:", e));
+
       const [dbQuestions, dbFolders] = await Promise.all([
         getAllTBQuestions(),
         getAllTBFolders(),
@@ -87,6 +90,7 @@ export default function TestBuilder() {
         // Firestore dan olish
         setQuestions(dbQuestions as Question[]);
         setFolders(dbFolders as Folder[]);
+        setExpandedFolders(dbFolders.map((f: any) => f.id));
       } else {
         // Firestore bo'sh — localStorage dan migratsiya qilish (bir martalik)
         const localQ = loadState<Question[]>("tb_questions", []);
