@@ -20,6 +20,14 @@ function shuffleArray<T>(arr: T[]): T[] {
   return a;
 }
 
+const OPTION_LABELS = ["A", "B", "C", "D", "E", "F", "G", "H"];
+
+interface ShuffledOption {
+  displayLabel: string;
+  originalLabel: string;
+  text: string;
+}
+
 export default function TestScreen() {
   const { testId } = useParams<{ testId: string }>();
   const navigate = useNavigate();
@@ -35,7 +43,7 @@ export default function TestScreen() {
   const [finished, setFinished] = useState(false);
   const finishingRef = useRef(false); // dublikat finish oldini olish
   // Har bir savol uchun shuffle qilingan options tartibini saqlash
-  const [shuffledOptionsMap, setShuffledOptionsMap] = useState<Record<string, Array<{ label: string; text: string }>>>({});
+  const [shuffledOptionsMap, setShuffledOptionsMap] = useState<Record<string, ShuffledOption[]>>({});
 
   useEffect(() => {
     if (!testId) return;
@@ -61,11 +69,16 @@ export default function TestScreen() {
         setCourseId(match.courseId);
         setCourseName(courses.find(c => c.id === match.courseId)?.title || "");
         setTimeLeft(match.test.totalTime * 60);
-        // Javob variantlarini shuffle qilish (bir marta)
-        const optionsMap: Record<string, Array<{ label: string; text: string }>> = {};
+        // Javob variantlarini shuffle qilish (bir marta) — variant matnlari almashadi, lekin A B C D label tartibi saqlanadi
+        const optionsMap: Record<string, ShuffledOption[]> = {};
         for (const question of match.test.questions || []) {
-          if (question.options) {
-            optionsMap[question.id] = shuffleArray([...question.options]);
+          if (question.options && question.options.length > 0) {
+            const shuffledRaw = shuffleArray([...question.options]);
+            optionsMap[question.id] = shuffledRaw.map((opt, idx) => ({
+              displayLabel: OPTION_LABELS[idx] || String.fromCharCode(65 + idx),
+              originalLabel: opt.label,
+              text: opt.text,
+            }));
           }
         }
         setShuffledOptionsMap(optionsMap);
@@ -303,28 +316,36 @@ export default function TestScreen() {
 
       {/* Options */}
       <div className="px-5 mt-6 space-y-3 flex-1">
-        {(shuffledOptionsMap[q.id] || q.options || []).map((opt) => {
-          const isSelected = selected === opt.label;
-          return (
-            <button
-              key={opt.label}
-              onClick={() => selectAnswer(opt.label)}
-              disabled={finished}
-              className={`w-full flex items-center px-5 py-4 rounded-xl border transition-all text-left ${
-                isSelected ? "border-primary-500 bg-primary-50" : "border-gray-200 bg-white hover:border-gray-300"
-              } ${finished ? "opacity-60 cursor-not-allowed" : ""}`}
-            >
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-4 text-sm font-bold shrink-0 ${
-                isSelected ? "bg-primary-500 text-white" : "bg-gray-100 text-gray-600"
-              }`}>
-                {opt.label}
-              </div>
-              <span className={`text-base ${isSelected ? "text-primary-700 font-medium" : "text-gray-700"}`}>
-                <LatexText text={opt.text} />
-              </span>
-            </button>
-          );
-        })}
+        {(() => {
+          const currentOptions: ShuffledOption[] = shuffledOptionsMap[q.id] || (q.options || []).map((opt, idx) => ({
+            displayLabel: OPTION_LABELS[idx] || opt.label || String.fromCharCode(65 + idx),
+            originalLabel: opt.label,
+            text: opt.text,
+          }));
+
+          return currentOptions.map((opt) => {
+            const isSelected = selected === opt.originalLabel || answers[q.id] === opt.originalLabel;
+            return (
+              <button
+                key={opt.displayLabel}
+                onClick={() => selectAnswer(opt.originalLabel)}
+                disabled={finished}
+                className={`w-full flex items-center px-5 py-4 rounded-xl border transition-all text-left ${
+                  isSelected ? "border-primary-500 bg-primary-50" : "border-gray-200 bg-white hover:border-gray-300"
+                } ${finished ? "opacity-60 cursor-not-allowed" : ""}`}
+              >
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-4 text-sm font-bold shrink-0 ${
+                  isSelected ? "bg-primary-500 text-white" : "bg-gray-100 text-gray-600"
+                }`}>
+                  {opt.displayLabel}
+                </div>
+                <span className={`text-base ${isSelected ? "text-primary-700 font-medium" : "text-gray-700"}`}>
+                  <LatexText text={opt.text} />
+                </span>
+              </button>
+            );
+          });
+        })()}
       </div>
 
       {/* Navigation */}
