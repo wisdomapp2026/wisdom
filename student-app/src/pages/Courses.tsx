@@ -7,7 +7,7 @@ import { CoursesLoader } from "../components/PageLoader";
 import { cachedFetch } from "../hooks/useCache";
 import { getLocalProgress } from "../hooks/useLocalProgress";
 
-const DEFAULT_CATEGORIES = ["Jarayonda", "Barchasi"];
+const DEFAULT_CATEGORIES = ["Barchasi", "Jarayonda"];
 // Lazy load: bir vaqtda nechta kurs ko'rsatilishi (30 tadan keyin, ro'yxat oxiriga yetganda keyingi 30 tasi yuklanadi)
 const PAGE_SIZE = 30;
 
@@ -18,7 +18,7 @@ interface CourseWithRealStats extends Course {
 
 export default function Courses() {
   const { user, loading: authLoading } = useAuth();
-  const [activeCategory, setActiveCategory] = useState("Jarayonda");
+  const [activeCategory, setActiveCategory] = useState("Barchasi");
   // Barcha (yashirilmagan) kurslar — statistikasiz, filterlash/qidiruv shu ro'yxat ustida ishlaydi
   const [rawCourses, setRawCourses] = useState<Course[]>([]);
   // Har bir kurs uchun hisoblangan statistika (faqat ekranda ko'rinadigan kurslar uchun to'ldiriladi)
@@ -46,8 +46,9 @@ export default function Courses() {
   async function loadCategories() {
     try {
       const cats = await cachedFetch("all-categories", getAllCategories);
-      const catNames = cats.map((c) => c.name);
-      setCategories(["Jarayonda", "Barchasi", ...catNames]);
+      // Dublikat nomlarni olib tashlash (courses.category matn sifatida saqlanadi)
+      const catNames = [...new Set(cats.map((c) => c.name))];
+      setCategories(["Barchasi", "Jarayonda", ...catNames]);
     } catch (err) {
       // Default qoladi
     }
@@ -204,8 +205,8 @@ export default function Courses() {
       <div className="px-5 mt-4">
         <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Kategoriyalar</p>
         <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-          {categories.map((c) => (
-            <button key={c} onClick={() => setActiveCategory(c)} className={`shrink-0 px-4 py-2.5 rounded-full text-sm font-medium ${activeCategory === c ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600"}`}>{c}</button>
+          {categories.map((c, i) => (
+            <button key={`cat-${i}`} onClick={() => setActiveCategory(c)} className={`shrink-0 px-4 py-2.5 rounded-full text-sm font-medium ${activeCategory === c ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-600"}`}>{c}</button>
           ))}
         </div>
       </div>

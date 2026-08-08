@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-import { collection, getDocs } from "firebase/firestore";
-import { db } from "@shared/firebase";
+import { supabase } from "@shared/supabase";
 import { useAuth } from "./useAuth";
 
 /** Umumiy (broadcast) bildirishnomalarning o'qilgan ID lari — har user uchun alohida */
@@ -28,7 +27,15 @@ export function useNotificationCount() {
     loadCount();
     // Har 30 sekund yangilanadi
     const interval = setInterval(loadCount, 30000);
-    return () => clearInterval(interval);
+
+    // Bildirishnoma o'qilganda darhol yangilash (custom event)
+    function handleRead() { loadCount(); }
+    window.addEventListener("edukids:notification-read", handleRead);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("edukids:notification-read", handleRead);
+    };
   }, [user?.uid]);
 
   async function loadCount() {
@@ -37,17 +44,14 @@ export function useNotificationCount() {
       return;
     }
     try {
-      const snap = await getDocs(collection(db, "studentNotifications"));
+      const { data } = await supabase.from("settings").select("value").eq("key", "studentNotifications").maybeSingle();
+      const all = (data?.value as any[]) || [];
       const readBroadcasts = getReadBroadcasts(user.uid);
 
-      const unread = snap.docs.filter((d) => {
-        const data = d.data() as { isRead?: boolean; userId?: string };
-        // Boshqa foydalanuvchiga tegishli bo'lsa — hisoblanmaydi
-        if (data.userId && data.userId !== user.uid) return false;
-        // Umumiy bildirishnoma — o'qilganligi localStorage da
-        if (!data.userId) return !readBroadcasts.includes(d.id);
-        // Shaxsiy bildirishnoma
-        return !data.isRead;
+      const unread = all.filter((n) => {
+        if (n.userId && n.userId !== user.uid) return false;
+        if (!n.userId) return !readBroadcasts.includes(n.id);
+        return !n.isRead;
       }).length;
 
       setCount(unread);
@@ -57,4 +61,9 @@ export function useNotificationCount() {
   }
 
   return { count, refresh: loadCount };
+}
+
+/** Bildirishnoma o'qilganda boshqa komponentlarga signal berish */
+export function notifyBadgeUpdate() {
+  window.dispatchEvent(new Event("edukids:notification-read"));
 }

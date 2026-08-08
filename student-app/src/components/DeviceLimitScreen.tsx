@@ -1,6 +1,5 @@
 import { Monitor, Smartphone, LogOut } from "lucide-react";
-import { signOut } from "firebase/auth";
-import { auth } from "@shared/firebase";
+import { supabase } from "@shared/supabase";
 import type { DeviceSession } from "@shared/repositories/deviceRepository";
 
 interface Props {
@@ -14,7 +13,7 @@ interface Props {
  */
 export default function DeviceLimitScreen({ activeDevices, maxDevices }: Props) {
   async function handleLogout() {
-    await signOut(auth);
+    await supabase.auth.signOut();
   }
 
   function formatTime(timestamp: number): string {

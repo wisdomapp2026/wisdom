@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { Plus, Trash2, Edit, Check, X, ExternalLink, Upload } from "lucide-react";
 import { getAllSocialLinks, createSocialLink, updateSocialLink, deleteSocialLink } from "@shared/repositories";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { storage } from "@shared/firebase";
+import { uploadFile } from "@shared/supabase";
 import type { SocialLink, SocialPlatform } from "@shared/types";
 import LoadingButton from "../components/LoadingButton";
 
@@ -63,10 +62,8 @@ export default function SocialLinks() {
     // Ikonka upload
     if (newIconFile) {
       try {
-        const storageRef = ref(storage, `social-icons/${now}-${newIconFile.name}`);
-        await uploadBytes(storageRef, newIconFile);
-        iconUrl = await getDownloadURL(storageRef);
-      } catch (err) {
+        iconUrl = await uploadFile("edukids", `social-icons/${now}-${newIconFile.name}`, newIconFile);
+      } catch (err: any) {
         console.error("Ikonka yuklashda xatolik:", err);
       }
     }

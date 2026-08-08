@@ -1,8 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { Check, X, Clock, Eye, Phone, CreditCard, Calendar, Image, Search } from "lucide-react";
 import { getRecentPayments, createSubscription, getUserById } from "@shared/repositories";
-import { doc, updateDoc, setDoc, collection } from "firebase/firestore";
-import { db } from "@shared/firebase";
+import { supabase } from "@shared/supabase";
 import type { Payment, Subscription, User } from "@shared/types";
 
 export default function Payments() {
@@ -26,7 +25,7 @@ export default function Payments() {
     if (!confirm(`${payment.userName} ning ${payment.amount.toLocaleString()} so'm to'lovini tasdiqlaysizmi?`)) return;
 
     // 1. To'lov holatini "success" ga o'zgartirish
-    await updateDoc(doc(db, "payments", payment.id), { status: "success", confirmedAt: Date.now() });
+    await supabase.from("payments").update({ status: "success", confirmed_at: Date.now() }).eq("id", payment.id);
 
     // 2. Obuna yaratish
     const now = Date.now();
@@ -51,22 +50,29 @@ export default function Payments() {
 
     // 3. Studentga bildirishnoma yuborish
     const notifId = `notif-${payment.userId}-${now}`;
-    await setDoc(doc(db, "studentNotifications", notifId), {
-      id: notifId,
-      type: "payment",
-      title: "To'lov tasdiqlandi ✅",
-      body: `Sizning ${payment.amount.toLocaleString()} so'm to'lovingiz tasdiqlandi. "${payment.courseTitle}" kursiga kirish ochildi!`,
-      isRead: false,
-      userId: payment.userId,
-      createdAt: now,
-    });
+    try {
+      const { data } = await supabase.from("settings").select("value").eq("key", "studentNotifications").maybeSingle();
+      const list = (data?.value as any[]) || [];
+      const newNotif = {
+        id: notifId,
+        type: "payment",
+        title: "To'lov tasdiqlandi ✅",
+        body: `Sizning ${payment.amount.toLocaleString()} so'm to'lovingiz tasdiqlandi. "${payment.courseTitle}" kursiga kirish ochildi!`,
+        isRead: false,
+        userId: payment.userId,
+        createdAt: now,
+      };
+      await supabase.from("settings").upsert({ key: "studentNotifications", value: [...list, newNotif] });
+    } catch (err) {
+      console.error("Student bildirishnomasi yuborilmadi:", err);
+    }
 
     await loadData();
   }
 
   async function handleReject(paymentId: string) {
     if (!confirm("Bu to'lovni rad etasizmi?")) return;
-    await updateDoc(doc(db, "payments", paymentId), { status: "failed" });
+    await supabase.from("payments").update({ status: "failed" }).eq("id", paymentId);
     await loadData();
   }
 

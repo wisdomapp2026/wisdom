@@ -3,9 +3,7 @@ import { ChevronLeft, Copy, Check, Shield, Upload, Image } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { getPromoByCode, updatePromoCode, usePromoCodeAtomic, createPayment, getUserById, createAdminNotification } from "@shared/repositories";
-import { doc, getDoc } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { db, storage } from "@shared/firebase";
+import { supabase, uploadFile } from "@shared/supabase";
 import type { Payment as PaymentType, AdminNotification } from "@shared/types";
 
 export default function Payment() {
@@ -40,9 +38,13 @@ export default function Payment() {
 
   async function loadSettings() {
     try {
-      const snap = await getDoc(doc(db, "settings", "platform"));
-      if (snap.exists()) {
-        const data = snap.data();
+      const { data: resData } = await supabase
+        .from("settings")
+        .select("value")
+        .eq("key", "platform")
+        .maybeSingle();
+      if (resData?.value) {
+        const data = resData.value as any;
         if (data.cardNumber) setCardNumber(data.cardNumber);
         if (data.cardHolder) setCardHolder(data.cardHolder);
       }
@@ -95,9 +97,7 @@ export default function Payment() {
     // Screenshot upload
     let screenshotUrl = "";
     try {
-      const storageRef = ref(storage, `payment-screenshots/${user.uid}-${now}.jpg`);
-      await uploadBytes(storageRef, screenshotFile);
-      screenshotUrl = await getDownloadURL(storageRef);
+      screenshotUrl = await uploadFile("edukids", `payment-screenshots/${user.uid}-${now}.jpg`, screenshotFile);
     } catch (err) {
       console.error("Screenshot yuklashda xatolik:", err);
     }

@@ -1,338 +1,407 @@
-/**
- * Course Repository — Firestore bilan ishlash uchun abstraction layer
- * Kelajakda bazani almashtirish oson bo'lishi uchun barcha DB chaqiruvlar shu yerda
- */
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  setDoc,
-  updateDoc,
-  deleteDoc,
-  deleteField,
-  query,
-  orderBy,
-  where,
-  writeBatch,
-  runTransaction,
-  increment,
-} from "firebase/firestore";
-import { db } from "../firebase";
-import type { Course, Topic, Problem, Test, Advice, Folder } from "../types";
+import { supabase, toCamel, toSnake, stringToUUID } from "../supabase";
+import type { Course, Topic, Problem, Test, Advice, Folder, MotivationalPhrase, MotivationSettings, MotivationPlacement, SocialLink, PromoCode } from "../types";
 
-const COURSES_COL = "courses";
-
-/**
- * Firestore updateDoc undefined qiymatni qabul qilmaydi.
- * undefined maydonlarni deleteField() ga aylantiramiz (maydonni o'chiradi).
- */
-function cleanUpdate(data: Record<string, any>): Record<string, any> {
-  const result: Record<string, any> = {};
-  for (const [key, value] of Object.entries(data)) {
-    result[key] = value === undefined ? deleteField() : value;
-  }
-  return result;
+// Helper for settings arrays (stored as JSONB in settings table)
+async function getSettingsArray<T>(key: string): Promise<T[]> {
+  const { data, error } = await supabase
+    .from("settings")
+    .select("value")
+    .eq("key", key)
+    .maybeSingle();
+  if (error || !data) return [];
+  return (data.value as T[]) || [];
 }
 
-/**
- * setDoc uchun — undefined maydonlarni to'liq olib tashlaydi (deleteField ishlamaydi setDoc da).
- * Rekursiv — ichki obektlar va arraylar ham tozalanadi.
- */
-function cleanData(data: Record<string, any>): Record<string, any> {
-  const result: Record<string, any> = {};
-  for (const [key, value] of Object.entries(data)) {
-    if (value === undefined) continue;
-    if (Array.isArray(value)) {
-      result[key] = value.map((item) =>
-        item && typeof item === "object" && !Array.isArray(item) ? cleanData(item) : item
-      );
-    } else if (value && typeof value === "object" && !(value instanceof Date)) {
-      result[key] = cleanData(value);
-    } else {
-      result[key] = value;
-    }
-  }
-  return result;
+async function saveSettingsArray<T>(key: string, array: T[]): Promise<void> {
+  const { error } = await supabase
+    .from("settings")
+    .upsert({ key, value: array });
+  if (error) throw new Error(error.message);
 }
 
 // ============ COURSES ============
 
 export async function getAllCourses(): Promise<Course[]> {
-  const q = query(collection(db, COURSES_COL), orderBy("order", "asc"));
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => d.data() as Course);
+  const { data, error } = await supabase
+    .from("courses")
+    .select("*")
+    .order("order", { ascending: true });
+
+  if (error || !data) return [];
+  return toCamel<Course[]>(data);
 }
 
 export async function getCourseById(courseId: string): Promise<Course | null> {
-  const snap = await getDoc(doc(db, COURSES_COL, courseId));
-  return snap.exists() ? (snap.data() as Course) : null;
+  const { data, error } = await supabase
+    .from("courses")
+    .select("*")
+    .eq("id", courseId)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return toCamel<Course>(data);
 }
 
 export async function createCourse(course: Course): Promise<void> {
-  await setDoc(doc(db, COURSES_COL, course.id), cleanData(course as any));
+  const snakeCourse = toSnake(course);
+  if (snakeCourse.created_by) {
+    snakeCourse.created_by = stringToUUID(snakeCourse.created_by);
+  }
+
+  const { error } = await supabase
+    .from("courses")
+    .upsert(snakeCourse);
+
+  if (error) throw new Error(error.message);
 }
 
 export async function updateCourse(courseId: string, data: Partial<Course>): Promise<void> {
-  await updateDoc(doc(db, COURSES_COL, courseId), { ...data, updatedAt: Date.now() });
+  const snakeData = toSnake(data);
+  const { error } = await supabase
+    .from("courses")
+    .update({ ...snakeData, updated_at: Date.now() })
+    .eq("id", courseId);
+
+  if (error) throw new Error(error.message);
 }
 
-/** Foydalanuvchini kursga a'zo qilish (totalStudents +1 va user progress isJoined=true) */
 export async function enrollUserInCourse(userId: string, courseId: string): Promise<void> {
-  const userProgRef = doc(db, "users", userId, "courseProgress", courseId);
-  const userProgSnap = await getDoc(userProgRef);
-  const progData = userProgSnap.exists() ? userProgSnap.data() : {};
+  const userUuid = stringToUUID(userId);
+  const progressId = `${userUuid}_${courseId}`;
 
-  // Agar allaqachon a'zo bo'lgan bo'lsa qayta totalStudents oshirilmaydi
-  if (progData?.isJoined) return;
+  const { data: existingProgress, error: getErr } = await supabase
+    .from("user_progress")
+    .select("is_joined")
+    .eq("id", progressId)
+    .maybeSingle();
 
-  await setDoc(
-    userProgRef,
-    {
-      ...progData,
-      userId,
-      courseId,
-      isJoined: true,
-      enrolledAt: progData?.enrolledAt || Date.now(),
-      lastStudiedAt: Date.now(),
-    },
-    { merge: true }
-  );
+  if (getErr) throw new Error(getErr.message);
 
-  // Kursning totalStudents qiymatini +1 qilish
-  const courseRef = doc(db, COURSES_COL, courseId);
-  await updateDoc(courseRef, {
-    totalStudents: increment(1),
-  }).catch(() => {});
+  if (existingProgress?.is_joined) return;
+
+  const { error: progErr } = await supabase
+    .from("user_progress")
+    .upsert({
+      id: progressId,
+      user_id: userUuid,
+      course_id: courseId,
+      is_joined: true,
+      enrolled_at: Date.now(),
+      last_accessed_at: Date.now()
+    });
+
+  if (progErr) throw new Error(progErr.message);
+
+  // `courses.total_students` hisoblagichini oshirish.
+  //
+  // Bu `courses` jadvalini yozishni talab qiladi, lekin RLS bo'yicha kursni
+  // faqat admin o'zgartiradi. Shuning uchun SECURITY DEFINER RPC ishlatiladi
+  // (rls-policies.sql da yaratiladi). RPC mavjud bo'lmasa — bu kritik emas,
+  // chunki o'quvchilar soni haqiqiy manba sifatida `user_progress` dan
+  // `getStudentCountByCourse()` orqali hisoblanadi.
+  const { error: rpcErr } = await supabase.rpc("increment_course_students", { p_course_id: courseId });
+  if (rpcErr) {
+    console.warn("total_students hisoblagichi yangilanmadi (kritik emas):", rpcErr.message);
+  }
 }
 
 export async function deleteCourse(courseId: string): Promise<void> {
-  // Barcha o'chiriladigan doc ref larni to'plash
-  const refsToDelete: any[] = [];
+  const { error } = await supabase
+    .from("courses")
+    .delete()
+    .eq("id", courseId);
 
-  // Papkalar va ularning presence lari
-  const foldersSnap = await getDocs(collection(db, COURSES_COL, courseId, "folders"));
-  for (const f of foldersSnap.docs) {
-    const presSnap = await getDocs(collection(f.ref, "presence"));
-    presSnap.docs.forEach((p) => refsToDelete.push(p.ref));
-    refsToDelete.push(f.ref);
-  }
-  // Mavzular va ularning misollari
-  const topicsSnap = await getDocs(collection(db, COURSES_COL, courseId, "topics"));
-  for (const t of topicsSnap.docs) {
-    const probsSnap = await getDocs(collection(t.ref, "problems"));
-    probsSnap.docs.forEach((p) => refsToDelete.push(p.ref));
-    refsToDelete.push(t.ref);
-  }
-  // Testlar
-  const testsSnap = await getDocs(collection(db, COURSES_COL, courseId, "tests"));
-  testsSnap.docs.forEach((t) => refsToDelete.push(t.ref));
-  // Maslahatlar
-  const advSnap = await getDocs(collection(db, COURSES_COL, courseId, "advices"));
-  advSnap.docs.forEach((a) => refsToDelete.push(a.ref));
-  // Ijtimoiy tarmoqlar
-  const socialSnap = await getDocs(collection(db, COURSES_COL, courseId, "socialLinks"));
-  socialSnap.docs.forEach((s) => refsToDelete.push(s.ref));
-  // Kursning o'zi
-  refsToDelete.push(doc(db, COURSES_COL, courseId));
-
-  // Batch bilan o'chirish (Firestore limit: 500 per batch)
-  const BATCH_SIZE = 450;
-  for (let i = 0; i < refsToDelete.length; i += BATCH_SIZE) {
-    const batch = writeBatch(db);
-    const chunk = refsToDelete.slice(i, i + BATCH_SIZE);
-    chunk.forEach((ref) => batch.delete(ref));
-    await batch.commit();
-  }
+  if (error) throw new Error(error.message);
 }
 
 // ============ FOLDERS (Papkalar / Kitoblar) ============
 
 export async function getFoldersByCourse(courseId: string): Promise<Folder[]> {
-  const q = query(
-    collection(db, COURSES_COL, courseId, "folders"),
-    orderBy("order", "asc")
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => d.data() as Folder);
+  const { data, error } = await supabase
+    .from("folders")
+    .select("*")
+    .eq("course_id", courseId)
+    .order("order", { ascending: true });
+
+  if (error || !data) return [];
+  return toCamel<Folder[]>(data);
 }
 
 export async function getFolderById(courseId: string, folderId: string): Promise<Folder | null> {
-  const snap = await getDoc(doc(db, COURSES_COL, courseId, "folders", folderId));
-  return snap.exists() ? (snap.data() as Folder) : null;
+  const { data, error } = await supabase
+    .from("folders")
+    .select("*")
+    .eq("course_id", courseId)
+    .eq("id", folderId)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return toCamel<Folder>(data);
 }
 
 export async function createFolder(courseId: string, folder: Folder): Promise<void> {
-  await setDoc(doc(db, COURSES_COL, courseId, "folders", folder.id), cleanData(folder as any));
+  const snakeFolder = toSnake(folder);
+  snakeFolder.course_id = courseId;
+
+  const { error } = await supabase
+    .from("folders")
+    .upsert(snakeFolder);
+
+  if (error) throw new Error(error.message);
 }
 
 export async function updateFolder(courseId: string, folderId: string, data: Partial<Folder>): Promise<void> {
-  await updateDoc(doc(db, COURSES_COL, courseId, "folders", folderId), cleanUpdate({ ...data, updatedAt: Date.now() }));
+  const snakeData = toSnake(data);
+  const { error } = await supabase
+    .from("folders")
+    .update({ ...snakeData, updated_at: Date.now() })
+    .eq("course_id", courseId)
+    .eq("id", folderId);
+
+  if (error) throw new Error(error.message);
 }
 
-/**
- * Papkani o'chirish. Ichidagi barcha mavzu, test va maslahatlarni ham DB dan o'chiradi.
- * Mavzu o'chirilganda uning ichidagi misollar (problems) ham o'chiriladi.
- * writeBatch bilan atomic o'chirish.
- */
 export async function deleteFolder(courseId: string, folderId: string): Promise<void> {
-  const refsToDelete: any[] = [];
+  const { error } = await supabase
+    .from("folders")
+    .delete()
+    .eq("course_id", courseId)
+    .eq("id", folderId);
 
-  // Papka ichidagi mavzularni o'chirish (har bir mavzuning problems lari bilan)
-  const topicsSnap = await getDocs(query(collection(db, COURSES_COL, courseId, "topics"), where("folderId", "==", folderId)));
-  for (const d of topicsSnap.docs) {
-    const problemsSnap = await getDocs(collection(db, COURSES_COL, courseId, "topics", d.id, "problems"));
-    problemsSnap.docs.forEach((p) => refsToDelete.push(p.ref));
-    refsToDelete.push(d.ref);
+  if (error) throw new Error(error.message);
+}
+
+// ============ PRESENCE (Supabase Realtime Presence) ============
+// Firebase da presence `courses/{id}/presence/{userId}` subkolleksiyasi orqali
+// ishlagan. Supabase da buning to'g'ri ekvivalenti — Realtime Presence:
+// ma'lumot vaqtinchalik (ephemeral), jadval kerak emas, va foydalanuvchi
+// sahifani yopganda avtomatik o'chadi.
+
+type PresenceEntry = {
+  channel: ReturnType<typeof supabase.channel>;
+  ready: Promise<void>;
+};
+
+const presenceChannels = new Map<string, PresenceEntry>();
+
+/** Presence kanaliga qo'shilish (bir topic uchun bir marta) */
+async function joinPresence(topic: string, userId: string): Promise<void> {
+  if (!userId) return;
+
+  let entry = presenceChannels.get(topic);
+  if (!entry) {
+    const channel = supabase.channel(topic, {
+      config: { presence: { key: userId } },
+    });
+
+    const ready = new Promise<void>((resolve) => {
+      // Kanal ulanmasa ham UI bloklanmasligi uchun timeout
+      const timer = setTimeout(resolve, 5000);
+      channel.subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          channel
+            .track({ userId, onlineAt: Date.now() })
+            .then(() => { clearTimeout(timer); resolve(); })
+            .catch(() => { clearTimeout(timer); resolve(); });
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          clearTimeout(timer);
+          resolve();
+        }
+      });
+    });
+
+    entry = { channel, ready };
+    presenceChannels.set(topic, entry);
   }
-  // Papka ichidagi testlarni o'chirish
-  const testsSnap = await getDocs(query(collection(db, COURSES_COL, courseId, "tests"), where("folderId", "==", folderId)));
-  testsSnap.docs.forEach((d) => refsToDelete.push(d.ref));
-  // Papka ichidagi maslahatlarni o'chirish
-  const advSnap = await getDocs(query(collection(db, COURSES_COL, courseId, "advices"), where("folderId", "==", folderId)));
-  advSnap.docs.forEach((d) => refsToDelete.push(d.ref));
-  // Papka presence ni tozalash
-  const presenceSnap = await getDocs(collection(db, COURSES_COL, courseId, "folders", folderId, "presence"));
-  presenceSnap.docs.forEach((d) => refsToDelete.push(d.ref));
-  // Papkani o'zi
-  refsToDelete.push(doc(db, COURSES_COL, courseId, "folders", folderId));
 
-  // Batch bilan atomic o'chirish
-  const BATCH_SIZE = 450;
-  for (let i = 0; i < refsToDelete.length; i += BATCH_SIZE) {
-    const batch = writeBatch(db);
-    const chunk = refsToDelete.slice(i, i + BATCH_SIZE);
-    chunk.forEach((ref) => batch.delete(ref));
-    await batch.commit();
+  await entry.ready;
+}
+
+/** Kanaldagi unikal foydalanuvchi ID lari */
+function presenceUserIds(topic: string): string[] {
+  const entry = presenceChannels.get(topic);
+  if (!entry) return [];
+  try {
+    const state = entry.channel.presenceState() as Record<string, Array<{ userId?: string }>>;
+    const ids = new Set<string>();
+    for (const members of Object.values(state)) {
+      for (const m of members) {
+        if (m?.userId) ids.add(m.userId);
+      }
+    }
+    return [...ids];
+  } catch {
+    return [];
   }
 }
 
-// ============ FOLDER PRESENCE (Papkani o'qiyotgan onlayn userlar) ============
+/** Kanaldan chiqish */
+async function leavePresence(topic: string): Promise<void> {
+  const entry = presenceChannels.get(topic);
+  if (!entry) return;
+  presenceChannels.delete(topic);
+  try {
+    await entry.channel.untrack();
+  } catch {
+    // jim
+  }
+  try {
+    await supabase.removeChannel(entry.channel);
+  } catch {
+    // jim
+  }
+}
 
-/**
- * Foydalanuvchi papkani ochganda "men shu yerdaman" deb belgilaydi.
- * Har ~30 soniyada qayta chaqirilishi kerak (heartbeat).
- */
+const folderTopic = (courseId: string, folderId: string) => `presence:folder:${courseId}:${folderId}`;
+const topicTopic = (courseId: string, topicId: string) => `presence:topic:${courseId}:${topicId}`;
+const courseTopic = (courseId: string) => `presence:course:${courseId}`;
+
+// ---- Folder presence ----
+
 export async function markFolderPresence(courseId: string, folderId: string, userId: string): Promise<void> {
-  await setDoc(doc(db, COURSES_COL, courseId, "folders", folderId, "presence", userId), {
-    userId,
-    lastSeen: Date.now(),
-  });
+  await joinPresence(folderTopic(courseId, folderId), userId);
 }
 
-/** Foydalanuvchi papkadan chiqqanda presence ni o'chirish */
-export async function clearFolderPresence(courseId: string, folderId: string, userId: string): Promise<void> {
-  await deleteDoc(doc(db, COURSES_COL, courseId, "folders", folderId, "presence", userId));
+export async function clearFolderPresence(courseId: string, folderId: string, _userId: string): Promise<void> {
+  await leavePresence(folderTopic(courseId, folderId));
 }
 
-/** Papkani hozir o'qiyotgan onlayn userlar soni (oxirgi 60 soniyada faol) */
 export async function getFolderOnlineCount(courseId: string, folderId: string): Promise<number> {
-  const snap = await getDocs(collection(db, COURSES_COL, courseId, "folders", folderId, "presence"));
-  const cutoff = Date.now() - 60000; // 60 soniya
-  return snap.docs.filter((d) => {
-    const data = d.data() as { lastSeen?: number };
-    return (data.lastSeen || 0) >= cutoff;
-  }).length;
+  return presenceUserIds(folderTopic(courseId, folderId)).length;
 }
 
-// ============ COURSE PRESENCE (Kursda hozir turgan onlayn userlar) ============
-
-// ============ TOPIC PRESENCE (Mavzuni o'qiyotgan onlayn userlar) ============
+// ---- Topic presence ----
 
 export async function markTopicPresence(courseId: string, topicId: string, userId: string): Promise<void> {
-  await setDoc(doc(db, COURSES_COL, courseId, "topics", topicId, "presence", userId), {
-    userId,
-    lastSeen: Date.now(),
-  });
+  await joinPresence(topicTopic(courseId, topicId), userId);
 }
 
-export async function clearTopicPresence(courseId: string, topicId: string, userId: string): Promise<void> {
-  await deleteDoc(doc(db, COURSES_COL, courseId, "topics", topicId, "presence", userId));
+export async function clearTopicPresence(courseId: string, topicId: string, _userId: string): Promise<void> {
+  await leavePresence(topicTopic(courseId, topicId));
 }
 
-/** Mavzuni hozir o'qiyotgan onlayn userlar ro'yxati (oxirgi 60 soniyada faol) */
 export async function getTopicPresenceUsers(courseId: string, topicId: string): Promise<string[]> {
-  const snap = await getDocs(collection(db, COURSES_COL, courseId, "topics", topicId, "presence"));
-  const cutoff = Date.now() - 60000;
-  return snap.docs
-    .filter((d) => { const data = d.data() as { lastSeen?: number }; return (data.lastSeen || 0) >= cutoff; })
-    .map((d) => d.id);
+  return presenceUserIds(topicTopic(courseId, topicId));
 }
 
-/**
- * Foydalanuvchi kursni ochganda "men shu kursdaman" deb belgilaydi.
- * Har ~30 soniyada qayta chaqirilishi kerak (heartbeat).
- */
+// ---- Course presence ----
+
 export async function markCoursePresence(courseId: string, userId: string): Promise<void> {
-  await setDoc(doc(db, COURSES_COL, courseId, "presence", userId), {
-    userId,
-    lastSeen: Date.now(),
-  });
+  await joinPresence(courseTopic(courseId), userId);
 }
 
-/** Foydalanuvchi kursdan chiqqanda presence ni o'chirish */
-export async function clearCoursePresence(courseId: string, userId: string): Promise<void> {
-  await deleteDoc(doc(db, COURSES_COL, courseId, "presence", userId));
+export async function clearCoursePresence(courseId: string, _userId: string): Promise<void> {
+  await leavePresence(courseTopic(courseId));
 }
 
-/** Kursda hozir turgan onlayn userlar soni (oxirgi 60 soniyada faol) */
 export async function getCourseOnlineCount(courseId: string): Promise<number> {
-  const snap = await getDocs(collection(db, COURSES_COL, courseId, "presence"));
-  const cutoff = Date.now() - 60000; // 60 soniya
-  return snap.docs.filter((d) => {
-    const data = d.data() as { lastSeen?: number };
-    return (data.lastSeen || 0) >= cutoff;
-  }).length;
+  return presenceUserIds(courseTopic(courseId)).length;
 }
 
 // ============ TOPICS ============
+
 export async function getTopicsByCourse(courseId: string): Promise<Topic[]> {
-  const q = query(
-    collection(db, COURSES_COL, courseId, "topics"),
-    orderBy("order", "asc")
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => d.data() as Topic);
+  const { data, error } = await supabase
+    .from("topics")
+    .select("*")
+    .eq("course_id", courseId)
+    .order("order", { ascending: true });
+
+  if (error || !data) return [];
+  return toCamel<Topic[]>(data);
 }
 
 export async function getTopicById(courseId: string, topicId: string): Promise<Topic | null> {
-  const snap = await getDoc(doc(db, COURSES_COL, courseId, "topics", topicId));
-  return snap.exists() ? (snap.data() as Topic) : null;
+  const { data, error } = await supabase
+    .from("topics")
+    .select("*")
+    .eq("course_id", courseId)
+    .eq("id", topicId)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return toCamel<Topic>(data);
 }
 
 export async function createTopic(courseId: string, topic: Topic): Promise<void> {
-  await setDoc(doc(db, COURSES_COL, courseId, "topics", topic.id), cleanData(topic as any));
+  const snakeTopic = toSnake(topic);
+  snakeTopic.course_id = courseId;
+
+  const { error } = await supabase
+    .from("topics")
+    .upsert(snakeTopic);
+
+  if (error) throw new Error(error.message);
 }
 
 export async function updateTopic(courseId: string, topicId: string, data: Partial<Topic>): Promise<void> {
-  await updateDoc(doc(db, COURSES_COL, courseId, "topics", topicId), cleanUpdate({ ...data, updatedAt: Date.now() }));
+  const snakeData = toSnake(data);
+  const { error } = await supabase
+    .from("topics")
+    .update({ ...snakeData, updated_at: Date.now() })
+    .eq("course_id", courseId)
+    .eq("id", topicId);
+
+  if (error) throw new Error(error.message);
 }
 
 export async function deleteTopic(courseId: string, topicId: string): Promise<void> {
-  // Mavzu ichidagi barcha misollarni (problems) o'chirish
-  const problemsSnap = await getDocs(collection(db, COURSES_COL, courseId, "topics", topicId, "problems"));
-  for (const d of problemsSnap.docs) {
-    await deleteDoc(d.ref);
-  }
-  await deleteDoc(doc(db, COURSES_COL, courseId, "topics", topicId));
+  const { error } = await supabase
+    .from("topics")
+    .delete()
+    .eq("course_id", courseId)
+    .eq("id", topicId);
+
+  if (error) throw new Error(error.message);
 }
 
 // ============ PROBLEMS ============
 
 export async function getProblemsByTopic(courseId: string, topicId: string): Promise<Problem[]> {
-  const q = query(
-    collection(db, COURSES_COL, courseId, "topics", topicId, "problems"),
-    orderBy("order", "asc")
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => d.data() as Problem);
+  const { data, error } = await supabase
+    .from("problems")
+    .select("*")
+    .eq("topic_id", topicId)
+    .order("order", { ascending: true });
+
+  if (error || !data) return [];
+  return toCamel<Problem[]>(data);
+}
+
+/** Porsiyalab yuklash (lazy load) — offset dan boshlab limit ta misol */
+export async function getProblemsByTopicPaged(
+  courseId: string,
+  topicId: string,
+  offset: number,
+  limit: number
+): Promise<{ problems: Problem[]; total: number }> {
+  // Jami sonni olish
+  const { count } = await supabase
+    .from("problems")
+    .select("*", { count: "exact", head: true })
+    .eq("topic_id", topicId);
+
+  const { data, error } = await supabase
+    .from("problems")
+    .select("*")
+    .eq("topic_id", topicId)
+    .order("order", { ascending: true })
+    .range(offset, offset + limit - 1);
+
+  if (error || !data) return { problems: [], total: count ?? 0 };
+  return { problems: toCamel<Problem[]>(data), total: count ?? 0 };
 }
 
 export async function createProblem(courseId: string, topicId: string, problem: Problem): Promise<void> {
-  await setDoc(
-    doc(db, COURSES_COL, courseId, "topics", topicId, "problems", problem.id),
-    cleanData(problem as any)
-  );
+  const snakeProblem = toSnake(problem);
+  snakeProblem.topic_id = topicId;
+  snakeProblem.course_id = courseId;
+
+  const { error } = await supabase
+    .from("problems")
+    .upsert(snakeProblem);
+
+  if (error) throw new Error(error.message);
 }
 
 export async function updateProblem(
@@ -341,98 +410,160 @@ export async function updateProblem(
   problemId: string,
   data: Partial<Problem>
 ): Promise<void> {
-  await updateDoc(
-    doc(db, COURSES_COL, courseId, "topics", topicId, "problems", problemId),
-    cleanUpdate(data as any)
-  );
+  const snakeData = toSnake(data);
+  const { error } = await supabase
+    .from("problems")
+    .update(snakeData)
+    .eq("topic_id", topicId)
+    .eq("id", problemId);
+
+  if (error) throw new Error(error.message);
 }
 
 export async function deleteProblem(courseId: string, topicId: string, problemId: string): Promise<void> {
-  await deleteDoc(doc(db, COURSES_COL, courseId, "topics", topicId, "problems", problemId));
+  const { error } = await supabase
+    .from("problems")
+    .delete()
+    .eq("topic_id", topicId)
+    .eq("id", problemId);
+
+  if (error) throw new Error(error.message);
 }
 
 // ============ TESTS ============
 
 export async function getTestsByCourse(courseId: string): Promise<Test[]> {
-  const q = query(collection(db, COURSES_COL, courseId, "tests"), orderBy("createdAt", "desc"));
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => d.data() as Test);
+  const { data, error } = await supabase
+    .from("tests")
+    .select("*")
+    .eq("course_id", courseId)
+    .order("created_at", { ascending: false });
+
+  if (error || !data) return [];
+  return toCamel<Test[]>(data);
 }
 
 export async function getTestById(courseId: string, testId: string): Promise<Test | null> {
-  const snap = await getDoc(doc(db, COURSES_COL, courseId, "tests", testId));
-  return snap.exists() ? (snap.data() as Test) : null;
+  const { data, error } = await supabase
+    .from("tests")
+    .select("*")
+    .eq("course_id", courseId)
+    .eq("id", testId)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return toCamel<Test>(data);
 }
 
 export async function createTest(courseId: string, test: Test): Promise<void> {
-  await setDoc(doc(db, COURSES_COL, courseId, "tests", test.id), cleanData(test as any));
+  const snakeTest = toSnake(test);
+  snakeTest.course_id = courseId;
+  if (snakeTest.created_by) {
+    snakeTest.created_by = stringToUUID(snakeTest.created_by);
+  }
+
+  const { error } = await supabase
+    .from("tests")
+    .upsert(snakeTest);
+
+  if (error) throw new Error(error.message);
 }
 
 export async function updateTest(courseId: string, testId: string, data: Partial<Test>): Promise<void> {
-  await updateDoc(doc(db, COURSES_COL, courseId, "tests", testId), cleanUpdate({ ...data, updatedAt: Date.now() }));
+  const snakeData = toSnake(data);
+  const { error } = await supabase
+    .from("tests")
+    .update({ ...snakeData, updated_at: Date.now() })
+    .eq("course_id", courseId)
+    .eq("id", testId);
+
+  if (error) throw new Error(error.message);
 }
 
 export async function deleteTest(courseId: string, testId: string): Promise<void> {
-  await deleteDoc(doc(db, COURSES_COL, courseId, "tests", testId));
+  const { error } = await supabase
+    .from("tests")
+    .delete()
+    .eq("course_id", courseId)
+    .eq("id", testId);
+
+  if (error) throw new Error(error.message);
 }
 
-// ============ TEST LIBRARY (Umumiy test banki — root "testLibrary" collection) ============
-
-const TEST_LIBRARY_COL = "testLibrary";
+// ============ TEST LIBRARY (Mapped to settings key-value store) ============
 
 export async function getAllLibraryTests(): Promise<Test[]> {
-  const q = query(collection(db, TEST_LIBRARY_COL), orderBy("createdAt", "desc"));
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => d.data() as Test);
+  return getSettingsArray<Test>("testLibrary");
 }
 
 export async function saveTestToLibrary(test: Test): Promise<void> {
-  await setDoc(doc(db, TEST_LIBRARY_COL, test.id), cleanData(test as any));
+  const list = await getSettingsArray<Test>("testLibrary");
+  const index = list.findIndex(t => t.id === test.id);
+  if (index > -1) {
+    list[index] = test;
+  } else {
+    list.push(test);
+  }
+  await saveSettingsArray("testLibrary", list);
 }
 
 export async function updateLibraryTest(testId: string, data: Partial<Test>): Promise<void> {
-  await updateDoc(doc(db, TEST_LIBRARY_COL, testId), { ...data, updatedAt: Date.now() });
+  const list = await getSettingsArray<Test>("testLibrary");
+  const index = list.findIndex(t => t.id === testId);
+  if (index > -1) {
+    list[index] = { ...list[index], ...data, updatedAt: Date.now() };
+    await saveSettingsArray("testLibrary", list);
+  }
 }
 
 export async function deleteLibraryTest(testId: string): Promise<void> {
-  await deleteDoc(doc(db, TEST_LIBRARY_COL, testId));
+  const list = await getSettingsArray<Test>("testLibrary");
+  await saveSettingsArray("testLibrary", list.filter(t => t.id !== testId));
 }
 
-// ============ TEST BUILDER (Savol bazasi — barcha adminlar uchun umumiy) ============
-
-const TB_QUESTIONS_COL = "testBuilderQuestions";
-const TB_FOLDERS_COL = "testBuilderFolders";
+// ============ TEST BUILDER (Mapped to settings key-value store) ============
 
 export async function getAllTBQuestions(): Promise<any[]> {
-  const snap = await getDocs(query(collection(db, TB_QUESTIONS_COL), orderBy("order", "desc")));
-  return snap.docs.map((d) => d.data());
+  return getSettingsArray<any>("testBuilderQuestions");
 }
 
 export async function saveTBQuestion(question: any): Promise<void> {
-  await setDoc(doc(db, TB_QUESTIONS_COL, question.id), cleanData(question));
+  const list = await getSettingsArray<any>("testBuilderQuestions");
+  const index = list.findIndex(q => q.id === question.id);
+  if (index > -1) {
+    list[index] = question;
+  } else {
+    list.push(question);
+  }
+  await saveSettingsArray("testBuilderQuestions", list);
 }
 
 export async function deleteTBQuestion(questionId: string): Promise<void> {
-  await deleteDoc(doc(db, TB_QUESTIONS_COL, questionId));
+  const list = await getSettingsArray<any>("testBuilderQuestions");
+  await saveSettingsArray("testBuilderQuestions", list.filter(q => q.id !== questionId));
 }
 
 export async function getAllTBFolders(): Promise<any[]> {
-  const snap = await getDocs(collection(db, TB_FOLDERS_COL));
-  return snap.docs.map((d) => d.data());
+  return getSettingsArray<any>("testBuilderFolders");
 }
 
 export async function saveTBFolder(folder: any): Promise<void> {
-  await setDoc(doc(db, TB_FOLDERS_COL, folder.id), cleanData(folder));
+  const list = await getSettingsArray<any>("testBuilderFolders");
+  const index = list.findIndex(f => f.id === folder.id);
+  if (index > -1) {
+    list[index] = folder;
+  } else {
+    list.push(folder);
+  }
+  await saveSettingsArray("testBuilderFolders", list);
 }
 
 export async function deleteTBFolder(folderId: string): Promise<void> {
-  await deleteDoc(doc(db, TB_FOLDERS_COL, folderId));
+  const list = await getSettingsArray<any>("testBuilderFolders");
+  await saveSettingsArray("testBuilderFolders", list.filter(f => f.id !== folderId));
 }
 
-/**
- * Test bazasidagi "Umumiy" papka (yoki biriktirilmagan) testlarni avtomatik
- * Kurs -> Modul -> Mavzu 3-darajali papkalar iyerarxiyasiga joylashtirish migration funksiyasi.
- */
+// Auto-organization helper
 export async function organizeGeneralTestLibrary(): Promise<{ movedCount: number }> {
   try {
     const [folders, questions, courses] = await Promise.all([
@@ -445,7 +576,6 @@ export async function organizeGeneralTestLibrary(): Promise<{ movedCount: number
       return { movedCount: 0 };
     }
 
-    // Barcha kurslar ichidagi modullar, mavzular va misollarni o'qish
     type ProblemMeta = {
       courseId: string;
       courseTitle: string;
@@ -489,7 +619,7 @@ export async function organizeGeneralTestLibrary(): Promise<{ movedCount: number
             }
           }
         } catch {
-          // Ignore topic problems error
+          // Ignore problems errors
         }
       }
     }
@@ -540,13 +670,11 @@ export async function organizeGeneralTestLibrary(): Promise<{ movedCount: number
     for (const q of questions) {
       const cleanContent = q.content ? q.content.trim().toLowerCase() : "";
       
-      // 1. Meta topish: problemId -> content match -> topicId
       let meta: ProblemMeta | undefined =
         (q.problemId ? problemByIdMap.get(q.problemId) : undefined) ||
         problemByContentMap.get(cleanContent) ||
         (q.topicId ? topicByIdMap.get(q.topicId) : undefined);
 
-      // Agar topilmasa: 1-kurs va 1-mavzugacha fallback
       if (!meta && courses.length > 0) {
         const firstCourse = courses[0];
         const firstTopicMeta = Array.from(topicByIdMap.values())[0];
@@ -564,12 +692,9 @@ export async function organizeGeneralTestLibrary(): Promise<{ movedCount: number
 
       if (!meta) continue;
 
-      // 1-daraja: Kurs papkasi
       const courseFolder = await ensureFolder(meta.courseTitle, null, `c-${meta.courseId}`);
-
       let targetFolder = courseFolder;
 
-      // 2 va 3-daraja: Modul va Mavzu papkalari
       if (meta.topicTitle) {
         if (meta.folderId && meta.moduleTitle) {
           const moduleFolder = await ensureFolder(
@@ -591,7 +716,6 @@ export async function organizeGeneralTestLibrary(): Promise<{ movedCount: number
         }
       }
 
-      // Savolga targetFolder.id biriktirish
       let qUpdated = false;
       if (q.folderId !== targetFolder.id) {
         q.folderId = targetFolder.id;
@@ -612,7 +736,6 @@ export async function organizeGeneralTestLibrary(): Promise<{ movedCount: number
       }
     }
 
-    // "Umumiy" deb nomlangan ortiqcha bo'sh papkalardan ko'chirilgan questionId larni tozalash va papkani o'chirish
     for (const f of folderMap.values()) {
       if (f.name?.trim().toLowerCase() === "umumiy" || f.refKey === "general") {
         await deleteTBFolder(f.id);
@@ -629,304 +752,288 @@ export async function organizeGeneralTestLibrary(): Promise<{ movedCount: number
 // ============ ADVICE (Maslahat bloklari) ============
 
 export async function getAdviceByCourse(courseId: string): Promise<Advice[]> {
-  const snap = await getDocs(collection(db, COURSES_COL, courseId, "advices"));
-  const results = snap.docs.map((d) => d.data() as Advice);
-  return results.sort((a, b) => (a.afterTopicOrder || 0) - (b.afterTopicOrder || 0));
+  const { data, error } = await supabase
+    .from("advices")
+    .select("*")
+    .eq("course_id", courseId)
+    .order("after_topic_order", { ascending: true });
+
+  if (error || !data) return [];
+  return toCamel<Advice[]>(data);
 }
 
 export async function createAdvice(courseId: string, advice: Advice): Promise<void> {
-  await setDoc(doc(db, COURSES_COL, courseId, "advices", advice.id), advice);
+  const snakeAdvice = toSnake(advice);
+  snakeAdvice.course_id = courseId;
+
+  const { error } = await supabase
+    .from("advices")
+    .upsert(snakeAdvice);
+
+  if (error) throw new Error(error.message);
 }
 
 export async function updateAdvice(courseId: string, adviceId: string, data: Partial<Advice>): Promise<void> {
-  await updateDoc(doc(db, COURSES_COL, courseId, "advices", adviceId), cleanUpdate({ ...data, updatedAt: Date.now() }));
+  const snakeData = toSnake(data);
+  const { error } = await supabase
+    .from("advices")
+    .update({ ...snakeData, updated_at: Date.now() })
+    .eq("course_id", courseId)
+    .eq("id", adviceId);
+
+  if (error) throw new Error(error.message);
 }
 
 export async function deleteAdvice(courseId: string, adviceId: string): Promise<void> {
-  await deleteDoc(doc(db, COURSES_COL, courseId, "advices", adviceId));
+  const { error } = await supabase
+    .from("advices")
+    .delete()
+    .eq("course_id", courseId)
+    .eq("id", adviceId);
+
+  if (error) throw new Error(error.message);
 }
 
-// ============ MOTIVATIONAL PHRASES (Motivatsion frazalar) ============
+// ============ MOTIVATIONAL PHRASES ============
 
-import type { MotivationalPhrase, MotivationSettings, MotivationPlacement } from "../types";
-
-const MOTIVATION_COL = "motivations";
-const MOTIVATION_SETTINGS_COL = "motivationSettings";
-
-/** Barcha frazalarni olish (placement bo'yicha) */
 export async function getMotivationPhrases(placement: MotivationPlacement): Promise<MotivationalPhrase[]> {
-  const q = query(
-    collection(db, MOTIVATION_COL),
-    where("placement", "==", placement)
-  );
-  const snap = await getDocs(q);
-  const results = snap.docs.map((d) => d.data() as MotivationalPhrase);
-  return results.sort((a, b) => (a.order || 0) - (b.order || 0));
+  const { data, error } = await supabase
+    .from("motivational_phrases")
+    .select("*")
+    .eq("placement", placement)
+    .order("order", { ascending: true });
+
+  if (error || !data) return [];
+  return toCamel<MotivationalPhrase[]>(data);
 }
 
-/** Yangi fraza yaratish */
 export async function createMotivationPhrase(phrase: MotivationalPhrase): Promise<void> {
-  await setDoc(doc(db, MOTIVATION_COL, phrase.id), phrase);
+  const snakePhrase = toSnake(phrase);
+  const { error } = await supabase
+    .from("motivational_phrases")
+    .upsert(snakePhrase);
+
+  if (error) throw new Error(error.message);
 }
 
-/** Frazani yangilash */
 export async function updateMotivationPhrase(phraseId: string, data: Partial<MotivationalPhrase>): Promise<void> {
-  await updateDoc(doc(db, MOTIVATION_COL, phraseId), data);
+  const snakeData = toSnake(data);
+  const { error } = await supabase
+    .from("motivational_phrases")
+    .update(snakeData)
+    .eq("id", phraseId);
+
+  if (error) throw new Error(error.message);
 }
 
-/** Frazani o'chirish */
 export async function deleteMotivationPhrase(phraseId: string): Promise<void> {
-  await deleteDoc(doc(db, MOTIVATION_COL, phraseId));
+  const { error } = await supabase
+    .from("motivational_phrases")
+    .delete()
+    .eq("id", phraseId);
+
+  if (error) throw new Error(error.message);
 }
 
-/** Sozlamalarni olish */
 export async function getMotivationSettings(placement: MotivationPlacement): Promise<MotivationSettings | null> {
-  const snap = await getDoc(doc(db, MOTIVATION_SETTINGS_COL, placement));
-  return snap.exists() ? (snap.data() as MotivationSettings) : null;
+  const { data, error } = await supabase
+    .from("motivation_settings")
+    .select("*")
+    .eq("placement", placement)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return toCamel<MotivationSettings>(data);
 }
 
-/** Sozlamalarni saqlash */
 export async function saveMotivationSettings(settings: MotivationSettings): Promise<void> {
-  await setDoc(doc(db, MOTIVATION_SETTINGS_COL, settings.id), settings);
+  const snakeSettings = toSnake(settings);
+  const { error } = await supabase
+    .from("motivation_settings")
+    .upsert(snakeSettings);
+
+  if (error) throw new Error(error.message);
 }
 
-// ============ SOCIAL LINKS (Ijtimoiy tarmoqlar) ============
-
-import type { SocialLink } from "../types";
-
-const SOCIAL_LINKS_COL = "socialLinks";
+// ============ SOCIAL LINKS ============
 
 export async function getAllSocialLinks(): Promise<SocialLink[]> {
-  const snap = await getDocs(collection(db, SOCIAL_LINKS_COL));
-  const results = snap.docs.map((d) => d.data() as SocialLink);
-  return results.sort((a, b) => (a.order || 0) - (b.order || 0));
+  const { data, error } = await supabase
+    .from("social_links")
+    .select("*")
+    .is("course_id", null)
+    .order("order", { ascending: true });
+
+  if (error || !data) return [];
+  return toCamel<SocialLink[]>(data);
 }
 
 export async function getActiveSocialLinks(): Promise<SocialLink[]> {
-  const q = query(collection(db, SOCIAL_LINKS_COL), where("isActive", "==", true));
-  const snap = await getDocs(q);
-  const results = snap.docs.map((d) => d.data() as SocialLink);
-  return results.sort((a, b) => (a.order || 0) - (b.order || 0));
+  const { data, error } = await supabase
+    .from("social_links")
+    .select("*")
+    .is("course_id", null)
+    .eq("is_active", true)
+    .order("order", { ascending: true });
+
+  if (error || !data) return [];
+  return toCamel<SocialLink[]>(data);
 }
 
 export async function createSocialLink(link: SocialLink): Promise<void> {
-  await setDoc(doc(db, SOCIAL_LINKS_COL, link.id), link);
+  const snakeLink = toSnake(link);
+  const { error } = await supabase
+    .from("social_links")
+    .upsert(snakeLink);
+
+  if (error) throw new Error(error.message);
 }
 
 export async function updateSocialLink(linkId: string, data: Partial<SocialLink>): Promise<void> {
-  await updateDoc(doc(db, SOCIAL_LINKS_COL, linkId), { ...data, updatedAt: Date.now() });
+  const snakeData = toSnake(data);
+  const { error } = await supabase
+    .from("social_links")
+    .update({ ...snakeData, updated_at: Date.now() })
+    .eq("id", linkId);
+
+  if (error) throw new Error(error.message);
 }
 
 export async function deleteSocialLink(linkId: string): Promise<void> {
-  await deleteDoc(doc(db, SOCIAL_LINKS_COL, linkId));
+  const { error } = await supabase
+    .from("social_links")
+    .delete()
+    .eq("id", linkId);
+
+  if (error) throw new Error(error.message);
 }
 
-// ============ COURSE SOCIAL LINKS (Kurs ichidagi ijtimoiy tarmoqlar) ============
+// ============ COURSE SOCIAL LINKS ============
 
 export async function getCourseSocialLinks(courseId: string): Promise<SocialLink[]> {
-  const snap = await getDocs(collection(db, "courses", courseId, "socialLinks"));
-  const results = snap.docs.map((d) => d.data() as SocialLink);
-  return results.sort((a, b) => (a.order || 0) - (b.order || 0));
+  const { data, error } = await supabase
+    .from("social_links")
+    .select("*")
+    .eq("course_id", courseId)
+    .order("order", { ascending: true });
+
+  if (error || !data) return [];
+  return toCamel<SocialLink[]>(data);
 }
 
 export async function getActiveCourseLinks(courseId: string): Promise<SocialLink[]> {
-  const snap = await getDocs(collection(db, "courses", courseId, "socialLinks"));
-  const results = snap.docs.map((d) => d.data() as SocialLink);
-  return results.filter((l) => l.isActive).sort((a, b) => (a.order || 0) - (b.order || 0));
+  const { data, error } = await supabase
+    .from("social_links")
+    .select("*")
+    .eq("course_id", courseId)
+    .eq("is_active", true)
+    .order("order", { ascending: true });
+
+  if (error || !data) return [];
+  return toCamel<SocialLink[]>(data);
 }
 
 export async function createCourseSocialLink(courseId: string, link: SocialLink): Promise<void> {
-  await setDoc(doc(db, "courses", courseId, "socialLinks", link.id), link);
+  const snakeLink = toSnake(link);
+  snakeLink.course_id = courseId;
+
+  const { error } = await supabase
+    .from("social_links")
+    .upsert(snakeLink);
+
+  if (error) throw new Error(error.message);
 }
 
 export async function updateCourseSocialLink(courseId: string, linkId: string, data: Partial<SocialLink>): Promise<void> {
-  await updateDoc(doc(db, "courses", courseId, "socialLinks", linkId), { ...data, updatedAt: Date.now() });
+  const snakeData = toSnake(data);
+  const { error } = await supabase
+    .from("social_links")
+    .update({ ...snakeData, updated_at: Date.now() })
+    .eq("course_id", courseId)
+    .eq("id", linkId);
+
+  if (error) throw new Error(error.message);
 }
 
 export async function deleteCourseSocialLink(courseId: string, linkId: string): Promise<void> {
-  await deleteDoc(doc(db, "courses", courseId, "socialLinks", linkId));
+  const { error } = await supabase
+    .from("social_links")
+    .delete()
+    .eq("course_id", courseId)
+    .eq("id", linkId);
+
+  if (error) throw new Error(error.message);
 }
 
 // ============ PROMO CODES ============
 
-import type { PromoCode } from "../types";
-
-const PROMO_COL = "promoCodes";
-
 export async function getAllPromoCodes(): Promise<PromoCode[]> {
-  const snap = await getDocs(collection(db, PROMO_COL));
-  return snap.docs.map((d) => d.data() as PromoCode);
+  const { data, error } = await supabase
+    .from("promo_codes")
+    .select("*");
+
+  if (error || !data) return [];
+  return toCamel<PromoCode[]>(data);
 }
 
 export async function getPromoByCode(code: string): Promise<PromoCode | null> {
-  const q = query(collection(db, PROMO_COL), where("code", "==", code.toUpperCase()));
-  const snap = await getDocs(q);
-  return snap.empty ? null : (snap.docs[0].data() as PromoCode);
+  const { data, error } = await supabase
+    .from("promo_codes")
+    .select("*")
+    .eq("code", code.toUpperCase())
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return toCamel<PromoCode>(data);
 }
 
 export async function createPromoCode(promo: PromoCode): Promise<void> {
-  await setDoc(doc(db, PROMO_COL, promo.id), promo);
+  const snakePromo = toSnake(promo);
+  if (snakePromo.created_by) {
+    snakePromo.created_by = stringToUUID(snakePromo.created_by);
+  }
+
+  const { error } = await supabase
+    .from("promo_codes")
+    .upsert(snakePromo);
+
+  if (error) throw new Error(error.message);
 }
 
 export async function updatePromoCode(promoId: string, data: Partial<PromoCode>): Promise<void> {
-  await updateDoc(doc(db, PROMO_COL, promoId), data);
+  const snakeData = toSnake(data);
+  const { error } = await supabase
+    .from("promo_codes")
+    .update(snakeData)
+    .eq("id", promoId);
+
+  if (error) throw new Error(error.message);
 }
 
-/**
- * Promo code ishlatilganda atomik increment — race condition oldini olish.
- * Transaction bilan tekshirib, faqat limit oshmaganida increment qiladi.
- * @returns true agar muvaffaqiyatli bo'lsa, false agar limit tugagan bo'lsa
- */
 export async function usePromoCodeAtomic(promoId: string): Promise<boolean> {
-  const promoRef = doc(db, PROMO_COL, promoId);
-  return runTransaction(db, async (transaction) => {
-    const snap = await transaction.get(promoRef);
-    if (!snap.exists()) return false;
-    const data = snap.data() as PromoCode;
-    if (!data.isActive) return false;
-    if (data.maxUses > 0 && data.usedCount >= data.maxUses) return false;
-    transaction.update(promoRef, { usedCount: increment(1) });
-    return true;
-  });
+  const { data, error } = await supabase
+    .from("promo_codes")
+    .select("is_active, max_uses, used_count")
+    .eq("id", promoId)
+    .maybeSingle();
+
+  if (error || !data) return false;
+  if (!data.is_active) return false;
+  if (data.max_uses > 0 && data.used_count >= data.max_uses) return false;
+
+  const { error: updErr } = await supabase
+    .from("promo_codes")
+    .update({ used_count: (data.used_count || 0) + 1 })
+    .eq("id", promoId);
+
+  return !updErr;
 }
 
 export async function deletePromoCode(promoId: string): Promise<void> {
-  await deleteDoc(doc(db, PROMO_COL, promoId));
-}
+  const { error } = await supabase
+    .from("promo_codes")
+    .delete()
+    .eq("id", promoId);
 
-// ============ ADMIN NOTIFICATIONS ============
-
-import type { AdminNotification } from "../types";
-
-const NOTIFICATIONS_COL = "adminNotifications";
-
-export async function getAdminNotifications(): Promise<AdminNotification[]> {
-  const snap = await getDocs(collection(db, NOTIFICATIONS_COL));
-  const results = snap.docs.map((d) => d.data() as AdminNotification);
-  return results.sort((a, b) => b.createdAt - a.createdAt);
-}
-
-export async function getUnreadNotificationCount(): Promise<number> {
-  const q = query(collection(db, NOTIFICATIONS_COL), where("isRead", "==", false));
-  const snap = await getDocs(q);
-  return snap.size;
-}
-
-export async function createAdminNotification(notif: AdminNotification): Promise<void> {
-  await setDoc(doc(db, NOTIFICATIONS_COL, notif.id), notif);
-}
-
-export async function markNotificationRead(notifId: string): Promise<void> {
-  await updateDoc(doc(db, NOTIFICATIONS_COL, notifId), { isRead: true });
-}
-
-export async function markAllNotificationsRead(): Promise<void> {
-  const q = query(collection(db, NOTIFICATIONS_COL), where("isRead", "==", false));
-  const snap = await getDocs(q);
-  if (snap.empty) return;
-
-  const BATCH_SIZE = 450;
-  const docs = snap.docs;
-  for (let i = 0; i < docs.length; i += BATCH_SIZE) {
-    const batch = writeBatch(db);
-    const chunk = docs.slice(i, i + BATCH_SIZE);
-    chunk.forEach((d) => batch.update(d.ref, { isRead: true }));
-    await batch.commit();
-  }
-}
-
-
-// ============ HOME BANNERS ============
-
-import type { HomeBanner } from "../types";
-
-const BANNERS_COL = "homeBanners";
-
-export async function getAllBanners(): Promise<HomeBanner[]> {
-  const snap = await getDocs(collection(db, BANNERS_COL));
-  const results = snap.docs.map((d) => d.data() as HomeBanner);
-  return results.sort((a, b) => (a.order || 0) - (b.order || 0));
-}
-
-export async function getActiveBanners(): Promise<HomeBanner[]> {
-  const q = query(collection(db, BANNERS_COL), where("isActive", "==", true));
-  const snap = await getDocs(q);
-  const results = snap.docs.map((d) => d.data() as HomeBanner);
-  return results.sort((a, b) => (a.order || 0) - (b.order || 0));
-}
-
-export async function createBanner(banner: HomeBanner): Promise<void> {
-  await setDoc(doc(db, BANNERS_COL, banner.id), cleanData(banner as any));
-}
-
-export async function updateBanner(bannerId: string, data: Partial<HomeBanner>): Promise<void> {
-  await updateDoc(doc(db, BANNERS_COL, bannerId), cleanUpdate({ ...data, updatedAt: Date.now() }));
-}
-
-export async function deleteBanner(bannerId: string): Promise<void> {
-  await deleteDoc(doc(db, BANNERS_COL, bannerId));
-}
-
-
-// ============ NEWS ITEMS (Yangiliklar) ============
-
-import type { NewsItem } from "../types";
-
-const NEWS_COL = "newsItems";
-
-export async function getAllNewsItems(): Promise<NewsItem[]> {
-  const snap = await getDocs(collection(db, NEWS_COL));
-  const results = snap.docs.map((d) => d.data() as NewsItem);
-  return results.sort((a, b) => (a.order || 0) - (b.order || 0));
-}
-
-export async function getActiveNewsItems(): Promise<NewsItem[]> {
-  const q = query(collection(db, NEWS_COL), where("isActive", "==", true));
-  const snap = await getDocs(q);
-  const results = snap.docs.map((d) => d.data() as NewsItem);
-  return results.sort((a, b) => (a.order || 0) - (b.order || 0));
-}
-
-export async function createNewsItem(item: NewsItem): Promise<void> {
-  await setDoc(doc(db, NEWS_COL, item.id), cleanData(item as any));
-}
-
-export async function updateNewsItem(itemId: string, data: Partial<NewsItem>): Promise<void> {
-  await updateDoc(doc(db, NEWS_COL, itemId), cleanUpdate({ ...data, updatedAt: Date.now() }));
-}
-
-export async function deleteNewsItem(itemId: string): Promise<void> {
-  await deleteDoc(doc(db, NEWS_COL, itemId));
-}
-
-
-// ============ TESTIMONIALS (Foydalanuvchi otzivlari) ============
-
-import type { Testimonial } from "../types";
-
-const TESTIMONIALS_COL = "testimonials";
-
-export async function getAllTestimonials(): Promise<Testimonial[]> {
-  const snap = await getDocs(collection(db, TESTIMONIALS_COL));
-  const results = snap.docs.map((d) => d.data() as Testimonial);
-  return results.sort((a, b) => (a.order || 0) - (b.order || 0));
-}
-
-export async function getActiveTestimonials(): Promise<Testimonial[]> {
-  const q = query(collection(db, TESTIMONIALS_COL), where("isActive", "==", true));
-  const snap = await getDocs(q);
-  const results = snap.docs.map((d) => d.data() as Testimonial);
-  return results.sort((a, b) => (a.order || 0) - (b.order || 0));
-}
-
-export async function createTestimonial(testimonial: Testimonial): Promise<void> {
-  await setDoc(doc(db, TESTIMONIALS_COL, testimonial.id), cleanData(testimonial as any));
-}
-
-export async function updateTestimonial(testimonialId: string, data: Partial<Testimonial>): Promise<void> {
-  await updateDoc(doc(db, TESTIMONIALS_COL, testimonialId), cleanUpdate({ ...data, updatedAt: Date.now() }));
-}
-
-export async function deleteTestimonial(testimonialId: string): Promise<void> {
-  await deleteDoc(doc(db, TESTIMONIALS_COL, testimonialId));
+  if (error) throw new Error(error.message);
 }

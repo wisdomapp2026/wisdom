@@ -3,8 +3,7 @@ import { useState, useEffect, useRef } from "react";
 import { Plus, Edit, Trash2, Lock, Unlock, ChevronRight, ChevronDown, Loader2, GripVertical, FileText, Eye, EyeOff, MessageSquare, ExternalLink, Upload, Share2, Folder as FolderIcon, FolderPlus } from "lucide-react";
 import { getCourseById, getTopicsByCourse, getTestsByCourse, deleteCourse, updateCourse, updateTopic, updateTest, deleteTopic, deleteTest, getAdviceByCourse, updateAdvice, deleteAdvice, getCourseSocialLinks, createCourseSocialLink, updateCourseSocialLink, deleteCourseSocialLink, getFoldersByCourse, deleteFolder, updateFolder } from "@shared/repositories";
 import { getStudentCountByCourse } from "@shared/repositories";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { storage } from "@shared/firebase";
+import { uploadFile } from "@shared/supabase";
 import type { Course, Topic, Test, Advice, SocialLink, SocialPlatform, Folder } from "@shared/types";
 import CreateTopicModal from "../components/CreateTopicModal";
 import ImportTestModal from "../components/ImportTestModal";
@@ -792,9 +791,7 @@ function CourseSocialLinksSection({ courseId, links, onUpdate }: { courseId: str
     let iconUrl = "";
     if (newIconFile) {
       try {
-        const storageRef = ref(storage, `course-social-icons/${courseId}/${now}-${newIconFile.name}`);
-        await uploadBytes(storageRef, newIconFile);
-        iconUrl = await getDownloadURL(storageRef);
+        iconUrl = await uploadFile("edukids", `course-social-icons/${courseId}/${now}-${newIconFile.name}`, newIconFile);
       } catch (err) {
         console.error("Ikonka yuklashda xatolik:", err);
       }

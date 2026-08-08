@@ -700,11 +700,14 @@ export default function CourseDetail() {
         onClose={() => setShowJoinModal(false)}
         onConfirm={async () => {
           if (!courseId) return;
-          if (user) {
-            await enrollUserInCourse(user.uid, courseId);
-          } else {
-            enrollLocalCourse(courseId);
+          if (!user) {
+            // Login qilmagan — avval login sahifasiga yuboramiz
+            setShowJoinModal(false);
+            const returnPath = pendingTargetUrl || `/course/${courseId}`;
+            navigate(`/login?returnTo=${encodeURIComponent(returnPath)}`);
+            return;
           }
+          await enrollUserInCourse(user.uid, courseId);
           setIsEnrolled(true);
           setTotalStudentsInCourse((prev) => prev + 1);
           setShowJoinModal(false);

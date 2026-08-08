@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { ChevronLeft, Bell, CheckCheck, BookOpen, Trophy, CreditCard, MessageCircle } from "lucide-react";
-import { collection, getDocs, query, where, updateDoc, doc } from "firebase/firestore";
-import { db } from "@shared/firebase";
+import { supabase } from "@shared/supabase";
 import { useAuth } from "../hooks/useAuth";
+import { notifyBadgeUpdate } from "../hooks/useNotificationCount";
 
 interface StudentNotif {
   id: string;
@@ -54,8 +54,8 @@ export default function StudentNotifications() {
 
   async function loadNotifications() {
     try {
-      const snap = await getDocs(collection(db, "studentNotifications"));
-      const all = snap.docs.map((d) => ({ id: d.id, ...d.data() } as StudentNotif));
+      const { data } = await supabase.from("settings").select("value").eq("key", "studentNotifications").maybeSingle();
+      const all = (data?.value as StudentNotif[]) || [];
 
       // Faqat shu foydalanuvchiga tegishli (userId mos) yoki umumiy (userId yo'q) bildirishnomalar
       const mine = all.filter((n) => !n.userId || n.userId === user!.uid);
@@ -79,28 +79,49 @@ export default function StudentNotifications() {
     if (!notif || !user) return;
     try {
       if (notif.userId) {
-        // Shaxsiy bildirishnoma — Firestore da belgilanadi
-        await updateDoc(doc(db, "studentNotifications", id), { isRead: true });
+        // Shaxsiy bildirishnoma — global settings ro'yxatida yangilanadi
+        const { data } = await supabase.from("settings").select("value").eq("key", "studentNotifications").maybeSingle();
+        const list = (data?.value as StudentNotif[]) || [];
+        const updatedList = list.map((n) => n.id === id ? { ...n, isRead: true } : n);
+        await supabase.from("settings").upsert({ key: "studentNotifications", value: updatedList });
       } else {
-        // Umumiy bildirishnoma — localStorage da (boshqa userlarga ta'sir qilmasligi uchun)
+        // Umumiy bildirishnoma — localStorage da
         addReadBroadcast(user.uid, id);
       }
       setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, isRead: true } : n));
-    } catch {}
+      notifyBadgeUpdate();
+    } catch (err) {
+      console.error(err);
+    }
   }
 
   async function markAllRead() {
     if (!user) return;
-    for (const n of notifications.filter((x) => !x.isRead)) {
-      try {
-        if (n.userId) {
-          await updateDoc(doc(db, "studentNotifications", n.id), { isRead: true });
-        } else {
+    try {
+      const { data } = await supabase.from("settings").select("value").eq("key", "studentNotifications").maybeSingle();
+      const list = (data?.value as StudentNotif[]) || [];
+      
+      let listUpdated = false;
+      const updatedList = list.map((n) => {
+        const belongsToUser = n.userId === user.uid;
+        if (belongsToUser && !n.isRead) {
+          listUpdated = true;
+          return { ...n, isRead: true };
+        }
+        if (!n.userId && !n.isRead) {
           addReadBroadcast(user.uid, n.id);
         }
-      } catch {}
+        return n;
+      });
+
+      if (listUpdated) {
+        await supabase.from("settings").upsert({ key: "studentNotifications", value: updatedList });
+      }
+      setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+      notifyBadgeUpdate();
+    } catch (err) {
+      console.error(err);
     }
-    setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
   }
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;

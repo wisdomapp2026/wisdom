@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { MessageCircle, CreditCard, UserPlus, FileText, Check, CheckCheck, X, Trash2 } from "lucide-react";
 import { getAdminNotifications, markNotificationRead, markAllNotificationsRead } from "@shared/repositories";
-import { deleteDoc, doc } from "firebase/firestore";
-import { db } from "@shared/firebase";
+import { supabase } from "@shared/supabase";
 import type { AdminNotification } from "@shared/types";
 import LoadingButton from "../components/LoadingButton";
 
@@ -36,7 +35,7 @@ export default function Notifications() {
   }
 
   async function handleDelete(id: string) {
-    await deleteDoc(doc(db, "adminNotifications", id));
+    await supabase.from("admin_notifications").delete().eq("id", id);
     setNotifications((prev) => prev.filter((n) => n.id !== id));
   }
 

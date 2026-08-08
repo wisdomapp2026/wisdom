@@ -20,8 +20,7 @@ import {
   MessageSquareQuote,
   HardDrive,
 } from "lucide-react";
-import { signOut } from "firebase/auth";
-import { auth } from "@shared/firebase";
+import { supabase } from "@shared/supabase";
 import { getUnreadNotificationCount, getMultiDeviceUsers, getUserById } from "@shared/repositories";
 import clsx from "clsx";
 
@@ -50,11 +49,26 @@ export default function AdminLayout() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [alertMultiDeviceUsers, setAlertMultiDeviceUsers] = useState<Array<{ userId: string; name: string; phone: string; count: number }>>([]);
+  const [currentUser, setCurrentUser] = useState<any>(null);
 
   // Sahifa o'zgarganda mobile menuni yopish
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user: u } }) => {
+      setCurrentUser(u);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setCurrentUser(session?.user || null);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     loadNotifCount();
@@ -99,7 +113,7 @@ export default function AdminLayout() {
   }
 
   async function handleLogout() {
-    await signOut(auth);
+    await supabase.auth.signOut();
     navigate("/");
   }
 
@@ -145,18 +159,17 @@ export default function AdminLayout() {
           ))}
         </nav>
 
-        {/* Footer */}
         <div className="p-4 border-t border-gray-100">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 bg-primary-100 rounded-full flex items-center justify-center">
                 <span className="text-sm font-semibold text-primary-600">
-                  {auth.currentUser?.displayName?.charAt(0)?.toUpperCase() || "A"}
+                  {(currentUser?.user_metadata?.name || currentUser?.user_metadata?.displayName || "Admin").charAt(0).toUpperCase()}
                 </span>
               </div>
               <div>
-                <p className="text-sm font-medium text-gray-900">{auth.currentUser?.displayName || "Admin"}</p>
-                <p className="text-xs text-gray-500">{auth.currentUser?.email || ""}</p>
+                <p className="text-sm font-medium text-gray-900">{currentUser?.user_metadata?.name || currentUser?.user_metadata?.displayName || "Admin"}</p>
+                <p className="text-xs text-gray-500">{currentUser?.email || ""}</p>
               </div>
             </div>
             <button onClick={handleLogout} className="p-2 text-gray-400 hover:text-danger" title="Chiqish">

@@ -1,52 +1,70 @@
-/**
- * TestList Repository — Test ro'yxatlari uchun Firestore CRUD
- */
-import {
-  collection,
-  doc,
-  getDocs,
-  getDoc,
-  setDoc,
-  updateDoc,
-  deleteDoc,
-  query,
-  orderBy,
-  where,
-} from "firebase/firestore";
-import { db } from "../firebase";
+import { supabase, toCamel, toSnake, stringToUUID } from "../supabase";
 import type { TestList } from "../types";
 
-const TEST_LISTS_COL = "testLists";
-
 export async function getAllTestLists(): Promise<TestList[]> {
-  const q = query(collection(db, TEST_LISTS_COL), orderBy("createdAt", "desc"));
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => d.data() as TestList);
+  const { data, error } = await supabase
+    .from("test_lists")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error || !data) return [];
+  return toCamel<TestList[]>(data);
 }
 
 export async function getPublishedTestLists(): Promise<TestList[]> {
-  const q = query(
-    collection(db, TEST_LISTS_COL),
-    where("status", "==", "published"),
-    orderBy("createdAt", "desc")
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => d.data() as TestList);
+  const { data, error } = await supabase
+    .from("test_lists")
+    .select("*")
+    .eq("status", "published")
+    .order("created_at", { ascending: false });
+
+  if (error || !data) return [];
+  return toCamel<TestList[]>(data);
 }
 
 export async function getTestListById(id: string): Promise<TestList | null> {
-  const snap = await getDoc(doc(db, TEST_LISTS_COL, id));
-  return snap.exists() ? (snap.data() as TestList) : null;
+  const { data, error } = await supabase
+    .from("test_lists")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return toCamel<TestList>(data);
 }
 
 export async function createTestList(testList: TestList): Promise<void> {
-  await setDoc(doc(db, TEST_LISTS_COL, testList.id), testList);
+  const snakeList = toSnake(testList);
+  if (snakeList.created_by) {
+    snakeList.created_by = stringToUUID(snakeList.created_by);
+  }
+
+  const { error } = await supabase
+    .from("test_lists")
+    .upsert(snakeList);
+
+  if (error) throw new Error(error.message);
 }
 
 export async function updateTestList(id: string, data: Partial<TestList>): Promise<void> {
-  await updateDoc(doc(db, TEST_LISTS_COL, id), { ...data, updatedAt: Date.now() });
+  const snakeData = toSnake(data);
+  if (snakeData.created_by) {
+    snakeData.created_by = stringToUUID(snakeData.created_by);
+  }
+
+  const { error } = await supabase
+    .from("test_lists")
+    .update({ ...snakeData, updated_at: Date.now() })
+    .eq("id", id);
+
+  if (error) throw new Error(error.message);
 }
 
 export async function deleteTestList(id: string): Promise<void> {
-  await deleteDoc(doc(db, TEST_LISTS_COL, id));
+  const { error } = await supabase
+    .from("test_lists")
+    .delete()
+    .eq("id", id);
+
+  if (error) throw new Error(error.message);
 }

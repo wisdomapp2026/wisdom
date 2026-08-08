@@ -1,9 +1,7 @@
 import { useState } from "react";
 import { Edit, Trash2, Plus, Play, Video, X, Check, Upload, ImageIcon, FileText, Paperclip } from "lucide-react";
 import { updateCourse } from "@shared/repositories";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { storage } from "@shared/firebase";
-import { deleteField } from "firebase/firestore";
+import { supabase } from "@shared/supabase";
 import type { Course, CourseIntroduction } from "@shared/types";
 import RichMathInput from "./RichMathInput";
 import RichTextEditor from "./RichTextEditor";
@@ -52,18 +50,20 @@ export default function CourseIntroSection({ course, onUpdate }: Props) {
       // Rasm upload (agar yangi fayl tanlangan bo'lsa)
       let finalImageUrl = imageUrl;
       if (imageFile) {
-        const storageRef = ref(storage, `course-intro/${course.id}/${Date.now()}-${imageFile.name}`);
-        await uploadBytes(storageRef, imageFile);
-        finalImageUrl = await getDownloadURL(storageRef);
+        const filePath = `course-intro/${course.id}/${Date.now()}-${imageFile.name}`;
+        const { error: uploadErr } = await supabase.storage.from("edukids").upload(filePath, imageFile);
+        if (uploadErr) throw uploadErr;
+        finalImageUrl = supabase.storage.from("edukids").getPublicUrl(filePath).data.publicUrl;
       }
 
       // Biriktirilgan fayl (PDF/Word) upload
       let finalFileUrl = attachedFileUrl;
       let finalFileName = attachedFileName;
       if (attachedFile) {
-        const storageRef = ref(storage, `course-intro/${course.id}/files/${Date.now()}-${attachedFile.name}`);
-        await uploadBytes(storageRef, attachedFile);
-        finalFileUrl = await getDownloadURL(storageRef);
+        const filePath = `course-intro/${course.id}/files/${Date.now()}-${attachedFile.name}`;
+        const { error: uploadErr } = await supabase.storage.from("edukids").upload(filePath, attachedFile);
+        if (uploadErr) throw uploadErr;
+        finalFileUrl = supabase.storage.from("edukids").getPublicUrl(filePath).data.publicUrl;
         finalFileName = attachedFile.name;
       }
 
@@ -95,7 +95,7 @@ export default function CourseIntroSection({ course, onUpdate }: Props) {
     if (!confirm("Kursni tanishtirish bo'limini o'chirishga ishonchingiz komilmi?")) return;
     setSaving(true);
     try {
-      await updateCourse(course.id, { introduction: deleteField() } as any);
+      await updateCourse(course.id, { introduction: null } as any);
       onUpdate({ ...course, introduction: undefined });
     } catch (err) {
       console.error("Introduction o'chirishda xatolik:", err);

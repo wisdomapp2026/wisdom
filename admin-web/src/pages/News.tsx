@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { MessageCircle, Send, Loader2, Check, User, X, Megaphone, Phone, ExternalLink } from "lucide-react";
 import { getAllMessages, markMessageAsRead, sendMessage, getUserById } from "@shared/repositories";
-import { setDoc, doc } from "firebase/firestore";
-import { db } from "@shared/firebase";
+import { supabase } from "@shared/supabase";
 import type { Message, User as UserType } from "@shared/types";
 import LoadingButton from "../components/LoadingButton";
 
@@ -49,21 +48,24 @@ export default function News() {
     try {
       const now = Date.now();
       const id = `broadcast-${now}`;
-      await setDoc(doc(db, "studentNotifications", id), {
+      const { data } = await supabase.from("settings").select("value").eq("key", "studentNotifications").maybeSingle();
+      const list = (data?.value as any[]) || [];
+      const newNotif = {
         id,
         type: "general",
         title: broadcastTitle.trim(),
         body: broadcastBody.trim(),
         isRead: false,
         createdAt: now,
-      });
+      };
+      await supabase.from("settings").upsert({ key: "studentNotifications", value: [...list, newNotif] });
       setBroadcastTitle("");
       setBroadcastBody("");
       setShowBroadcastForm(false);
       alert("✅ Habar barcha o'quvchilarga yuborildi!");
-    } catch (err) {
+    } catch (err: any) {
       console.error("Habar yuborishda xatolik:", err);
-      alert("Xatolik yuz berdi!");
+      alert("Xatolik yuz berdi: " + err.message);
     } finally {
       setBroadcastSending(false);
     }

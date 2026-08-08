@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-import { collection, query, where, getDocs } from "firebase/firestore";
-import { db } from "@shared/firebase";
+import { getAllUserSubscriptions } from "@shared/repositories";
 import { useAuth } from "./useAuth";
 
 /**
@@ -30,20 +29,13 @@ export function useCourseAccess(courseId: string | undefined) {
 
   async function checkAccess() {
     try {
-      // 1. Shu kursga tegishli aktiv obunani qidirish
-      const q = query(
-        collection(db, "subscriptions"),
-        where("userId", "==", user!.uid),
-        where("courseId", "==", courseId),
-        where("status", "==", "active")
-      );
-      const snap = await getDocs(q);
-      
+      const subs = await getAllUserSubscriptions(user!.uid);
       const now = Date.now();
-      const hasValidSub = snap.docs.some((doc) => {
-        const data = doc.data();
-        return data.endDate > now;
-      });
+      
+      // 1. Shu kursga tegishli aktiv obunani qidirish
+      const hasValidSub = subs.some(
+        (sub) => sub.courseId === courseId && sub.status === "active" && sub.endDate > now
+      );
 
       if (hasValidSub) {
         setHasAccess(true);
@@ -51,16 +43,9 @@ export function useCourseAccess(courseId: string | undefined) {
       }
 
       // 2. Eski umumiy obuna (courseId bo'sh) — backward compatibility
-      const qOld = query(
-        collection(db, "subscriptions"),
-        where("userId", "==", user!.uid),
-        where("status", "==", "active")
+      const hasOldSub = subs.some(
+        (sub) => (!sub.courseId || sub.courseId === "") && sub.status === "active" && sub.endDate > now
       );
-      const snapOld = await getDocs(qOld);
-      const hasOldSub = snapOld.docs.some((doc) => {
-        const data = doc.data();
-        return (!data.courseId || data.courseId === "") && data.endDate > now;
-      });
 
       setHasAccess(hasOldSub);
     } catch {

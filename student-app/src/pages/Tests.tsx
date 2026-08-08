@@ -142,6 +142,8 @@ export default function Tests() {
 
         const nodes: TestNode[] = [];
         let prevDone = true; // birinchi test uchun ketma-ketlik ochiq
+        // Kursda kamida bitta bepul test bor bo'lsa — kurs "qisman ochiq"
+        const hasFreeTests = published.some((t) => t.isPremium === false);
 
         for (const t of ordered) {
           const topic = topics.find((tp) => tp.order === t.afterTopicOrder);
@@ -152,7 +154,10 @@ export default function Tests() {
           const result = userResults.find((r) => r.testId === t.id) || null;
 
           let lockReason: TestNode["lockReason"] = null;
-          if (!hasAccess) lockReason = "course";
+          // Test o'ziga premium belgi qo'yilgan bo'lsa — kursga kirish huquqi tekshiriladi.
+          // Agar test.isPremium === false (bepul test) bo'lsa — kurs premium bo'lsa ham ochiq.
+          const testNeedsAccess = t.isPremium !== false && !hasAccess;
+          if (testNeedsAccess) lockReason = "course";
           else if (!topicUnlocked) lockReason = "topic";
           else if (!prevDone) lockReason = "sequence";
 
@@ -179,7 +184,7 @@ export default function Tests() {
           courseId: course.id,
           courseName: course.title,
           courseCategory: course.category,
-          hasAccess,
+          hasAccess: hasAccess || hasFreeTests,
           nodes,
         });
       }

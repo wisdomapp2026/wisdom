@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Menu, X, Moon, Star, CreditCard, Settings, Shield, Bell, HelpCircle, MessageSquare, LogOut, ChevronRight, BookOpen, Award } from "lucide-react";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "@shared/firebase";
+import { supabase } from "@shared/supabase";
 import { useAuth } from "../hooks/useAuth";
 import { useDarkMode } from "../hooks/useDarkMode";
 import AuthorModal from "./AuthorModal";
@@ -16,13 +15,25 @@ export default function HamburgerMenu() {
   const [appName, setAppName] = useState("EduKids");
 
   useEffect(() => {
-    getDoc(doc(db, "settings", "platform")).then((snap) => {
-      if (snap.exists()) {
-        const data = snap.data();
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const { data: resData } = await supabase
+          .from("settings")
+          .select("value")
+          .eq("key", "platform")
+          .maybeSingle();
+        if (cancelled || !resData?.value) return;
+        const data = resData.value as any;
         if (data.logoUrl) setLogoUrl(data.logoUrl);
         if (data.platformName) setAppName(data.platformName);
+      } catch {
+        // ixtiyoriy — sozlama yuklanmasa standart qiymatlar qoladi
       }
-    }).catch(() => {});
+    })();
+
+    return () => { cancelled = true; };
   }, []);
 
   function handleExit() {

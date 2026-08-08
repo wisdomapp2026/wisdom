@@ -12,7 +12,12 @@
     "admin:dev": "npm run dev --workspace=admin-web",
     "admin:build": "npm run build --workspace=admin-web",
     "student:web": "npm run dev --workspace=student-app",
-    "student:android": "echo Use Capacitor or PWA for mobile",
-    "seed": "node shared/scripts/seed-demo.mjs"
+    "student:build": "npm run build --workspace=student-app",
+    "build": "npm run admin:build && npm run student:build",
+    "migrate": "node shared/scripts/migrate.mjs",
+    "migrate:finish": "node shared/scripts/migrate-finish.mjs",
+    "verify": "node shared/scripts/verify-migration.mjs",
+    "check-rls": "node shared/scripts/check-rls.mjs",
+    "reset-passwords": "node shared/scripts/reset-passwords.mjs"
   }
 }

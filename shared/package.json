@@ -5,11 +5,18 @@
   "type": "module",
   "main": "src/index.ts",
   "scripts": {
-    "seed": "node scripts/seed-demo.mjs"
+    "migrate": "node scripts/migrate.mjs",
+    "migrate:finish": "node scripts/migrate-finish.mjs",
+    "verify": "node scripts/verify-migration.mjs"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.112.1",
     "dotenv": "^17.4.2",
     "firebase": "11.6.1",
-    "firebase-admin": "^13.10.0"
+    "firebase-admin": "^13.10.0",
+    "js-md5": "^0.9.2"
+  },
+  "devDependencies": {
+    "@types/js-md5": "^0.8.0"
   }
 }

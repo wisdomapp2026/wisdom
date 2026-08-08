@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
-import { onAuthStateChanged, User } from "firebase/auth";
-import { auth } from "@shared/firebase";
+import { supabase } from "@shared/supabase";
+import { getUserById } from "@shared/repositories";
 import ErrorBoundary from "./components/ErrorBoundary";
 import AdminLayout from "./layouts/AdminLayout";
 import Login from "./pages/Login";
@@ -27,23 +27,83 @@ import Testimonials from "./pages/Testimonials";
 import Backup from "./pages/Backup";
 
 export default function App() {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<any | null>(null);
   const [checking, setChecking] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [accessDenied, setAccessDenied] = useState(false);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
+    let cancelled = false;
+
+    /** Foydalanuvchi haqiqatan admin rolida ekanligini `users` jadvalidan tekshirish */
+    async function resolveRole(u: any | null) {
+      if (cancelled) return;
       setUser(u);
-      setIsAdmin(!!u);
-      setChecking(false);
+
+      if (!u) {
+        setIsAdmin(false);
+        setAccessDenied(false);
+        setChecking(false);
+        return;
+      }
+
+      try {
+        const profile = await getUserById(u.id);
+        if (cancelled) return;
+        const admin = profile?.role === "admin";
+        setIsAdmin(admin);
+        // Login qilgan, lekin admin emas — sababini ko'rsatamiz
+        setAccessDenied(!admin);
+      } catch (err) {
+        console.error("Rolni tekshirishda xatolik:", err);
+        if (cancelled) return;
+        setIsAdmin(false);
+        setAccessDenied(true);
+      } finally {
+        if (!cancelled) setChecking(false);
+      }
+    }
+
+    supabase.auth.getSession().then(({ data: { session } }) => resolveRole(session?.user || null));
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setChecking(true);
+      resolveRole(session?.user || null);
     });
-    return unsub;
+
+    return () => {
+      cancelled = true;
+      subscription.unsubscribe();
+    };
   }, []);
 
   if (checking) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="w-12 h-12 border-4 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  // Login qilgan, lekin admin huquqi yo'q
+  if (user && accessDenied) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-white rounded-2xl p-8 shadow-sm border border-gray-100 text-center">
+          <div className="w-14 h-14 bg-red-50 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <span className="text-2xl">🔒</span>
+          </div>
+          <h1 className="text-lg font-bold text-gray-900">Kirish huquqi yo'q</h1>
+          <p className="text-sm text-gray-500 mt-2">
+            Bu hisob admin emas. Boshqaruv paneliga faqat admin rolidagi foydalanuvchilar kira oladi.
+          </p>
+          <button
+            onClick={async () => { await supabase.auth.signOut(); }}
+            className="w-full btn-primary py-3 mt-6"
+          >
+            Boshqa hisob bilan kirish
+          </button>
+        </div>
       </div>
     );
   }

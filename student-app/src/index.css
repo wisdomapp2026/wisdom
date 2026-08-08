@@ -59,6 +59,14 @@
     @apply outline-2 outline-offset-2 outline-primary-500;
   }
 
+  /* KaTeX formulalar blokdan toshib ketmasligi uchun */
+  .katex-display,
+  .katex {
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-width: 100%;
+  }
+
   /* Lazy loading images — layout shift oldini olish */
   img {
     content-visibility: auto;

@@ -23,6 +23,8 @@ Thumbs.db
 # Firebase
 .firebase/
 firebase-debug.log
+firebase-service-account.json
+users.json
 
 # Expo
 *.jks

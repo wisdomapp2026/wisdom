@@ -1,6 +1,6 @@
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { getTopicById, getProblemsByTopic, getUserProgress, setUserProgress, getTopicsByCourse, getMotivationPhrases, getMotivationSettings, addFavoriteTopic, removeFavoriteTopic, isFavoriteTopic, getTestsByCourse, markTopicPresence, clearTopicPresence, getTopicPresenceUsers, getUserById } from "@shared/repositories";
+import { getTopicById, getProblemsByTopicPaged, getUserProgress, setUserProgress, getTopicsByCourse, getMotivationPhrases, getMotivationSettings, addFavoriteTopic, removeFavoriteTopic, isFavoriteTopic, getTestsByCourse, markTopicPresence, clearTopicPresence, getTopicPresenceUsers, getUserById } from "@shared/repositories";
 import type { Topic, Problem, UserProgress, Test } from "@shared/types";
 import { ChevronLeft, Star, Play, Lock, CheckCircle, ChevronDown, ChevronUp, FileText, Download } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
@@ -51,8 +51,12 @@ export default function TopicDetail() {
   const viewedRef = useRef(new Set<string>());
   const [topicOnlineUsers, setTopicOnlineUsers] = useState<Array<{ avatar?: string; name?: string }>>([]);
   const presenceRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [visibleProblemsCount, setVisibleProblemsCount] = useState(10);
+  const [totalProblemsCount, setTotalProblemsCount] = useState(0);
   const loadMoreRef = useRef<HTMLDivElement>(null);
+  const loadingMoreRef = useRef(false);
+
+  const PAGE_SIZE = 20;
+  const PREFETCH_THRESHOLD = 15; // 15-ga yetganda keyingi sahifani yuklash
 
   /**
    * Orqaga qaytish — mavzu modul (papka) ichida bo'lsa modulga, aks holda kursga.
@@ -66,24 +70,38 @@ export default function TopicDetail() {
     }
   }
 
-  // Lazy loading — pastga scroll qilganda ko'proq misollarni ko'rsatish
+  // Lazy loading — 15-misol ko'ringanda keyingi 20 tani DB dan yuklash
   useEffect(() => {
     if (!loadMoreRef.current) return;
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting) {
-          setVisibleProblemsCount((prev) => prev + 10);
+        if (entries[0].isIntersecting && !loadingMoreRef.current && problems.length < totalProblemsCount) {
+          loadingMoreRef.current = true;
+          getProblemsByTopicPaged(courseId!, topicId!, problems.length, PAGE_SIZE)
+            .then(({ problems: more }) => {
+              if (more.length > 0) {
+                setProblems((prev) => {
+                  // Dublikat oldini olish
+                  const existingIds = new Set(prev.map((p) => p.id));
+                  const newOnes = more.filter((p) => !existingIds.has(p.id) && !p.isHidden);
+                  return [...prev, ...newOnes];
+                });
+              }
+            })
+            .catch(console.error)
+            .finally(() => { loadingMoreRef.current = false; });
         }
       },
-      { rootMargin: "200px" }
+      { rootMargin: "400px" }
     );
     observer.observe(loadMoreRef.current);
     return () => observer.disconnect();
-  }, [problems.length]);
+  }, [problems.length, totalProblemsCount, courseId, topicId]);
 
-  // Yangi mavzu ochilganda misollar sonini reset qilish
+  // Yangi mavzu ochilganda misollarni reset qilish
   useEffect(() => {
-    setVisibleProblemsCount(10);
+    setProblems([]);
+    setTotalProblemsCount(0);
   }, [topicId]);
 
   useEffect(() => {
@@ -91,14 +109,15 @@ export default function TopicDetail() {
     // Yangi mavzu — o'qilgan misollar hisobini tozalash (keyin saqlangan progress tiklanadi)
     viewedRef.current = new Set<string>();
     setViewedCount(0);
-    Promise.all([getTopicById(courseId, topicId), getProblemsByTopic(courseId, topicId), getTestsByCourse(courseId)])
-      .then(([t, p, allTests]) => {
+    Promise.all([getTopicById(courseId, topicId), getProblemsByTopicPaged(courseId, topicId, 0, PAGE_SIZE), getTestsByCourse(courseId)])
+      .then(([t, pResult, allTests]) => {
         if (t?.isPremium && !hasSubscription && !accessLoading) {
           navigate(`/premium-gate?course=${courseId}`, { replace: true });
           return;
         }
         setTopic(t);
-        setProblems(p.filter(x => !x.isHidden));
+        setProblems(pResult.problems.filter(x => !x.isHidden));
+        setTotalProblemsCount(pResult.total);
         // Faqat shu modulga tegishli (afterTopicOrder === topic.order) va published testlarni ko'rsatish
         if (t) {
           setTopicTests(allTests.filter(test => test.status === "published" && test.afterTopicOrder === t.order));
@@ -491,9 +510,8 @@ export default function TopicDetail() {
   }
 
   const freeProblems = problems.filter((p) => !p.isPremium).length;
-  // Progress = o'qilgan bepul misollar / JAMI misollar soni (premium ham hisobga olinadi)
-  // Premium ochilmaguncha 100% bo'lmaydi
-  const mastery = problems.length > 0 ? Math.round((viewedCount / problems.length) * 100) : 0;
+  // Progress = o'qilgan bepul misollar / JAMI misollar soni (totalProblemsCount — DB dagi haqiqiy son)
+  const mastery = totalProblemsCount > 0 ? Math.round((viewedCount / totalProblemsCount) * 100) : 0;
 
   function handlePremiumClick() {
     if (!isLoggedIn) {
@@ -575,7 +593,7 @@ export default function TopicDetail() {
       </div>
 
       <div className="px-5 space-y-4">
-        {problems.slice(0, visibleProblemsCount).map((p, i) => {
+        {problems.map((p, i) => {
           const isPremium = p.isPremium === true;
 
           return (
@@ -594,8 +612,8 @@ export default function TopicDetail() {
           );
         })}
 
-        {/* Lazy load sentinel — ko'ringanida yana 10 ta misol qo'shiladi */}
-        {visibleProblemsCount < problems.length && (
+        {/* Lazy load sentinel — 15-misol atrofida joylashadi, keyingi sahifa DB dan yuklanadi */}
+        {problems.length < totalProblemsCount && (
           <div ref={loadMoreRef} className="flex items-center justify-center py-6">
             <div className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
             <span className="ml-2 text-sm text-gray-400">Yuklanmoqda...</span>
@@ -868,7 +886,7 @@ function StudentProblemCard({ problem, index, isPremium, isLoggedIn, onRequireAu
               <span className="text-sm font-bold text-blue-700">📖 Yechim</span>
               <button onClick={(e) => { e.stopPropagation(); setFlipped(false); setVisibleSteps(1); }} className="text-xs text-gray-500 px-2 py-1 bg-white rounded border border-gray-200 active:bg-gray-50">← Orqaga</button>
             </div>
-            <div className="bg-white rounded-lg p-4 border border-blue-200">
+            <div className="bg-white rounded-lg p-4 border border-blue-200 overflow-x-auto">
               {(() => {
                 // Aqlli qadam ajratish:
                 // 1. Agar solution array da 2+ qadam bo'lsa — ularni ishlatish
@@ -893,8 +911,8 @@ function StudentProblemCard({ problem, index, isPremium, isLoggedIn, onRequireAu
                 return (
                   <>
                     {shown.map((stepText, idx) => (
-                      <div key={idx} className="text-sm text-gray-800 mb-3 animate-fadeIn">
-                        <div className="whitespace-pre-wrap leading-relaxed"><LatexText text={stepText} /></div>
+                      <div key={idx} className="text-sm text-gray-800 mb-3 animate-fadeIn overflow-x-auto">
+                        <div className="whitespace-pre-wrap leading-relaxed break-words"><LatexText text={stepText} /></div>
                       </div>
                     ))}
                     {totalSteps > 0 && (

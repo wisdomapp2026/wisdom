@@ -2,8 +2,7 @@ import { useState, useEffect } from "react";
 import { Ban, Send, MessageCircle } from "lucide-react";
 import { sendMessage, getMessagesByUser, getMessagesForUser } from "@shared/repositories";
 import type { Message } from "@shared/types";
-import { signOut } from "firebase/auth";
-import { auth } from "@shared/firebase";
+import { supabase } from "@shared/supabase";
 
 interface Props {
   userId: string;
@@ -91,7 +90,7 @@ export default function BannedScreen({ userId, userName }: Props) {
                 <MessageCircle className="w-5 h-5" /> Adminga murojaat qilish
               </button>
               <button
-                onClick={() => signOut(auth)}
+                onClick={() => supabase.auth.signOut()}
                 className="w-full py-3 text-gray-500 font-medium text-sm"
               >
                 Boshqa hisob bilan kirish

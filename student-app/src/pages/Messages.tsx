@@ -2,10 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { ChevronLeft, Send } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
-import { collection, query, where, orderBy, onSnapshot, addDoc, getDocs } from "firebase/firestore";
-import { db } from "@shared/firebase";
-import { getUserById, createAdminNotification } from "@shared/repositories";
-import type { AdminNotification } from "@shared/types";
+import { getUserById, createAdminNotification, sendMessage, getAllMessages } from "@shared/repositories";
+import type { AdminNotification, Message } from "@shared/types";
 
 interface ChatMessage {
   id: string;
@@ -33,24 +31,17 @@ export default function Messages() {
     });
 
     // Real-time messages listener
-    const q = query(
-      collection(db, "messages"),
-      where("fromUserId", "in", [user.uid, "admin-001"]),
-      orderBy("createdAt", "asc")
-    );
-
-    // Oddiy getDocs (real-time emas, lekin composite index kerak emas)
+    // Oddiy fetch (real-time emas, lekin composite index kerak emas)
     loadMessages();
   }, [user]);
 
   async function loadMessages() {
     if (!user) return;
     try {
-      const snap = await getDocs(collection(db, "messages"));
-      const all = snap.docs.map((d) => ({ id: d.id, ...d.data() } as ChatMessage));
+      const all = await getAllMessages();
       // Faqat shu foydalanuvchiga tegishli habarlar (yuborgan yoki admin javob bergan)
       const filtered = all.filter(
-        (m) => m.fromUserId === user.uid || (m.fromRole === "admin")
+        (m) => m.fromUserId === user.uid || m.toUserId === user.uid
       ).sort((a, b) => a.createdAt - b.createdAt);
       setMessages(filtered);
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: "smooth" }), 100);
@@ -63,7 +54,8 @@ export default function Messages() {
     if (!newMessage.trim() || !user) return;
     setSending(true);
     try {
-      await addDoc(collection(db, "messages"), {
+      await sendMessage({
+        id: `msg-${Date.now()}`,
         fromUserId: user.uid,
         fromName: userName,
         fromRole: "student",

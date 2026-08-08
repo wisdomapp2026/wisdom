@@ -31,7 +31,7 @@ function cleanTopicTitle(title: string): string {
 }
 
 export default function Profile() {
-  const { user, isLoggedIn } = useAuth();
+  const { user, isLoggedIn, logout } = useAuth();
   const navigate = useNavigate();
 
   const [userData, setUserData] = useState<User | null>(null);
@@ -435,9 +435,7 @@ export default function Profile() {
         <button
           onClick={async () => {
             if (confirm("Akkauntdan chiqishni xohlaysizmi?")) {
-              const { signOut } = await import("firebase/auth");
-              const { auth } = await import("@shared/firebase");
-              await signOut(auth);
+              await logout();
               navigate("/");
             }
           }}

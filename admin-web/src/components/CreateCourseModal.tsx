@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { X, Plus, Pencil, Trash2, Check, ImageIcon } from "lucide-react";
 import { createCourse, updateCourse, getAllCategories, createCategory, updateCategory, deleteCategory } from "@shared/repositories";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { storage } from "@shared/firebase";
+import { uploadFile } from "@shared/supabase";
 import type { Course, Category } from "@shared/types";
 import LoadingButton from "./LoadingButton";
 
@@ -175,9 +174,7 @@ export default function CreateCourseModal({ open, editCourse, onClose, onCreated
     if (coverFile) {
       try {
         const courseId = isEditMode ? editCourse!.id : title.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-");
-        const storageRef = ref(storage, `courses/${courseId}/cover-${now}-${coverFile.name}`);
-        await uploadBytes(storageRef, coverFile);
-        coverImage = await getDownloadURL(storageRef);
+        coverImage = await uploadFile("edukids", `courses/${courseId}/cover-${now}-${coverFile.name}`, coverFile);
       } catch (err) {
         console.error("Muqova yuklashda xatolik:", err);
       }
@@ -191,9 +188,7 @@ export default function CreateCourseModal({ open, editCourse, onClose, onCreated
     if (heroFile) {
       try {
         const courseId = isEditMode ? editCourse!.id : title.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-");
-        const storageRef = ref(storage, `courses/${courseId}/hero-${now}-${heroFile.name}`);
-        await uploadBytes(storageRef, heroFile);
-        heroImage = await getDownloadURL(storageRef);
+        heroImage = await uploadFile("edukids", `courses/${courseId}/hero-${now}-${heroFile.name}`, heroFile);
       } catch (err) {
         console.error("Hero rasm yuklashda xatolik:", err);
       }

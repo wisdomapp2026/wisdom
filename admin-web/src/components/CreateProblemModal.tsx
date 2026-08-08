@@ -1,8 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { X, Upload } from "lucide-react";
 import { createProblem, updateProblem, saveTestToLibrary, saveTBQuestion, saveTBFolder, getAllTBFolders, getAllTBQuestions, getCourseById, getTopicById, getFoldersByCourse } from "@shared/repositories";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { storage } from "@shared/firebase";
+import { uploadFile } from "@shared/supabase";
 import type { Problem, Test, Question } from "@shared/types";
 import RichMathInput from "./RichMathInput";
 
@@ -362,13 +361,11 @@ export default function CreateProblemModal({ open, courseId, topicId, existingCo
     setUploadedFileName(file.name);
     try {
       const fileName = `videos/${Date.now()}-${file.name}`;
-      const storageRef = ref(storage, fileName);
-      await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(storageRef);
+      const url = await uploadFile("edukids", fileName, file);
       setVideoUrl(url);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Video yuklashda xatolik:", err);
-      alert("Video yuklashda xatolik yuz berdi!");
+      alert("Video yuklashda xatolik: " + err.message);
       setUploadedFileName("");
     } finally {
       setUploading(false);
@@ -381,9 +378,7 @@ export default function CreateProblemModal({ open, courseId, topicId, existingCo
     setUploadingSolImg(true);
     try {
       const fileName = `solutions/${Date.now()}-${file.name}`;
-      const storageRef = ref(storage, fileName);
-      await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(storageRef);
+      const url = await uploadFile("edukids", fileName, file);
       setSolutionImage(url);
     } catch (err) {
       console.error("Rasm yuklashda xatolik:", err);

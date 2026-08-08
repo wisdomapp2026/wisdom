@@ -1,8 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Plus, Edit, Trash2, Eye, EyeOff, X, GripVertical } from "lucide-react";
 import { getAllBanners, createBanner, updateBanner, deleteBanner, getAllCourses } from "@shared/repositories";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { storage } from "@shared/firebase";
+import { uploadFile } from "@shared/supabase";
 import type { HomeBanner, Course } from "@shared/types";
 import LoadingButton from "../components/LoadingButton";
 
@@ -68,9 +67,11 @@ export default function Banners() {
 
     let imageUrl = editBanner?.imageUrl || "";
     if (imageFile) {
-      const storageRef = ref(storage, `banners/${now}-${imageFile.name}`);
-      await uploadBytes(storageRef, imageFile);
-      imageUrl = await getDownloadURL(storageRef);
+      try {
+        imageUrl = await uploadFile("edukids", `banners/${now}-${imageFile.name}`, imageFile);
+      } catch (err: any) {
+        console.error("Rasm yuklashda xatolik:", err);
+      }
     }
 
     try {

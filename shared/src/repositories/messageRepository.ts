@@ -1,46 +1,70 @@
-import {
-  collection,
-  doc,
-  getDocs,
-  setDoc,
-  updateDoc,
-  query,
-  orderBy,
-  where,
-} from "firebase/firestore";
-import { db } from "../firebase";
+import { supabase, toCamel, toSnake, stringToUUID } from "../supabase";
 import type { Message } from "../types";
 
-const MESSAGES_COL = "messages";
-
 export async function sendMessage(message: Message): Promise<void> {
-  await setDoc(doc(db, MESSAGES_COL, message.id), message);
+  const snakeMsg = toSnake(message);
+  snakeMsg.from_user_id = stringToUUID(message.fromUserId);
+  if (message.toUserId) {
+    snakeMsg.to_user_id = stringToUUID(message.toUserId);
+  }
+
+  const { error } = await supabase
+    .from("messages")
+    .upsert(snakeMsg);
+
+  if (error) throw new Error(error.message);
 }
 
 export async function getAllMessages(): Promise<Message[]> {
-  const q = query(collection(db, MESSAGES_COL), orderBy("createdAt", "desc"));
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => d.data() as Message);
+  const { data, error } = await supabase
+    .from("messages")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error || !data) return [];
+  return toCamel<Message[]>(data);
 }
 
 export async function getMessagesByUser(userId: string): Promise<Message[]> {
-  const q = query(collection(db, MESSAGES_COL), where("fromUserId", "==", userId), orderBy("createdAt", "desc"));
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => d.data() as Message);
+  const userUuid = stringToUUID(userId);
+  const { data, error } = await supabase
+    .from("messages")
+    .select("*")
+    .eq("from_user_id", userUuid)
+    .order("created_at", { ascending: false });
+
+  if (error || !data) return [];
+  return toCamel<Message[]>(data);
 }
 
 export async function getMessagesForUser(userId: string): Promise<Message[]> {
-  const q = query(collection(db, MESSAGES_COL), where("toUserId", "==", userId), orderBy("createdAt", "desc"));
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => d.data() as Message);
+  const userUuid = stringToUUID(userId);
+  const { data, error } = await supabase
+    .from("messages")
+    .select("*")
+    .eq("to_user_id", userUuid)
+    .order("created_at", { ascending: false });
+
+  if (error || !data) return [];
+  return toCamel<Message[]>(data);
 }
 
 export async function getUnreadMessagesCount(): Promise<number> {
-  const q = query(collection(db, MESSAGES_COL), where("fromRole", "==", "student"), where("isRead", "==", false));
-  const snap = await getDocs(q);
-  return snap.size;
+  const { count, error } = await supabase
+    .from("messages")
+    .select("*", { count: "exact", head: true })
+    .eq("from_role", "student")
+    .eq("is_read", false);
+
+  if (error) return 0;
+  return count || 0;
 }
 
 export async function markMessageAsRead(messageId: string): Promise<void> {
-  await updateDoc(doc(db, MESSAGES_COL, messageId), { isRead: true });
+  const { error } = await supabase
+    .from("messages")
+    .update({ is_read: true })
+    .eq("id", messageId);
+
+  if (error) throw new Error(error.message);
 }

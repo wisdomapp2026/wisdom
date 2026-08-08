@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { X, Star, Send } from "lucide-react";
-import { doc, getDoc, setDoc } from "firebase/firestore";
-import { db } from "@shared/firebase";
+import { supabase } from "@shared/supabase";
 import { createTestimonial, createAdminNotification } from "@shared/repositories";
 import { useAuth } from "../hooks/useAuth";
 import type { AuthorInfo, Testimonial, AdminNotification } from "@shared/types";
@@ -61,9 +60,13 @@ export default function AuthorModal({ open, onClose }: Props) {
 
   async function loadAuthor() {
     try {
-      const snap = await getDoc(doc(db, "settings", "author"));
-      if (snap.exists()) {
-        setAuthor(snap.data() as AuthorInfo);
+      const { data: resData } = await supabase
+        .from("settings")
+        .select("value")
+        .eq("key", "author")
+        .maybeSingle();
+      if (resData?.value) {
+        setAuthor(resData.value as AuthorInfo);
       }
     } catch (err) {
       console.error("Muallif yuklashda xatolik:", err);
@@ -80,7 +83,7 @@ export default function AuthorModal({ open, onClose }: Props) {
     const testimonial: Testimonial = {
       id: `review-${user.uid}-${now}`,
       name: user.displayName || user.email?.split("@")[0] || "Foydalanuvchi",
-      avatarUrl: user.photoURL || undefined,
+      avatarUrl: undefined,
       role: "O'quvchi",
       text: reviewText.trim(),
       rating,

@@ -3,10 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { ChevronLeft, Save, Camera } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { getUserById, updateUser } from "@shared/repositories";
-import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from "firebase/auth";
-import { auth } from "@shared/firebase";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { storage } from "@shared/firebase";
+import { uploadFile } from "@shared/supabase";
+import { supabase } from "@shared/supabase";
 
 export default function ProfileEdit() {
   const { user } = useAuth();
@@ -56,9 +54,7 @@ export default function ProfileEdit() {
     if (!file || !user) return;
     setAvatarUploading(true);
     try {
-      const storageRef = ref(storage, `avatars/${user.uid}/${Date.now()}-${file.name}`);
-      await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(storageRef);
+      const url = await uploadFile("edukids", `avatars/${user.uid}/${Date.now()}-${file.name}`, file);
       setAvatarUrl(url);
       // Darhol saqlash
       await updateUser(user.uid, { avatar: url });
@@ -75,14 +71,13 @@ export default function ProfileEdit() {
     if (!user || !user.email || !oldPassword || !newPassword) return;
     setPasswordMsg("");
     try {
-      const credential = EmailAuthProvider.credential(user.email, oldPassword);
-      await reauthenticateWithCredential(user, credential);
-      await updatePassword(user, newPassword);
+      const { error: updateErr } = await supabase.auth.updateUser({ password: newPassword });
+      if (updateErr) throw updateErr;
       setPasswordMsg("Parol muvaffaqiyatli o'zgartirildi!");
       setOldPassword("");
       setNewPassword("");
     } catch (err: any) {
-      setPasswordMsg(err.code === "auth/wrong-password" ? "Joriy parol noto'g'ri" : "Xatolik: " + err.message);
+      setPasswordMsg("Xatolik: " + err.message);
     }
   }
 

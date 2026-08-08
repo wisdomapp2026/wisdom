@@ -103,6 +103,7 @@ export default function FolderDetail() {
 
       const topics = allTopics.filter((t) => !t.isHidden && t.folderId === folderId);
       const advices = allAdvices.filter((a) => a.folderId === folderId);
+      const tests = allTests.filter((t) => t.status === "published" && t.folderId === folderId);
 
       // Agar papka premium bo'lsa va unda birorta ham bepul dars bo'lmasa, hamda o'quvchida obuna bo'lmasa — obuna sotib olish sahifasiga yo'naltiramiz
       const hasFreeTopic = topics.some((t) => !t.isPremium);
@@ -113,6 +114,7 @@ export default function FolderDetail() {
 
       const combined: FolderItem[] = [];
       for (const topic of topics) combined.push({ type: "topic", data: topic, order: topic.order });
+      for (const test of tests) combined.push({ type: "test", data: test, order: (test.afterTopicOrder ?? 99999) + 0.5 });
       for (const adv of advices) combined.push({ type: "advice", data: adv, order: adv.afterTopicOrder + 0.3 });
       combined.sort((a, b) => a.order - b.order);
       setItems(combined);
@@ -454,12 +456,14 @@ export default function FolderDetail() {
         onClose={() => setShowJoinModal(false)}
         onConfirm={async () => {
           if (!courseId) return;
-          if (user) {
-            await enrollUserInCourse(user.uid, courseId);
-          } else {
-            enrollLocalCourse(courseId);
+          if (!user) {
+            setShowJoinModal(false);
+            const returnPath = pendingTargetUrl || `/course/${courseId}/folder/${folderId}`;
+            navigate(`/login?returnTo=${encodeURIComponent(returnPath)}`);
+            return;
           }
-          setUserProgress((prev) => prev ? { ...prev, isJoined: true } : { id: `prog_${user?.uid || "guest"}_${courseId}`, userId: user?.uid || "guest", courseId, completedTopics: [], completedProblems: [], progressPercent: 0, totalXP: 0, streak: 0, weeklyMinutes: [0, 0, 0, 0, 0, 0, 0], lastAccessedAt: Date.now(), isJoined: true });
+          await enrollUserInCourse(user.uid, courseId);
+          setUserProgress((prev) => prev ? { ...prev, isJoined: true } : { id: `prog_${user.uid}_${courseId}`, userId: user.uid, courseId, completedTopics: [], completedProblems: [], progressPercent: 0, totalXP: 0, streak: 0, weeklyMinutes: [0, 0, 0, 0, 0, 0, 0], lastAccessedAt: Date.now(), isJoined: true });
           setShowJoinModal(false);
           if (pendingTargetUrl) {
             const url = pendingTargetUrl;

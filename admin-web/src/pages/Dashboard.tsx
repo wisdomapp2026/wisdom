@@ -13,7 +13,7 @@ import { Link } from "react-router-dom";
 import { getAllCourses, getAllStudents, getRecentPayments, getStudentCountByCourse } from "@shared/repositories";
 import type { Course, User, Payment } from "@shared/types";
 import StudentActivityModal from "../components/StudentActivityModal";
-import { auth } from "@shared/firebase";
+import { supabase } from "@shared/supabase";
 import {
   AreaChart,
   Area,
@@ -39,9 +39,18 @@ export default function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [activityModalOpen, setActivityModalOpen] = useState(false);
+  const [adminName, setAdminName] = useState("Admin");
 
   useEffect(() => {
     loadDashboard();
+  }, []);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        setAdminName(user.user_metadata?.name || user.user_metadata?.displayName || "Admin");
+      }
+    });
   }, []);
 
   async function loadDashboard() {
@@ -81,6 +90,56 @@ export default function Dashboard() {
     );
   }
 
+  function downloadReport() {
+    if (!data) return;
+
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
+    // CSV hisobot yaratish
+    const lines: string[] = [];
+    lines.push("EduKids — Dashboard Hisoboti");
+    lines.push(`Sana: ${dateStr}`);
+    lines.push("");
+    lines.push("=== UMUMIY STATISTIKA ===");
+    lines.push(`Jami o'quvchilar,${data.totalStudents}`);
+    lines.push(`Jami kurslar,${data.totalCourses}`);
+    lines.push(`Jami tushum (so'm),${totalRevenue}`);
+    lines.push(`Top kurs,${topCourse?.course.title || "-"}`);
+    lines.push("");
+    lines.push("=== KURSLAR BO'YICHA ===");
+    lines.push("Kurs nomi,Kategoriya,O'quvchilar soni,Premium");
+    for (const item of data.coursesWithStudents) {
+      lines.push(`"${item.course.title}","${item.course.category}",${item.students},${item.course.isPremium ? "Ha" : "Yo'q"}`);
+    }
+    lines.push("");
+    lines.push("=== SO'NGGI TO'LOVLAR ===");
+    lines.push("Foydalanuvchi,Summa (so'm),Holat,Sana");
+    for (const p of data.recentPayments) {
+      const d = new Date(p.createdAt);
+      lines.push(`"${p.userName}",${p.amount},${p.status},${d.toLocaleDateString("uz")}`);
+    }
+    lines.push("");
+    lines.push("=== SO'NGGI O'QUVCHILAR ===");
+    lines.push("Ism,Telefon,Ro'yxatdan o'tgan");
+    for (const s of data.recentStudents) {
+      const d = new Date(s.createdAt);
+      lines.push(`"${s.name}","${s.phone}",${d.toLocaleDateString("uz")}`);
+    }
+
+    // Faylni yuklab olish
+    const csvContent = "\uFEFF" + lines.join("\n"); // BOM — Excel uchun UTF-8 kodlash
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `edukids-hisobot-${dateStr}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }
+
   const totalRevenue = data?.recentPayments
     .filter((p) => p.status === "success")
     .reduce((sum, p) => sum + p.amount, 0) || 0;
@@ -104,7 +163,7 @@ export default function Dashboard() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl lg:text-2xl font-bold text-gray-900">Xayrli kun, {auth.currentUser?.displayName || "Admin"}!</h1>
+          <h1 className="text-xl lg:text-2xl font-bold text-gray-900">Xayrli kun, {adminName}!</h1>
           <p className="text-sm text-gray-500 mt-1">Platformadagi bugungi asosiy ko'rsatkichlar va yangilanishlar bilan tanishing.</p>
         </div>
         <div className="flex items-center gap-2 shrink-0 flex-wrap">
@@ -112,7 +171,7 @@ export default function Dashboard() {
             <Activity className="w-4 h-4 text-green-500" /> Faollik
           </button>
           <button className="btn-outline text-sm">Oxirgi 7 kun</button>
-          <button className="btn-primary text-sm">Hisobotni yuklash</button>
+          <button onClick={downloadReport} className="btn-primary text-sm">Hisobotni yuklash</button>
         </div>
       </div>
 

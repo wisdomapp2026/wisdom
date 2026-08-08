@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { X, Check, Crown } from "lucide-react";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "@shared/firebase";
+import { supabase } from "@shared/supabase";
 import { useAuth } from "../hooks/useAuth";
 
 interface PricingPlan {
@@ -27,8 +26,12 @@ export default function Subscription() {
 
   async function loadPricing() {
     try {
-      const snap = await getDoc(doc(db, "settings", "platform"));
-      const data = snap.exists() ? snap.data() : {};
+      const { data: resData, error } = await supabase
+        .from("settings")
+        .select("value")
+        .eq("key", "platform")
+        .maybeSingle();
+      const data = (resData?.value || {}) as any;
       const monthly = data.monthlyPrice || 50000;
       const quarterly = data.quarterlyPrice || 120000;
       const yearly = data.yearlyPrice || 400000;

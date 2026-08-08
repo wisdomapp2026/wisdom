@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { Plus, Edit, Trash2, Eye, EyeOff, X, Image, Video, FileText } from "lucide-react";
 import { getAllNewsItems, createNewsItem, updateNewsItem, deleteNewsItem } from "@shared/repositories";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { storage } from "@shared/firebase";
+import { uploadFile } from "@shared/supabase";
 import type { NewsItem, NewsItemType } from "@shared/types";
 
 export default function NewsItems() {
@@ -51,9 +50,11 @@ export default function NewsItems() {
 
     let imageUrl = editItem?.imageUrl || "";
     if (imageFile) {
-      const storageRef = ref(storage, `news/${now}-${imageFile.name}`);
-      await uploadBytes(storageRef, imageFile);
-      imageUrl = await getDownloadURL(storageRef);
+      try {
+        imageUrl = await uploadFile("edukids", `news/${now}-${imageFile.name}`, imageFile);
+      } catch (err: any) {
+        console.error("Rasm yuklashda xatolik:", err);
+      }
     }
 
     try {

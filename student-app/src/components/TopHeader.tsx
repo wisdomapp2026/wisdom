@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Search } from "lucide-react";
-import { doc, getDoc } from "firebase/firestore";
-import { db } from "@shared/firebase";
+import { supabase } from "@shared/supabase";
 import { useAuth } from "../hooks/useAuth";
 import { getUserById } from "@shared/repositories";
 import HamburgerMenu from "./HamburgerMenu";
@@ -33,9 +32,13 @@ export default function TopHeader() {
 
   async function loadBranding() {
     try {
-      const snap = await getDoc(doc(db, "settings", "platform"));
-      if (snap.exists()) {
-        const data = snap.data();
+      const { data: resData } = await supabase
+        .from("settings")
+        .select("value")
+        .eq("key", "platform")
+        .maybeSingle();
+      if (resData?.value) {
+        const data = resData.value as any;
         if (data.logoUrl) setLogoUrl(data.logoUrl);
         if (data.platformName) setAppName(data.platformName);
       }

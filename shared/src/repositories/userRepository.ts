@@ -1,303 +1,413 @@
-import {
-  doc,
-  getDoc,
-  setDoc,
-  updateDoc,
-  deleteDoc,
-  collection,
-  getDocs,
-  query,
-  where,
-  orderBy,
-  limit,
-  writeBatch,
-  runTransaction,
-  increment,
-} from "firebase/firestore";
-import { db } from "../firebase";
-import type { User, UserProgress, TestResult, Subscription, Payment, UserActivity, ActivitySession, FavoriteTopic } from "../types";
+import { supabase, toCamel, toSnake, stringToUUID } from "../supabase";
+import type { User, UserProgress, TestResult, Subscription, Payment, UserActivity, ActivitySession, FavoriteTopic, Certificate } from "../types";
 
-// ============ USERS ============
-
-export async function getUserById(userId: string): Promise<User | null> {
-  const snap = await getDoc(doc(db, "users", userId));
-  return snap.exists() ? (snap.data() as User) : null;
-}
-
-export async function createUser(user: User): Promise<void> {
-  await setDoc(doc(db, "users", user.id), user);
-}
-
-export async function updateUser(userId: string, data: Partial<User>): Promise<void> {
-  const cleanData: Record<string, any> = { updatedAt: Date.now() };
-  for (const [key, value] of Object.entries(data)) {
-    if (value !== undefined) cleanData[key] = value;
-  }
-  await updateDoc(doc(db, "users", userId), cleanData);
-}
-
-export async function getAllStudents(): Promise<User[]> {
-  const q = query(collection(db, "users"), where("role", "==", "student"), orderBy("createdAt", "desc"));
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => d.data() as User);
-}
-
-// ============ PROGRESS ============
-
-export async function getUserProgress(userId: string, courseId: string): Promise<UserProgress | null> {
-  const id = `${userId}_${courseId}`;
-  const snap = await getDoc(doc(db, "progress", id));
-  return snap.exists() ? (snap.data() as UserProgress) : null;
-}
-
-export async function setUserProgress(progress: UserProgress): Promise<void> {
-  await setDoc(doc(db, "progress", progress.id), progress);
-}
-
-export async function updateUserProgress(progressId: string, data: Partial<UserProgress>): Promise<void> {
-  await updateDoc(doc(db, "progress", progressId), data);
-}
-
-export async function getAllProgressByUser(userId: string): Promise<UserProgress[]> {
-  const q = query(collection(db, "progress"), where("userId", "==", userId));
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => d.data() as UserProgress);
-}
-
-export async function getStudentCountByCourse(courseId: string): Promise<number> {
-  const q = query(collection(db, "progress"), where("courseId", "==", courseId));
-  const snap = await getDocs(q);
-  return snap.size;
-}
-
-/** Kurs ichidagi barcha o'quvchilar progressini olish (reyting hisoblash uchun) */
-export async function getAllProgressByCourse(courseId: string): Promise<UserProgress[]> {
-  const q = query(collection(db, "progress"), where("courseId", "==", courseId));
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => d.data() as UserProgress);
-}
-
-// ============ TEST RESULTS ============
-
-export async function saveTestResult(result: TestResult): Promise<void> {
-  await setDoc(doc(db, "testResults", result.id), result);
-}
-
-export async function getTestResultsByUser(userId: string): Promise<TestResult[]> {
-  const q = query(collection(db, "testResults"), where("userId", "==", userId), orderBy("completedAt", "desc"));
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => d.data() as TestResult);
-}
-
-/** Barcha test natijalarini olish (reyting uchun) */
-export async function getAllTestResults(): Promise<TestResult[]> {
-  const snap = await getDocs(collection(db, "testResults"));
-  return snap.docs.map((d) => d.data() as TestResult);
-}
-
-export async function getTestResultsByTest(testId: string): Promise<TestResult[]> {
-  const q = query(collection(db, "testResults"), where("testId", "==", testId), orderBy("completedAt", "desc"));
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => d.data() as TestResult);
-}
-
-// ============ SUBSCRIPTIONS ============
-
-export async function getUserSubscription(userId: string): Promise<Subscription | null> {
-  const q = query(
-    collection(db, "subscriptions"),
-    where("userId", "==", userId),
-    where("status", "==", "active"),
-    limit(1)
-  );
-  const snap = await getDocs(q);
-  return snap.empty ? null : (snap.docs[0].data() as Subscription);
-}
-
-/** Foydalanuvchining barcha obunalarini olish (faol + bekor qilingan — tarix uchun) */
-export async function getAllUserSubscriptions(userId: string): Promise<Subscription[]> {
-  const q = query(
-    collection(db, "subscriptions"),
-    where("userId", "==", userId)
-  );
-  const snap = await getDocs(q);
-  return snap.docs
-    .map((d) => d.data() as Subscription)
-    .sort((a, b) => (b.startDate || 0) - (a.startDate || 0));
-}
-
-export async function createSubscription(sub: Subscription): Promise<void> {
-  await setDoc(doc(db, "subscriptions", sub.id), sub);
-}
-
-/** Admin tomonidan obunani bekor qilish */
-export async function cancelSubscription(subscriptionId: string): Promise<void> {
-  await updateDoc(doc(db, "subscriptions", subscriptionId), {
-    status: "cancelled",
-    cancelledAt: Date.now(),
-  });
-}
-
-// ============ PAYMENTS ============
-
-export async function createPayment(payment: Payment): Promise<void> {
-  await setDoc(doc(db, "payments", payment.id), payment);
-}
-
-export async function getRecentPayments(limitCount = 10): Promise<Payment[]> {
-  const q = query(collection(db, "payments"), orderBy("createdAt", "desc"), limit(limitCount));
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => d.data() as Payment);
-}
-
-export async function getPaymentsByUser(userId: string): Promise<Payment[]> {
-  const q = query(collection(db, "payments"), where("userId", "==", userId));
-  const snap = await getDocs(q);
-  const results = snap.docs.map((d) => d.data() as Payment);
-  return results.sort((a, b) => b.createdAt - a.createdAt);
-}
-
-
-// ============ BAN & DELETE ============
-
-export async function banUser(userId: string): Promise<void> {
-  await updateDoc(doc(db, "users", userId), { isBanned: true, bannedAt: Date.now(), updatedAt: Date.now() });
-}
-
-export async function unbanUser(userId: string): Promise<void> {
-  await updateDoc(doc(db, "users", userId), { isBanned: false, bannedAt: null, updatedAt: Date.now() });
-}
-
-export async function deleteUserCompletely(userId: string): Promise<void> {
-  // Barcha bog'liq ma'lumotlarni to'plash
-  const refsToDelete: any[] = [];
-
-  // 1. Progress o'chirish
-  const progressQ = query(collection(db, "progress"), where("userId", "==", userId));
-  const progressSnap = await getDocs(progressQ);
-  progressSnap.docs.forEach((d) => refsToDelete.push(d.ref));
-
-  // 2. Test natijalarini o'chirish
-  const resultsQ = query(collection(db, "testResults"), where("userId", "==", userId));
-  const resultsSnap = await getDocs(resultsQ);
-  resultsSnap.docs.forEach((d) => refsToDelete.push(d.ref));
-
-  // 3. Obunalarni o'chirish
-  const subsQ = query(collection(db, "subscriptions"), where("userId", "==", userId));
-  const subsSnap = await getDocs(subsQ);
-  subsSnap.docs.forEach((d) => refsToDelete.push(d.ref));
-
-  // 4. To'lovlarni o'chirish
-  const paymentsQ = query(collection(db, "payments"), where("userId", "==", userId));
-  const paymentsSnap = await getDocs(paymentsQ);
-  paymentsSnap.docs.forEach((d) => refsToDelete.push(d.ref));
-
-  // 5. Faollik ma'lumotlarini o'chirish
-  const activityQ = query(collection(db, "userActivity"), where("userId", "==", userId));
-  const activitySnap = await getDocs(activityQ);
-  activitySnap.docs.forEach((d) => refsToDelete.push(d.ref));
-
-  // 6. Favoritelarni o'chirish
-  const favQ = query(collection(db, "favorites"), where("userId", "==", userId));
-  const favSnap = await getDocs(favQ);
-  favSnap.docs.forEach((d) => refsToDelete.push(d.ref));
-
-  // 7. User hujjatini o'chirish
-  refsToDelete.push(doc(db, "users", userId));
-
-  // WriteBatch bilan atomic o'chirish (limit: 500 per batch)
-  const BATCH_SIZE = 450;
-  for (let i = 0; i < refsToDelete.length; i += BATCH_SIZE) {
-    const batch = writeBatch(db);
-    const chunk = refsToDelete.slice(i, i + BATCH_SIZE);
-    chunk.forEach((ref) => batch.delete(ref));
-    await batch.commit();
-  }
-}
-
-
-// ============ USER ACTIVITY (Faollik) ============
-
-/** Bugungi sana stringini olish */
+// Helper to format date as today's date string YYYY-MM-DD
 function getTodayDateStr(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 }
 
-/** Foydalanuvchi sessiyasini boshlash (kirganida) */
+// ============ USERS ============
+
+export async function getUserById(userId: string): Promise<User | null> {
+  const uuid = stringToUUID(userId);
+  const { data, error } = await supabase
+    .from("users")
+    .select("*")
+    .eq("id", uuid)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return toCamel<User>(data);
+}
+
+export async function createUser(user: User): Promise<void> {
+  const snakeUser = toSnake(user);
+  snakeUser.id = stringToUUID(user.id);
+  
+  const { error } = await supabase
+    .from("users")
+    .upsert(snakeUser);
+    
+  if (error) throw new Error(error.message);
+}
+
+export async function updateUser(userId: string, data: Partial<User>): Promise<void> {
+  const uuid = stringToUUID(userId);
+  const cleanData: Record<string, any> = { updated_at: Date.now() };
+  for (const [key, value] of Object.entries(data)) {
+    if (value !== undefined) {
+      let snakeKey = key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`);
+      cleanData[snakeKey] = value;
+    }
+  }
+
+  const { error } = await supabase
+    .from("users")
+    .update(cleanData)
+    .eq("id", uuid);
+
+  if (error) throw new Error(error.message);
+}
+
+export async function getAllStudents(): Promise<User[]> {
+  const { data, error } = await supabase
+    .from("users")
+    .select("*")
+    .eq("role", "student")
+    .order("created_at", { ascending: false });
+
+  if (error || !data) return [];
+  return toCamel<User[]>(data);
+}
+
+// ============ PROGRESS ============
+
+export async function getUserProgress(userId: string, courseId: string): Promise<UserProgress | null> {
+  const userUuid = stringToUUID(userId);
+  const id = `${userUuid}_${courseId}`;
+  
+  const { data, error } = await supabase
+    .from("user_progress")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return toCamel<UserProgress>(data);
+}
+
+export async function setUserProgress(progress: UserProgress): Promise<void> {
+  const userUuid = stringToUUID(progress.userId);
+  const progressId = `${userUuid}_${progress.courseId}`;
+  
+  const snakeProg = toSnake(progress);
+  snakeProg.id = progressId;
+  snakeProg.user_id = userUuid;
+  
+  const { error } = await supabase
+    .from("user_progress")
+    .upsert(snakeProg);
+
+  if (error) {
+    // Foreign key constraint xatosini ignore qilish (user profil yaratilmagan)
+    if (error.message.includes("violates foreign key constraint")) {
+      console.warn(`User profile not found for ${progress.userId}, skipping progress sync`);
+      return;
+    }
+    throw new Error(error.message);
+  }
+}
+
+export async function updateUserProgress(progressId: string, data: Partial<UserProgress>): Promise<void> {
+  // progressId is already mapped to ${userUuid}_${courseId} by frontend if it uses getUserProgress output
+  const snakeData = toSnake(data);
+  const { error } = await supabase
+    .from("user_progress")
+    .update(snakeData)
+    .eq("id", progressId);
+
+  if (error) throw new Error(error.message);
+}
+
+export async function getAllProgressByUser(userId: string): Promise<UserProgress[]> {
+  const userUuid = stringToUUID(userId);
+  const { data, error } = await supabase
+    .from("user_progress")
+    .select("*")
+    .eq("user_id", userUuid);
+
+  if (error || !data) return [];
+  return toCamel<UserProgress[]>(data);
+}
+
+export async function getStudentCountByCourse(courseId: string): Promise<number> {
+  const { count, error } = await supabase
+    .from("user_progress")
+    .select("*", { count: "exact", head: true })
+    .eq("course_id", courseId);
+
+  if (error) return 0;
+  return count || 0;
+}
+
+export async function getAllProgressByCourse(courseId: string): Promise<UserProgress[]> {
+  const { data, error } = await supabase
+    .from("user_progress")
+    .select("*")
+    .eq("course_id", courseId);
+
+  if (error || !data) return [];
+  return toCamel<UserProgress[]>(data);
+}
+
+// ============ TEST RESULTS ============
+
+export async function saveTestResult(result: TestResult): Promise<void> {
+  const userUuid = stringToUUID(result.userId);
+  const snakeResult = toSnake(result);
+  snakeResult.user_id = userUuid;
+
+  const { error } = await supabase
+    .from("test_results")
+    .upsert(snakeResult);
+
+  if (error) throw new Error(error.message);
+}
+
+export async function getTestResultsByUser(userId: string): Promise<TestResult[]> {
+  const userUuid = stringToUUID(userId);
+  const { data, error } = await supabase
+    .from("test_results")
+    .select("*")
+    .eq("user_id", userUuid)
+    .order("completed_at", { ascending: false });
+
+  if (error || !data) return [];
+  return toCamel<TestResult[]>(data);
+}
+
+export async function getAllTestResults(): Promise<TestResult[]> {
+  const { data, error } = await supabase
+    .from("test_results")
+    .select("*");
+
+  if (error || !data) return [];
+  return toCamel<TestResult[]>(data);
+}
+
+export async function getTestResultsByTest(testId: string): Promise<TestResult[]> {
+  const { data, error } = await supabase
+    .from("test_results")
+    .select("*")
+    .eq("test_id", testId)
+    .order("completed_at", { ascending: false });
+
+  if (error || !data) return [];
+  return toCamel<TestResult[]>(data);
+}
+
+// ============ SUBSCRIPTIONS ============
+
+export async function getUserSubscription(userId: string): Promise<Subscription | null> {
+  const userUuid = stringToUUID(userId);
+  const { data, error } = await supabase
+    .from("subscriptions")
+    .select("*")
+    .eq("user_id", userUuid)
+    .eq("status", "active")
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return toCamel<Subscription>(data);
+}
+
+export async function getAllUserSubscriptions(userId: string): Promise<Subscription[]> {
+  const userUuid = stringToUUID(userId);
+  const { data, error } = await supabase
+    .from("subscriptions")
+    .select("*")
+    .eq("user_id", userUuid)
+    .order("start_date", { ascending: false });
+
+  if (error || !data) return [];
+  return toCamel<Subscription[]>(data);
+}
+
+export async function createSubscription(sub: Subscription): Promise<void> {
+  const userUuid = stringToUUID(sub.userId);
+  const snakeSub = toSnake(sub);
+  snakeSub.user_id = userUuid;
+
+  const { error } = await supabase
+    .from("subscriptions")
+    .upsert(snakeSub);
+
+  if (error) throw new Error(error.message);
+}
+
+export async function cancelSubscription(subscriptionId: string): Promise<void> {
+  const { error } = await supabase
+    .from("subscriptions")
+    .update({
+      status: "cancelled",
+      cancelled_at: Date.now()
+    })
+    .eq("id", subscriptionId);
+
+  if (error) throw new Error(error.message);
+}
+
+// ============ PAYMENTS ============
+
+export async function createPayment(payment: Payment): Promise<void> {
+  const userUuid = stringToUUID(payment.userId);
+  const snakePay = toSnake(payment);
+  snakePay.user_id = userUuid;
+
+  const { error } = await supabase
+    .from("payments")
+    .upsert(snakePay);
+
+  if (error) throw new Error(error.message);
+}
+
+export async function getRecentPayments(limitCount = 10): Promise<Payment[]> {
+  const { data, error } = await supabase
+    .from("payments")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(limitCount);
+
+  if (error || !data) return [];
+  return toCamel<Payment[]>(data);
+}
+
+export async function getPaymentsByUser(userId: string): Promise<Payment[]> {
+  const userUuid = stringToUUID(userId);
+  const { data, error } = await supabase
+    .from("payments")
+    .select("*")
+    .eq("user_id", userUuid)
+    .order("created_at", { ascending: false });
+
+  if (error || !data) return [];
+  return toCamel<Payment[]>(data);
+}
+
+// ============ BAN & DELETE ============
+
+export async function banUser(userId: string): Promise<void> {
+  const uuid = stringToUUID(userId);
+  const { error } = await supabase
+    .from("users")
+    .update({ is_banned: true, banned_at: Date.now(), updated_at: Date.now() })
+    .eq("id", uuid);
+
+  if (error) throw new Error(error.message);
+}
+
+export async function unbanUser(userId: string): Promise<void> {
+  const uuid = stringToUUID(userId);
+  const { error } = await supabase
+    .from("users")
+    .update({ is_banned: false, banned_at: null, updated_at: Date.now() })
+    .eq("id", uuid);
+
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteUserCompletely(userId: string): Promise<void> {
+  const uuid = stringToUUID(userId);
+  // Cascade deletes handle the rest on PostgreSQL!
+  const { error } = await supabase
+    .from("users")
+    .delete()
+    .eq("id", uuid);
+
+  if (error) throw new Error(error.message);
+}
+
+// ============ USER ACTIVITY (Faollik) ============
+
 export async function startUserSession(userId: string, userName: string): Promise<void> {
+  const userUuid = stringToUUID(userId);
   const dateStr = getTodayDateStr();
-  const id = `${userId}_${dateStr}`;
-  const ref = doc(db, "userActivity", id);
-  const snap = await getDoc(ref);
+  const id = `${userUuid}_${dateStr}`;
+
+  const { data: existing, error: getErr } = await supabase
+    .from("user_activity")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
 
   const session: ActivitySession = {
     startedAt: Date.now(),
     durationMinutes: 0,
   };
 
-  if (snap.exists()) {
-    const data = snap.data() as UserActivity;
-    await updateDoc(ref, {
-      sessions: [...data.sessions, session],
-      lastActiveAt: Date.now(),
-    });
+  if (getErr) throw new Error(getErr.message);
+
+  if (existing) {
+    const activity = toCamel<UserActivity>(existing);
+    const { error: updErr } = await supabase
+      .from("user_activity")
+      .update({
+        sessions: [...activity.sessions, session],
+        last_active_at: Date.now()
+      })
+      .eq("id", id);
+    if (updErr) throw new Error(updErr.message);
   } else {
     const activity: UserActivity = {
       id,
-      userId,
+      userId: userUuid,
       userName,
       date: dateStr,
       totalMinutes: 0,
       sessions: [session],
       lastActiveAt: Date.now(),
     };
-    await setDoc(ref, activity);
+    const { error: insErr } = await supabase
+      .from("user_activity")
+      .insert(toSnake(activity));
+    if (insErr) throw new Error(insErr.message);
   }
 }
 
-/** Sessiya vaqtini yangilash (har 30 soniyada chaqiriladi) — transaction bilan race condition oldini olish */
 export async function updateSessionTime(userId: string): Promise<void> {
+  const userUuid = stringToUUID(userId);
   const dateStr = getTodayDateStr();
-  const id = `${userId}_${dateStr}`;
-  const ref = doc(db, "userActivity", id);
+  const id = `${userUuid}_${dateStr}`;
 
-  await runTransaction(db, async (transaction) => {
-    const snap = await transaction.get(ref);
-    if (!snap.exists()) return;
+  // Read current activity
+  const { data, error } = await supabase
+    .from("user_activity")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
 
-    const data = snap.data() as UserActivity;
-    if (data.sessions.length === 0) return;
+  if (error || !data) return;
+  const activity = toCamel<UserActivity>(data);
+  if (activity.sessions.length === 0) return;
 
-    const sessions = [...data.sessions];
-    const lastSession = { ...sessions[sessions.length - 1] };
-    const elapsed = (Date.now() - lastSession.startedAt) / 60000;
-    lastSession.durationMinutes = Math.round(elapsed);
-    sessions[sessions.length - 1] = lastSession;
+  const sessions = [...activity.sessions];
+  const lastSession = { ...sessions[sessions.length - 1] };
+  const elapsed = (Date.now() - lastSession.startedAt) / 60000;
+  lastSession.durationMinutes = Math.round(elapsed);
+  sessions[sessions.length - 1] = lastSession;
 
-    const totalMinutes = sessions.reduce((sum, s) => sum + s.durationMinutes, 0);
+  const totalMinutes = sessions.reduce((sum, s) => sum + s.durationMinutes, 0);
 
-    transaction.update(ref, {
+  const { error: updErr } = await supabase
+    .from("user_activity")
+    .update({
       sessions,
-      totalMinutes,
-      lastActiveAt: Date.now(),
-    });
-  });
+      total_minutes: totalMinutes,
+      last_active_at: Date.now()
+    })
+    .eq("id", id);
+
+  if (updErr) throw new Error(updErr.message);
 }
 
-/** Sessiyani tugatish */
 export async function endUserSession(userId: string): Promise<void> {
+  const userUuid = stringToUUID(userId);
   const dateStr = getTodayDateStr();
-  const id = `${userId}_${dateStr}`;
-  const ref = doc(db, "userActivity", id);
-  const snap = await getDoc(ref);
+  const id = `${userUuid}_${dateStr}`;
 
-  if (!snap.exists()) return;
+  const { data, error } = await supabase
+    .from("user_activity")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
 
-  const data = snap.data() as UserActivity;
-  if (data.sessions.length === 0) return;
+  if (error || !data) return;
+  const activity = toCamel<UserActivity>(data);
+  if (activity.sessions.length === 0) return;
 
-  const sessions = [...data.sessions];
+  const sessions = [...activity.sessions];
   const lastSession = { ...sessions[sessions.length - 1] };
   lastSession.endedAt = Date.now();
   lastSession.durationMinutes = Math.round((Date.now() - lastSession.startedAt) / 60000);
@@ -305,20 +415,20 @@ export async function endUserSession(userId: string): Promise<void> {
 
   const totalMinutes = sessions.reduce((sum, s) => sum + s.durationMinutes, 0);
 
-  await updateDoc(ref, {
-    sessions,
-    totalMinutes,
-    lastActiveAt: Date.now(),
-  });
+  const { error: updErr } = await supabase
+    .from("user_activity")
+    .update({
+      sessions,
+      total_minutes: totalMinutes,
+      last_active_at: Date.now()
+    })
+    .eq("id", id);
+
+  if (updErr) throw new Error(updErr.message);
 }
 
-/** Barcha o'quvchilarning faolligini olish (admin uchun, oxirgi N kun) */
 export async function getAllStudentActivities(daysBack = 7): Promise<UserActivity[]> {
-  // Firestore "in" query 30 ta qiymatgacha qo'llab-quvvatlaydi
-  // 30 dan ko'p bo'lsa, chunklarga bo'lamiz
-  const MAX_IN_VALUES = 30;
   const safeDaysBack = Math.max(1, daysBack);
-
   const now = new Date();
   const dates: string[] = [];
   for (let i = 0; i < safeDaysBack; i++) {
@@ -327,88 +437,135 @@ export async function getAllStudentActivities(daysBack = 7): Promise<UserActivit
     dates.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
   }
 
-  const allActivities: UserActivity[] = [];
+  const { data, error } = await supabase
+    .from("user_activity")
+    .select("*")
+    .in("date", dates)
+    .order("last_active_at", { ascending: false });
 
-  // Chunklarga bo'lib so'rov yuborish
-  for (let i = 0; i < dates.length; i += MAX_IN_VALUES) {
-    const chunk = dates.slice(i, i + MAX_IN_VALUES);
-    const q = query(
-      collection(db, "userActivity"),
-      where("date", "in", chunk),
-      orderBy("lastActiveAt", "desc")
-    );
-    const snap = await getDocs(q);
-    snap.docs.forEach((d) => allActivities.push(d.data() as UserActivity));
-  }
-
-  // Oxirgi faollik bo'yicha tartiblash
-  return allActivities.sort((a, b) => (b.lastActiveAt || 0) - (a.lastActiveAt || 0));
+  if (error || !data) return [];
+  return toCamel<UserActivity[]>(data);
 }
 
-/** Bugungi faol o'quvchilar ro'yxati */
 export async function getTodayActiveStudents(): Promise<UserActivity[]> {
   const dateStr = getTodayDateStr();
-  const q = query(
-    collection(db, "userActivity"),
-    where("date", "==", dateStr),
-    orderBy("lastActiveAt", "desc")
-  );
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => d.data() as UserActivity);
-}
+  const { data, error } = await supabase
+    .from("user_activity")
+    .select("*")
+    .eq("date", dateStr)
+    .order("last_active_at", { ascending: false });
 
+  if (error || !data) return [];
+  return toCamel<UserActivity[]>(data);
+}
 
 // ============ FAVORITE TOPICS (Tanlangan mavzular) ============
 
-/** Mavzuni tanlanganlarga qo'shish */
 export async function addFavoriteTopic(fav: FavoriteTopic): Promise<void> {
-  await setDoc(doc(db, "favorites", fav.id), fav);
+  const userUuid = stringToUUID(fav.userId);
+  const id = `${userUuid}_${fav.topicId}`;
+  
+  const snakeFav = toSnake(fav);
+  snakeFav.id = id;
+  snakeFav.user_id = userUuid;
+
+  const { error } = await supabase
+    .from("favorites")
+    .upsert(snakeFav);
+
+  if (error) throw new Error(error.message);
 }
 
-/** Mavzuni tanlanganlardan o'chirish */
 export async function removeFavoriteTopic(favId: string): Promise<void> {
-  await deleteDoc(doc(db, "favorites", favId));
+  // favId is constructed as ${userId}_${topicId} on client side
+  const parts = favId.split('_');
+  const userUuid = stringToUUID(parts[0]);
+  const topicId = parts[1];
+  const mappedFavId = `${userUuid}_${topicId}`;
+
+  const { error } = await supabase
+    .from("favorites")
+    .delete()
+    .eq("id", mappedFavId);
+
+  if (error) throw new Error(error.message);
 }
 
-/** Foydalanuvchining barcha tanlangan mavzulari */
 export async function getFavoriteTopics(userId: string): Promise<FavoriteTopic[]> {
-  const q = query(collection(db, "favorites"), where("userId", "==", userId));
-  const snap = await getDocs(q);
-  const results = snap.docs.map((d) => d.data() as FavoriteTopic);
-  return results.sort((a, b) => b.createdAt - a.createdAt);
+  const userUuid = stringToUUID(userId);
+  const { data, error } = await supabase
+    .from("favorites")
+    .select("*")
+    .eq("user_id", userUuid)
+    .order("created_at", { ascending: false });
+
+  if (error || !data) return [];
+  return toCamel<FavoriteTopic[]>(data);
 }
 
-/** Bitta mavzu tanlanganmi yoki yo'qligini tekshirish */
 export async function isFavoriteTopic(userId: string, topicId: string): Promise<boolean> {
-  const snap = await getDoc(doc(db, "favorites", `${userId}_${topicId}`));
-  return snap.exists();
+  const userUuid = stringToUUID(userId);
+  const id = `${userUuid}_${topicId}`;
+  
+  const { data, error } = await supabase
+    .from("favorites")
+    .select("id")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error || !data) return false;
+  return true;
 }
 
 // ============ CERTIFICATES (Sertifikatlar) ============
 
-import type { Certificate } from "../types";
-
-const CERTIFICATES_COL = "certificates";
-
 export async function getCertificatesByUser(userId: string): Promise<Certificate[]> {
-  const q = query(collection(db, CERTIFICATES_COL), where("userId", "==", userId));
-  const snap = await getDocs(q);
-  const results = snap.docs.map((d) => d.data() as Certificate);
-  return results.sort((a, b) => b.issuedAt - a.issuedAt);
+  const userUuid = stringToUUID(userId);
+  const { data, error } = await supabase
+    .from("certificates")
+    .select("*")
+    .eq("user_id", userUuid)
+    .order("issued_at", { ascending: false });
+
+  if (error || !data) return [];
+  return toCamel<Certificate[]>(data);
 }
 
 export async function getCertificate(userId: string, courseId: string): Promise<Certificate | null> {
-  const id = `cert-${userId}-${courseId}`;
-  const snap = await getDoc(doc(db, CERTIFICATES_COL, id));
-  return snap.exists() ? (snap.data() as Certificate) : null;
+  const userUuid = stringToUUID(userId);
+  const id = `cert-${userUuid}-${courseId}`;
+  
+  const { data, error } = await supabase
+    .from("certificates")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return toCamel<Certificate>(data);
 }
 
 export async function createCertificate(cert: Certificate): Promise<void> {
-  await setDoc(doc(db, CERTIFICATES_COL, cert.id), cert);
+  const userUuid = stringToUUID(cert.userId);
+  const id = `cert-${userUuid}-${cert.courseId}`;
+
+  const snakeCert = toSnake(cert);
+  snakeCert.id = id;
+  snakeCert.user_id = userUuid;
+
+  const { error } = await supabase
+    .from("certificates")
+    .upsert(snakeCert);
+
+  if (error) throw new Error(error.message);
 }
 
 export async function getAllCertificates(): Promise<Certificate[]> {
-  const snap = await getDocs(collection(db, CERTIFICATES_COL));
-  const results = snap.docs.map((d) => d.data() as Certificate);
-  return results.sort((a, b) => b.issuedAt - a.issuedAt);
+  const { data, error } = await supabase
+    .from("certificates")
+    .select("*")
+    .order("issued_at", { ascending: false });
+
+  if (error || !data) return [];
+  return toCamel<Certificate[]>(data);
 }

@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { X, FolderPlus, Upload, ImageIcon } from "lucide-react";
 import { createFolder, updateFolder, getTopicsByCourse, updateTopic } from "@shared/repositories";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { storage } from "@shared/firebase";
+import { uploadFile } from "@shared/supabase";
 import LoadingButton from "./LoadingButton";
 import type { Folder } from "@shared/types";
 
@@ -55,9 +54,7 @@ export default function CreateFolderModal({ open, courseId, existingCount, editF
       // Muqova rasmini yuklash (agar yangi rasm tanlangan bo'lsa)
       let coverImage = editFolder?.coverImage || "";
       if (coverFile) {
-        const storageRef = ref(storage, `folder-covers/${courseId}/${now}-${coverFile.name}`);
-        await uploadBytes(storageRef, coverFile);
-        coverImage = await getDownloadURL(storageRef);
+        coverImage = await uploadFile("edukids", `folder-covers/${courseId}/${now}-${coverFile.name}`, coverFile);
       }
 
       if (editFolder) {

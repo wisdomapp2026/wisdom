@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Supabase Session Debug</title>
+</head>
+<body>
+    <h1>Supabase Session Debug</h1>
+    <pre id="output"></pre>
+    
+    <script>
+        // Barcha Supabase session ma'lumotlarini ko'rsatish
+        const output = document.getElementById('output');
+        
+        const allKeys = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.includes('supabase')) {
+                allKeys.push(key);
+            }
+        }
+        
+        const data = {};
+        allKeys.forEach(key => {
+            try {
+                data[key] = JSON.parse(localStorage.getItem(key));
+            } catch {
+                data[key] = localStorage.getItem(key);
+            }
+        });
+        
+        output.textContent = JSON.stringify(data, null, 2);
+        
+        if (allKeys.length === 0) {
+            output.textContent = 'Session topilmadi. Login qiling va qaytadan tekshiring.';
+        }
+    </script>
+</body>
+</html>

@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { X, Plus, Trash2, Upload, Clock, Image } from "lucide-react";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { storage } from "@shared/firebase";
+import { uploadFile } from "@shared/supabase";
 
 interface QuestionOption {
   label: string;
@@ -29,12 +28,10 @@ interface Props {
   initialData?: NewQuestion | null;
 }
 
-// Rasmni Firebase Storage ga yuklash
+// Rasmni Supabase Storage ga yuklash
 async function uploadImage(file: File): Promise<string> {
   const fileName = `questions/${Date.now()}-${file.name}`;
-  const storageRef = ref(storage, fileName);
-  await uploadBytes(storageRef, file);
-  return getDownloadURL(storageRef);
+  return uploadFile("edukids", fileName, file);
 }
 
 export default function CreateQuestionModal({ open, onClose, onSave, initialData }: Props) {

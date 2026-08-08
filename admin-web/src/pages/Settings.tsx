@@ -1,8 +1,6 @@
 import { useState, useEffect } from "react";
 import { Save, DollarSign, Globe, Shield, Bell, Palette, Server, User, Check } from "lucide-react";
-import { doc, getDoc, setDoc } from "firebase/firestore";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { db, storage } from "@shared/firebase";
+import { supabase } from "@shared/supabase";
 import LoadingButton from "../components/LoadingButton";
 import type { AuthorInfo, AuthorSocialLink, SocialPlatform } from "@shared/types";
 
@@ -95,9 +93,13 @@ export default function Settings() {
 
   async function loadSettings() {
     try {
-      const snap = await getDoc(doc(db, "settings", "platform"));
-      if (snap.exists()) {
-        setSettings({ ...DEFAULT_SETTINGS, ...snap.data() } as PlatformSettings);
+      const { data, error } = await supabase
+        .from("settings")
+        .select("value")
+        .eq("key", "platform")
+        .maybeSingle();
+      if (!error && data?.value) {
+        setSettings({ ...DEFAULT_SETTINGS, ...data.value } as PlatformSettings);
       }
     } catch (err) {
       console.error(err);
@@ -110,11 +112,15 @@ export default function Settings() {
     setSaving(true);
     setSaved(false);
     try {
-      await setDoc(doc(db, "settings", "platform"), settings);
+      const { error } = await supabase
+        .from("settings")
+        .upsert({ key: "platform", value: settings });
+      if (error) throw error;
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Saqlashda xatolik:", err);
+      alert("Saqlashda xatolik: " + err.message);
     } finally {
       setSaving(false);
     }
@@ -203,15 +209,15 @@ export default function Settings() {
                         if (!file) return;
                         if (file.size > 5 * 1024 * 1024) { alert("Maksimal 5MB!"); return; }
                         try {
-                          const storageRef = ref(storage, `branding/logo-${Date.now()}.${file.name.split('.').pop()}`);
-                          await uploadBytes(storageRef, file);
-                          const url = await getDownloadURL(storageRef);
+                          const filePath = `branding/logo-${Date.now()}.${file.name.split('.').pop()}`;
+                          const { error: uploadErr } = await supabase.storage.from("edukids").upload(filePath, file);
+                          if (uploadErr) throw uploadErr;
+                          const url = supabase.storage.from("edukids").getPublicUrl(filePath).data.publicUrl;
                           updateField("logoUrl", url);
-                          // Avtomatik saqlash — admin alohida "Saqlash" bosmasligiga to'g'ri keladi
-                          await setDoc(doc(db, "settings", "platform"), { ...settings, logoUrl: url });
-                        } catch (err) {
+                          await supabase.from("settings").upsert({ key: "platform", value: { ...settings, logoUrl: url } });
+                        } catch (err: any) {
                           console.error("Logo yuklashda xatolik:", err);
-                          alert("Logo yuklashda xatolik yuz berdi");
+                          alert("Logo yuklashda xatolik: " + err.message);
                         }
                       }}
                     />
@@ -572,11 +578,15 @@ function AuthorEditor() {
 
   async function loadAuthor() {
     try {
-      const snap = await getDoc(doc(db, "settings", "author"));
-      if (snap.exists()) {
-        const data = snap.data() as AuthorInfo;
-        setAuthor(data);
-        if (data.avatarUrl) setAvatarPreview(data.avatarUrl);
+      const { data, error } = await supabase
+        .from("settings")
+        .select("value")
+        .eq("key", "author")
+        .maybeSingle();
+      if (!error && data?.value) {
+        const authorData = data.value as AuthorInfo;
+        setAuthor(authorData);
+        if (authorData.avatarUrl) setAvatarPreview(authorData.avatarUrl);
       }
     } catch (err) {
       console.error(err);
@@ -592,20 +602,25 @@ function AuthorEditor() {
     let avatarUrl = author.avatarUrl || "";
     if (avatarFile) {
       try {
-        const storageRef = ref(storage, `author/avatar-${Date.now()}.jpg`);
-        await uploadBytes(storageRef, avatarFile);
-        avatarUrl = await getDownloadURL(storageRef);
-      } catch (err) {
+        const filePath = `author/avatar-${Date.now()}.jpg`;
+        const { error: uploadErr } = await supabase.storage.from("edukids").upload(filePath, avatarFile);
+        if (uploadErr) throw uploadErr;
+        avatarUrl = supabase.storage.from("edukids").getPublicUrl(filePath).data.publicUrl;
+      } catch (err: any) {
         console.error("Rasm yuklashda xatolik:", err);
       }
     }
 
     try {
-      await setDoc(doc(db, "settings", "author"), { ...author, avatarUrl });
-      setAuthor((prev) => ({ ...prev, avatarUrl }));
+      const updatedAuthor = { ...author, avatarUrl };
+      const { error } = await supabase
+        .from("settings")
+        .upsert({ key: "author", value: updatedAuthor });
+      if (error) throw error;
+      setAuthor(updatedAuthor);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Saqlashda xatolik:", err);
     } finally {
       setSaving(false);

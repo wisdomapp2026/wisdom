@@ -34,12 +34,10 @@ import ErrorBoundary from "./components/ErrorBoundary";
 import { useAuth } from "./hooks/useAuth";
 import { useActivityTracker } from "./hooks/useActivityTracker";
 import { useDeviceSession } from "./hooks/useDeviceSession";
-import { getUserById } from "@shared/repositories";
-import { signOut } from "firebase/auth";
-import { auth, db } from "@shared/firebase";
+import { getUserById, createUser } from "@shared/repositories";
+import { supabase } from "@shared/supabase";
 import { syncLocalProgressToDb, hasLocalProgress } from "./hooks/useLocalProgress";
 import type { User } from "@shared/types";
-import { doc, getDoc } from "firebase/firestore";
 
 export default function App() {
   const { user, loading: authLoading } = useAuth();
@@ -47,27 +45,64 @@ export default function App() {
   const [checkingBan, setCheckingBan] = useState(false);
 
   useEffect(() => {
-    if (user) {
-      setCheckingBan(true);
-      getUserById(user.uid)
-        .then((u) => {
-          if (!u) {
-            // User Firestore dan o'chirilgan — tizimdan chiqarish
-            signOut(auth);
-            return;
-          }
-          setUserData(u);
-        })
-        .catch(console.error)
-        .finally(() => setCheckingBan(false));
-
-      // Login qilganda — local progress ni DB ga sync qilish
-      if (hasLocalProgress()) {
-        syncLocalProgressToDb(user.uid).catch(console.error);
-      }
-    } else {
+    if (!user) {
       setUserData(null);
+      return;
     }
+
+    let cancelled = false;
+    setCheckingBan(true);
+
+    (async () => {
+      try {
+        let profile = await getUserById(user.uid);
+
+        // Profil topilmasa — avval yaratib ko'ramiz (Supabase Auth da hisob bor,
+        // lekin `users` jadvalida yozuv yo'q holati). Faqat yaratish ham
+        // muvaffaqiyatsiz bo'lsa tizimdan chiqaramiz.
+        if (!profile) {
+          // Google/Apple orqali kirgan bo'lsa — email haqiqiy (gmail.com kabi)
+          // Telefon bilan kirgan bo'lsa — email 998...@edukids.uz formatda
+          const isRealEmail = user.email && !user.email.endsWith("@edukids.uz");
+          const phoneFromEmail = !isRealEmail ? (user.email?.split("@")[0] || "") : "";
+          try {
+            await createUser({
+              id: user.uid,
+              phone: phoneFromEmail ? `+${phoneFromEmail}` : (user.email || ""),
+              name: user.displayName || user.email?.split("@")[0] || "O'quvchi",
+              role: "student",
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+            });
+            profile = await getUserById(user.uid);
+          } catch (createErr) {
+            console.error("Profil yaratib bo'lmadi:", createErr);
+          }
+        }
+
+        if (cancelled) return;
+
+        if (!profile) {
+          // Hisob haqiqatan yo'q — sessiyani tugatamiz
+          await supabase.auth.signOut();
+          return;
+        }
+
+        setUserData(profile);
+      } catch (err) {
+        // Tarmoq/vaqtinchalik xato — foydalanuvchini tizimdan CHIQARMAYMIZ
+        console.error("Profilni yuklashda xatolik:", err);
+      } finally {
+        if (!cancelled) setCheckingBan(false);
+      }
+    })();
+
+    // Login qilganda — local (guest) progressni DB ga sync qilish
+    if (hasLocalProgress()) {
+      syncLocalProgressToDb(user.uid).catch(console.error);
+    }
+
+    return () => { cancelled = true; };
   }, [user]);
 
   // O'quvchi faolligini kuzatish (kunlik ishlatish vaqti)
@@ -83,10 +118,13 @@ export default function App() {
 
   async function loadTheme() {
     try {
-      const snap = await getDoc(doc(db, "settings", "platform"));
-      if (snap.exists()) {
-        const data = snap.data();
-        const theme = data.theme;
+      const { data: resData } = await supabase
+        .from("settings")
+        .select("value")
+        .eq("key", "platform")
+        .maybeSingle();
+      if (resData?.value) {
+        const theme = (resData.value as any).theme;
         if (theme) {
           const root = document.documentElement;
           root.style.setProperty("--theme-primary", theme.primaryColor || "#2196F3");

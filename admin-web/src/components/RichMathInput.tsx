@@ -1,7 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { ImageIcon, FunctionSquare, X } from "lucide-react";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { storage } from "@shared/firebase";
+import { uploadFile } from "@shared/supabase";
 
 /**
  * Matematik formulalar va rasm paste qilib yozish uchun rich input.
@@ -196,9 +195,7 @@ export default function RichMathInput({ value, onChange, placeholder, rows = 4, 
     setUploading(true);
     try {
       const fileName = `inline-images/${Date.now()}-${file.name || "paste.png"}`;
-      const storageRef = ref(storage, fileName);
-      await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(storageRef);
+      const url = await uploadFile("edukids", fileName, file);
       insertAtCursor(`[IMG:${url}]`);
     } catch (err) {
       console.error("Rasm yuklashda xatolik:", err);

@@ -3,11 +3,11 @@ import {
   registerDeviceAndEvictOldestIfNeeded,
   updateDeviceHeartbeat,
   cleanupStaleDevices,
+  getUserDevices,
   MAX_DEVICES,
 } from "@shared/repositories";
 import type { DeviceSession } from "@shared/repositories/deviceRepository";
-import { signOut } from "firebase/auth";
-import { auth } from "@shared/firebase";
+import { supabase } from "@shared/supabase";
 
 const DEVICE_ID_KEY = "edukids_device_id";
 const HEARTBEAT_INTERVAL = 30000; // 30 soniya
@@ -64,6 +64,7 @@ export function useDeviceSession(userId: string | undefined): DeviceSessionState
     if (!userId) {
       setChecking(false);
       setAllowed(true);
+      setActiveDevices([]);
       return;
     }
 
@@ -71,26 +72,36 @@ export function useDeviceSession(userId: string | undefined): DeviceSessionState
 
     async function checkAndRegister() {
       try {
+        // Eskirgan (2 daqiqadan beri heartbeat yubormagan) qurilmalarni tozalash
         await cleanupStaleDevices(userId!);
 
-        // Qurilmani ro'yxatga olish / auto-evict (4-qurilma kirsa 1-si avtomatik o'chiriladi)
+        // Qurilmani ro'yxatga olish / auto-evict
+        // (4-qurilma kirsa, eng eski qurilma avtomatik o'chiriladi)
         const result = await registerDeviceAndEvictOldestIfNeeded(userId!, deviceId, deviceName);
         if (cancelled) return;
 
         setAllowed(result.allowed);
 
-        // Heartbeat boshlash
+        const devices = await getUserDevices(userId!);
+        if (!cancelled) setActiveDevices(devices);
+
+        // Heartbeat — har 30 soniyada "men tirikman" signali
         intervalRef.current = setInterval(async () => {
           const active = await updateDeviceHeartbeat(userId!, deviceId);
-          // Agar sessiya o'chirilgan bo'lsa (admin kick qilgan yoki 4-qurilma kirgan bo'lsa) — avtomatik logout
+          // Sessiya o'chirilgan bo'lsa (admin kick qilgan yoki 4-qurilma kirgan) — avtomatik chiqish
           if (!active) {
+            if (intervalRef.current) {
+              clearInterval(intervalRef.current);
+              intervalRef.current = null;
+            }
             console.warn("Sessiya tugatildi — tizimdan chiqilmoqda...");
-            signOut(auth);
+            supabase.auth.signOut();
           }
         }, HEARTBEAT_INTERVAL);
       } catch (err) {
-        console.error("Device session error:", err);
-        setAllowed(true);
+        // Qurilma kuzatuvi xato bersa — foydalanuvchini blokllamaymiz
+        console.error("Qurilma sessiyasi xatosi:", err);
+        if (!cancelled) setAllowed(true);
       }
     }
 

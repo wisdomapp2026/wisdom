@@ -1,35 +1,40 @@
-/**
- * Category Repository — Kategoriyalar uchun Firestore CRUD
- */
-import {
-  collection,
-  doc,
-  getDocs,
-  setDoc,
-  updateDoc,
-  deleteDoc,
-  query,
-  orderBy,
-} from "firebase/firestore";
-import { db } from "../firebase";
+import { supabase, toCamel, toSnake } from "../supabase";
 import type { Category } from "../types";
 
-const CATEGORIES_COL = "categories";
-
 export async function getAllCategories(): Promise<Category[]> {
-  const q = query(collection(db, CATEGORIES_COL), orderBy("order", "asc"));
-  const snap = await getDocs(q);
-  return snap.docs.map((d) => d.data() as Category);
+  const { data, error } = await supabase
+    .from("categories")
+    .select("*")
+    .order("order", { ascending: true });
+
+  if (error || !data) return [];
+  return toCamel<Category[]>(data);
 }
 
 export async function createCategory(category: Category): Promise<void> {
-  await setDoc(doc(db, CATEGORIES_COL, category.id), category);
+  const snakeCategory = toSnake(category);
+  const { error } = await supabase
+    .from("categories")
+    .upsert(snakeCategory);
+
+  if (error) throw new Error(error.message);
 }
 
 export async function updateCategory(categoryId: string, data: Partial<Category>): Promise<void> {
-  await updateDoc(doc(db, CATEGORIES_COL, categoryId), data);
+  const snakeData = toSnake(data);
+  const { error } = await supabase
+    .from("categories")
+    .update(snakeData)
+    .eq("id", categoryId);
+
+  if (error) throw new Error(error.message);
 }
 
 export async function deleteCategory(categoryId: string): Promise<void> {
-  await deleteDoc(doc(db, CATEGORIES_COL, categoryId));
+  const { error } = await supabase
+    .from("categories")
+    .delete()
+    .eq("id", categoryId);
+
+  if (error) throw new Error(error.message);
 }

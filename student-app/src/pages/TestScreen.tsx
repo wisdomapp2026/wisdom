@@ -44,6 +44,9 @@ export default function TestScreen() {
   const finishingRef = useRef(false); // dublikat finish oldini olish
   // Har bir savol uchun shuffle qilingan options tartibini saqlash
   const [shuffledOptionsMap, setShuffledOptionsMap] = useState<Record<string, ShuffledOption[]>>({});
+  const [skipWarning, setSkipWarning] = useState(false);
+  const [reviewMode, setReviewMode] = useState(false); // Belgilanmagan savollarga qaytish rejimi
+  const [finishConfirm, setFinishConfirm] = useState<{ unansweredCount: number } | null>(null);
 
   useEffect(() => {
     if (!testId) return;
@@ -154,19 +157,54 @@ export default function TestScreen() {
   const seconds = timeLeft % 60;
 
   function selectAnswer(label: string) {
-    if (finished) return; // Yakunlangan testda javob berish mumkin emas
+    if (finished) return;
     setSelected(label);
     setAnswers({ ...answers, [q.id]: label });
+    setSkipWarning(false);
   }
 
   function goNext() {
     if (finished) return;
+
+    // Variant belgilanmagan — eslatish
+    if (!answers[q.id] && !selected) {
+      if (!skipWarning) {
+        setSkipWarning(true);
+        return; // birinchi bosishda faqat ogohlantirish ko'rsatiladi
+      }
+      // Ikkinchi bosishda o'tkazib yuboriladi
+    }
+    setSkipWarning(false);
+
     if (current < questions.length - 1) {
       setCurrent(current + 1);
       setSelected(answers[questions[current + 1]?.id] || null);
     } else {
-      finishTest();
+      // Oxirgi savol — belgilanmagan savollar bormi?
+      handleFinishAttempt();
     }
+  }
+
+  /** Testni yakunlashga urinish — belgilanmagan savollar bo'lsa qayta yo'naltirish */
+  function handleFinishAttempt() {
+    const unanswered = questions.filter((qq) => !answers[qq.id]);
+
+    if (unanswered.length > 0 && !reviewMode) {
+      // Birinchi marta — belgilanmagan savollarga qaytarish
+      setReviewMode(true);
+      const firstUnansweredIdx = questions.findIndex((qq) => !answers[qq.id]);
+      setCurrent(firstUnansweredIdx);
+      setSelected(null);
+      return;
+    }
+
+    if (unanswered.length > 0) {
+      // Review rejimda ham hali bor — modal ko'rsatish
+      setFinishConfirm({ unansweredCount: unanswered.length });
+      return;
+    }
+
+    finishTest();
   }
 
   async function finishTest() {
@@ -267,9 +305,7 @@ export default function TestScreen() {
             </div>
             <button
               onClick={() => {
-                if (confirm("Testni yakunlashga ishonchingiz komilmi? Javoblar saqlanadi.")) {
-                  finishTest();
-                }
+                handleFinishAttempt();
               }}
               disabled={finished}
               className="bg-red-500 text-white text-xs font-semibold px-3 py-1.5 rounded-full active:bg-red-600 disabled:opacity-50"
@@ -315,7 +351,7 @@ export default function TestScreen() {
       </div>
 
       {/* Options */}
-      <div className="px-5 mt-6 space-y-3 flex-1">
+      <div className="px-5 mt-6 space-y-3 flex-1 overflow-x-hidden">
         {(() => {
           const currentOptions: ShuffledOption[] = shuffledOptionsMap[q.id] || (q.options || []).map((opt, idx) => ({
             displayLabel: OPTION_LABELS[idx] || opt.label || String.fromCharCode(65 + idx),
@@ -330,16 +366,16 @@ export default function TestScreen() {
                 key={opt.displayLabel}
                 onClick={() => selectAnswer(opt.originalLabel)}
                 disabled={finished}
-                className={`w-full flex items-center px-5 py-4 rounded-xl border transition-all text-left ${
+                className={`w-full flex items-center px-4 py-3.5 rounded-xl border transition-all text-left overflow-hidden ${
                   isSelected ? "border-primary-500 bg-primary-50" : "border-gray-200 bg-white hover:border-gray-300"
                 } ${finished ? "opacity-60 cursor-not-allowed" : ""}`}
               >
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-4 text-sm font-bold shrink-0 ${
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center mr-3 text-sm font-bold shrink-0 ${
                   isSelected ? "bg-primary-500 text-white" : "bg-gray-100 text-gray-600"
                 }`}>
                   {opt.displayLabel}
                 </div>
-                <span className={`text-base ${isSelected ? "text-primary-700 font-medium" : "text-gray-700"}`}>
+                <span className={`text-sm break-words overflow-hidden min-w-0 ${isSelected ? "text-primary-700 font-medium" : "text-gray-700"}`}>
                   <LatexText text={opt.text} />
                 </span>
               </button>
@@ -349,14 +385,75 @@ export default function TestScreen() {
       </div>
 
       {/* Navigation */}
+      {skipWarning && (
+        <div className="mx-5 mb-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 animate-in fade-in">
+          <p className="text-xs text-amber-700 font-medium">⚠️ Variant belgilanmagan! Qayta bosing — o'tkazib yuboriladi.</p>
+        </div>
+      )}
       <div className="px-5 py-4 flex items-center justify-between border-t border-gray-100 mt-auto">
         <button onClick={goPrev} disabled={current === 0} className="flex items-center gap-1 text-sm text-gray-400 disabled:opacity-40">
           <ChevronLeft size={16} /> Oldingi
         </button>
-        <button onClick={goNext} disabled={finished} className="bg-primary-500 text-white font-bold text-sm px-6 py-3 rounded-xl flex items-center gap-2 disabled:opacity-50">
-          {current === questions.length - 1 ? "Tugatish" : "Keyingi savol"} <ChevronRight size={16} />
-        </button>
+        <div className="flex items-center gap-2">
+          {reviewMode && (
+            <span className="text-[10px] text-amber-600 font-medium bg-amber-50 px-2 py-1 rounded-full">
+              {questions.filter((qq) => !answers[qq.id]).length} ta belgilanmagan
+            </span>
+          )}
+          <button onClick={goNext} disabled={finished} className="bg-primary-500 text-white font-bold text-sm px-6 py-3 rounded-xl flex items-center gap-2 disabled:opacity-50">
+            {current === questions.length - 1 ? "Tugatish" : "Keyingi savol"} <ChevronRight size={16} />
+          </button>
+        </div>
       </div>
+
+      {/* Yakunlash tasdiqlash modali */}
+      {finishConfirm && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-5">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 shadow-2xl text-center">
+            {/* Icon */}
+            <div className="w-16 h-16 bg-amber-50 border-4 border-amber-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <span className="text-3xl">⚠️</span>
+            </div>
+
+            {/* Sarlavha */}
+            <h3 className="text-lg font-bold text-gray-900 mb-2">Testni yakunlaysizmi?</h3>
+
+            {/* Tafsilot */}
+            <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 mb-5">
+              <p className="text-sm text-amber-800 font-semibold">
+                {finishConfirm.unansweredCount} ta savolga javob belgilanmagan
+              </p>
+              <p className="text-xs text-amber-700 mt-1">
+                Belgilanmagan savollar noto'g'ri hisoblanadi va ball berilmaydi.
+              </p>
+            </div>
+
+            {/* Tugmalar */}
+            <div className="flex flex-col gap-2.5">
+              <button
+                onClick={() => {
+                  setFinishConfirm(null);
+                  // Birinchi belgilanmagan savolga qaytarish
+                  const idx = questions.findIndex((qq) => !answers[qq.id]);
+                  if (idx >= 0) { setCurrent(idx); setSelected(null); }
+                }}
+                className="w-full bg-primary-500 text-white py-3 rounded-xl font-bold text-sm active:scale-[0.98] transition-transform"
+              >
+                ← Javob berishga qaytish
+              </button>
+              <button
+                onClick={() => {
+                  setFinishConfirm(null);
+                  finishTest();
+                }}
+                className="w-full bg-red-50 border border-red-200 text-red-600 py-3 rounded-xl font-semibold text-sm active:scale-[0.98] transition-transform"
+              >
+                Shunda ham yakunlash
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

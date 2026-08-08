@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { Plus, Edit, Trash2, Eye, EyeOff, X, Star, Quote, User as UserIcon } from "lucide-react";
 import { getAllTestimonials, createTestimonial, updateTestimonial, deleteTestimonial } from "@shared/repositories";
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { storage } from "@shared/firebase";
+import { uploadFile } from "@shared/supabase";
 import type { Testimonial } from "@shared/types";
 import LoadingButton from "../components/LoadingButton";
 
@@ -50,9 +49,11 @@ export default function Testimonials() {
 
     let avatarUrl = editItem?.avatarUrl || "";
     if (avatarFile) {
-      const storageRef = ref(storage, `testimonials/${now}-${avatarFile.name}`);
-      await uploadBytes(storageRef, avatarFile);
-      avatarUrl = await getDownloadURL(storageRef);
+      try {
+        avatarUrl = await uploadFile("edukids", `testimonials/${now}-${avatarFile.name}`, avatarFile);
+      } catch (err: any) {
+        console.error("Avatar yuklashda xatolik:", err);
+      }
     }
 
     try {
