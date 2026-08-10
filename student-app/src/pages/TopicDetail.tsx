@@ -48,6 +48,8 @@ export default function TopicDetail() {
   const [isFavorite, setIsFavorite] = useState(false);
   const [favLoading, setFavLoading] = useState(false);
   const [viewedCount, setViewedCount] = useState(0);
+  const [showGoToModal, setShowGoToModal] = useState(false);
+  const [goToValue, setGoToValue] = useState("");
   const viewedRef = useRef(new Set<string>());
   const [topicOnlineUsers, setTopicOnlineUsers] = useState<Array<{ avatar?: string; name?: string }>>([]);
   const presenceRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -522,6 +524,36 @@ export default function TopicDetail() {
     }
   }
 
+  async function handleGoTo() {
+    const num = parseInt(goToValue, 10);
+    if (!num || num < 1 || num > totalProblemsCount) return;
+
+    // Agar misol hali yuklanmagan bo'lsa — yuklab olish
+    if (num > problems.length) {
+      loadingMoreRef.current = true;
+      try {
+        const result = await getProblemsByTopicPaged(courseId!, topicId!, 0, num);
+        const filtered = result.problems.filter((x: any) => !x.isHidden);
+        setProblems(filtered);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        loadingMoreRef.current = false;
+      }
+    }
+
+    setShowGoToModal(false);
+    setGoToValue("");
+
+    // Scroll to misol
+    setTimeout(() => {
+      const el = document.getElementById(`problem-${num - 1}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 100);
+  }
+
   return (
     <div className="page-content bg-gray-50">
       {/* Header */}
@@ -590,8 +622,52 @@ export default function TopicDetail() {
       {/* Misollar */}
       <div className="px-5 mt-6 flex justify-between items-center mb-4">
         <h3 className="font-bold text-gray-900">Misollar</h3>
-        <span className="text-sm text-gray-400">{problems.length} ta</span>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-400">{problems.length} / {totalProblemsCount} ta</span>
+          <button
+            onClick={() => setShowGoToModal(true)}
+            className="text-xs bg-primary-50 text-primary-600 font-medium px-2.5 py-1.5 rounded-lg active:bg-primary-100"
+          >
+            # O'tish
+          </button>
+        </div>
       </div>
+
+      {/* Go to modal */}
+      {showGoToModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setShowGoToModal(false)} />
+          <div className="relative bg-white rounded-2xl p-6 w-[85%] max-w-xs shadow-xl">
+            <h4 className="font-bold text-gray-900 text-center mb-1">Misolga o'tish</h4>
+            <p className="text-xs text-gray-500 text-center mb-4">1 dan {totalProblemsCount} gacha raqam kiriting</p>
+            <input
+              type="number"
+              min={1}
+              max={totalProblemsCount}
+              value={goToValue}
+              onChange={(e) => setGoToValue(e.target.value)}
+              placeholder="Masalan: 25"
+              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-center text-lg font-bold focus:outline-none focus:ring-2 focus:ring-primary-500"
+              autoFocus
+              onKeyDown={(e) => { if (e.key === "Enter") handleGoTo(); }}
+            />
+            <div className="flex gap-3 mt-4">
+              <button
+                onClick={() => setShowGoToModal(false)}
+                className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-600"
+              >
+                Bekor
+              </button>
+              <button
+                onClick={handleGoTo}
+                className="flex-1 py-2.5 bg-primary-500 text-white rounded-xl text-sm font-semibold"
+              >
+                O'tish →
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="px-5 space-y-4">
         {problems.map((p, i) => {
@@ -609,6 +685,7 @@ export default function TopicDetail() {
               onPlayVideo={(url) => { setVideoUrl(url); setShowVideoModal(true); }}
               onSolutionViewed={handleProblemCompleted}
               onVisible={handleProblemVisible}
+              id={`problem-${i}`}
             />
           );
         })}
@@ -791,11 +868,12 @@ function TopicIntroCard({ introduction, onPlayVideo }: { introduction: NonNullab
 
 
 // ===== StudentProblemCard — flip effekti bilan =====
-function StudentProblemCard({ problem, index, isPremium, isLoggedIn, onRequireAuth, onPremiumClick, onPlayVideo, onSolutionViewed, onVisible }: {
+function StudentProblemCard({ problem, index, isPremium, isLoggedIn, onRequireAuth, onPremiumClick, onPlayVideo, onSolutionViewed, onVisible, id }: {
   problem: Problem; index: number; isPremium: boolean; isLoggedIn: boolean;
   onRequireAuth: () => void;
   onPremiumClick: () => void; onPlayVideo: (url: string) => void; onSolutionViewed: (problemId: string) => void;
   onVisible?: (problemId: string) => void;
+  id?: string;
 }) {
   const [flipped, setFlipped] = useState(false);
   const [visibleSteps, setVisibleSteps] = useState(1);
@@ -817,6 +895,7 @@ function StudentProblemCard({ problem, index, isPremium, isLoggedIn, onRequireAu
   return (
     <div
       ref={cardRef}
+      id={id}
       className={`bg-white rounded-xl border transition-all overflow-hidden ${isPremium ? "border-yellow-100" : flipped ? "border-blue-300 ring-1 ring-blue-200" : "border-gray-100"}`}
     >
       {/* FRONT — Misol (flipped bo'lganda yashiriladi) */}

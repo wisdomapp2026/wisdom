@@ -40,3 +40,5 @@ EDUKIDS SKRINSHOT/
 
 # Local Netlify folder
 .netlify
+.vercel
+.env*
