@@ -71,13 +71,14 @@ export default function TestScreen() {
         setTest(match.test);
         setCourseId(match.courseId);
         setCourseName(courses.find(c => c.id === match.courseId)?.title || "");
-        setTimeLeft(match.test.totalTime * 60);
-        // Javob variantlarini shuffle qilish (bir marta) — variant matnlari almashadi, lekin A B C D label tartibi saqlanadi
+        setTimeLeft((match.test as any).timerEnabled === false ? 0 : match.test.totalTime * 60);
+        // Javob variantlarini shuffle qilish — faqat admin yoqgan bo'lsa
+        const shouldShuffleOptions = (match.test as any).shuffleOptions === true;
         const optionsMap: Record<string, ShuffledOption[]> = {};
         for (const question of match.test.questions || []) {
           if (question.options && question.options.length > 0) {
-            const shuffledRaw = shuffleArray([...question.options]);
-            optionsMap[question.id] = shuffledRaw.map((opt, idx) => ({
+            const rawOptions = shouldShuffleOptions ? shuffleArray([...question.options]) : [...question.options];
+            optionsMap[question.id] = rawOptions.map((opt, idx) => ({
               displayLabel: OPTION_LABELS[idx] || String.fromCharCode(65 + idx),
               originalLabel: opt.label,
               text: opt.text,
@@ -297,12 +298,14 @@ export default function TestScreen() {
             {courseName && <p className="text-[11px] text-primary-500 font-medium truncate">{courseName}</p>}
           </div>
           <div className="flex items-center gap-2">
+            {timeLeft > 0 && (
             <div className={`px-3 py-1.5 rounded-full flex items-center gap-1 ${timeLeft <= 60 ? "bg-red-50" : "bg-primary-50"} ${timeLeft <= 10 && timeLeft > 0 ? "animate-shake" : ""}`}>
               <span className={`text-xs ${timeLeft <= 60 ? "text-red-500" : "text-primary-500"}`}>⏱</span>
               <span className={`font-bold text-sm ${timeLeft <= 60 ? "text-red-500 animate-pulse" : "text-primary-500"}`}>
                 {String(minutes).padStart(2, "0")}:{String(seconds).padStart(2, "0")}
               </span>
             </div>
+            )}
             <button
               onClick={() => {
                 handleFinishAttempt();
