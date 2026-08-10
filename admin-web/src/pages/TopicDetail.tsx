@@ -65,11 +65,10 @@ export default function TopicDetail() {
       ...problems.map((p) => ({ type: "problem" as const, data: p })),
       ...tests.map((t) => ({ type: "test" as const, data: t })),
     ];
-    // Misol order va test order (afterTopicOrder * 1000 + idx sifatida) bo'yicha tartiblash
-    // Amalda: problems.order va testlar uchun katta raqam (misol oxirida turishi uchun — agar maxsus order yo'q bo'lsa)
+    // Misol order va test order (internalOrder yoki afterTopicOrder * 1000) bo'yicha tartiblash
     items.sort((a, b) => {
-      const orderA = a.type === "problem" ? a.data.order : ((a.data as Test).afterTopicOrder || 0) * 1000 + 999;
-      const orderB = b.type === "problem" ? b.data.order : ((b.data as Test).afterTopicOrder || 0) * 1000 + 999;
+      const orderA = a.type === "problem" ? a.data.order : ((a.data as Test).internalOrder || (a.data as Test).afterTopicOrder || 0) * 1000 + 999;
+      const orderB = b.type === "problem" ? b.data.order : ((b.data as Test).internalOrder || (b.data as Test).afterTopicOrder || 0) * 1000 + 999;
       return orderA - orderB;
     });
     setCombinedItems(items);
@@ -135,9 +134,9 @@ export default function TopicDetail() {
         if (item.type === "problem") {
           await updateProblem(courseId, topicId, item.data.id, { order: newOrder });
         } else {
-          // Test uchun — afterTopicOrder ni topic.order ga o'xshash qilib, lekin tartibni saqlab qo'yamiz
-          // TestBuilder logikasiga mos: test.afterTopicOrder shu modul order'i, lekin biz uning ichki tartibini boshqaramiz
-          await updateTest(courseId, item.data.id, { afterTopicOrder: topic!.order } as any);
+          // Test uchun — afterTopicOrder ni saqlaymiz (qaysi topic'ga tegishli ekanini ko'rsatadi)
+          // internalOrder — shu topic ichidagi tartib (misollar orasidagi joy)
+          await updateTest(courseId, item.data.id, { afterTopicOrder: topic!.order, internalOrder: newOrder } as any);
         }
       }
       setOrderChanged(false);

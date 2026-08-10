@@ -103,7 +103,8 @@ export default function FolderDetail() {
 
       const topics = allTopics.filter((t) => !t.isHidden && t.folderId === folderId);
       const advices = allAdvices.filter((a) => a.folderId === folderId);
-      const tests = allTests.filter((t) => t.status === "published" && t.folderId === folderId);
+      // Faqat mavzu ichiga tegishli bo'lmagan testlarni ko'rsatish (afterTopicOrder bor bo'lsa — u mavzu ichida ko'rinadi)
+      const tests = allTests.filter((t) => t.status === "published" && t.folderId === folderId && t.afterTopicOrder == null);
 
       // Agar papka premium bo'lsa va unda birorta ham bepul dars bo'lmasa, hamda o'quvchida obuna bo'lmasa — obuna sotib olish sahifasiga yo'naltiramiz
       const hasFreeTopic = topics.some((t) => !t.isPremium);

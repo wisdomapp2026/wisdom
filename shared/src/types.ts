@@ -239,6 +239,7 @@ export interface Test {
   totalTime: number; // daqiqalarda
   questions: Question[];
   afterTopicOrder?: number; // qaysi mavzudan keyin, null = kurs oxirida
+  internalOrder?: number; // mavzu ichidagi tartib (drag-drop bilan o'zgartiriladi)
   createdAt: number;
   updatedAt: number;
   createdBy: string;

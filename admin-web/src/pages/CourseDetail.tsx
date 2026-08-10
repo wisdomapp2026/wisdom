@@ -76,11 +76,14 @@ export default function CourseDetail() {
       list.push({ type: "topic", data: t, order: t.order });
     }
     for (const t of tests) {
-      const order = t.afterTopicOrder != null ? t.afterTopicOrder + 0.5 : 99999;
+      // Agar test afterTopicOrder ga ega bo'lsa — u mavzu ichida ko'rinadi (TopicDetail),
+      // modul ro'yxatida ko'rsatilMAYDI
+      if (t.afterTopicOrder != null) continue;
+      const order = 99999;
       list.push({ type: "test", data: t, order });
     }
     for (const a of advices) {
-      const order = a.afterTopicOrder + 0.3; // moduldan keyin, testdan oldin
+      const order = a.afterTopicOrder + 0.3;
       list.push({ type: "advice", data: a, order });
     }
     list.sort((a, b) => a.order - b.order);
