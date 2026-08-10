@@ -80,14 +80,21 @@ export default function TestScreen() {
       }
 
       if (match) {
-        setTest(match.test);
+        // Savollar shuffle — admin yoqqan bo'lsa
+        const shouldShuffleQuestions = match.test.shuffleQuestions === true;
+        const finalQuestions = shouldShuffleQuestions
+          ? shuffleArray([...match.test.questions || []])
+          : [...(match.test.questions || [])];
+        const testWithShuffled = { ...match.test, questions: finalQuestions };
+
+        setTest(testWithShuffled);
         setCourseId(match.courseId);
         setCourseName(courses.find(c => c.id === match.courseId)?.title || "");
         setTimeLeft((match.test as any).timerEnabled === false ? 0 : match.test.totalTime * 60);
         // Javob variantlarini shuffle qilish — faqat admin yoqgan bo'lsa
         const shouldShuffleOptions = (match.test as any).shuffleOptions === true;
         const optionsMap: Record<string, ShuffledOption[]> = {};
-        for (const question of match.test.questions || []) {
+        for (const question of finalQuestions) {
           if (question.options && question.options.length > 0) {
             const rawOptions = shouldShuffleOptions ? shuffleArray([...question.options]) : [...question.options];
             optionsMap[question.id] = rawOptions.map((opt, idx) => ({
