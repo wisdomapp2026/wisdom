@@ -439,9 +439,24 @@ export default function FolderDetail() {
         {items.length === 0 ? (
           <p className="text-center text-sm text-gray-400 py-10">Bu bo'lim hozircha bo'sh</p>
         ) : (
-          items.map((item, idx) => renderItem(item, idx))
+          items.filter((it) => it.type !== "test").map((item, idx) => renderItem(item, idx))
         )}
       </div>
+
+      {/* Testlar bo'limi — alohida */}
+      {items.filter((it) => it.type === "test").length > 0 && (
+        <>
+          <div className="px-5 mt-6 flex items-center">
+            <div className="flex items-center gap-2">
+              <FileText className="w-4 h-4 text-orange-500" />
+              <h3 className="text-base font-bold text-gray-900">Testlar</h3>
+            </div>
+          </div>
+          <div className="px-5 mt-3 space-y-2.5">
+            {items.filter((it) => it.type === "test").map((item, idx) => renderItem(item, idx))}
+          </div>
+        </>
+      )}
 
       {lockToast && (
         <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 bg-gray-900 text-white text-xs font-medium px-4 py-3 rounded-xl shadow-lg flex items-center gap-2 max-w-[85%] animate-fadeIn">
