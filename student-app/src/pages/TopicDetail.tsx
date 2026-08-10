@@ -670,41 +670,47 @@ export default function TopicDetail() {
       )}
 
       <div className="px-5 space-y-4">
-        {problems.map((p, i) => {
-          const isPremium = p.isPremium === true;
+        {(() => {
+          // Testlarni misollar orasiga internalOrder bo'yicha joylashtirish
+          type RenderItem = { type: "problem"; data: typeof problems[0]; order: number } | { type: "test"; data: typeof topicTests[0]; order: number };
+          const combined: RenderItem[] = [];
 
-          return (
-            <StudentProblemCard
-              key={p.id}
-              problem={p}
-              index={i}
-              isPremium={isPremium}
-              isLoggedIn={isLoggedIn}
-              onRequireAuth={() => setShowAuthModal(true)}
-              onPremiumClick={handlePremiumClick}
-              onPlayVideo={(url) => { setVideoUrl(url); setShowVideoModal(true); }}
-              onSolutionViewed={handleProblemCompleted}
-              onVisible={handleProblemVisible}
-              id={`problem-${i}`}
-            />
-          );
-        })}
+          problems.forEach((p, i) => {
+            combined.push({ type: "problem", data: p, order: p.order || (i + 1) });
+          });
 
-        {/* Lazy load sentinel — 15-misol atrofida joylashadi, keyingi sahifa DB dan yuklanadi */}
-        {problems.length < totalProblemsCount && (
-          <div ref={loadMoreRef} className="flex items-center justify-center py-6">
-            <div className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
-            <span className="ml-2 text-sm text-gray-400">Yuklanmoqda...</span>
-          </div>
-        )}
-      </div>
+          // internalOrder bor testlarni misollar orasiga qo'shish
+          topicTests.forEach((t) => {
+            if ((t as any).internalOrder != null) {
+              combined.push({ type: "test", data: t, order: (t as any).internalOrder });
+            }
+          });
 
-      {/* Modul testlari — admin qo'shgan testlar */}
-      {topicTests.length > 0 && (
-        <div className="px-5 mt-6">
-          <h3 className="font-bold text-gray-900 mb-3">Testlar</h3>
-          <div className="space-y-3">
-            {topicTests.map((test) => {
+          combined.sort((a, b) => a.order - b.order);
+
+          let problemIndex = 0;
+          return combined.map((item, idx) => {
+            if (item.type === "problem") {
+              const p = item.data as typeof problems[0];
+              const isPremium = p.isPremium === true;
+              const currentIdx = problemIndex++;
+              return (
+                <StudentProblemCard
+                  key={p.id}
+                  problem={p}
+                  index={currentIdx}
+                  isPremium={isPremium}
+                  isLoggedIn={isLoggedIn}
+                  onRequireAuth={() => setShowAuthModal(true)}
+                  onPremiumClick={handlePremiumClick}
+                  onPlayVideo={(url) => { setVideoUrl(url); setShowVideoModal(true); }}
+                  onSolutionViewed={handleProblemCompleted}
+                  onVisible={handleProblemVisible}
+                  id={`problem-${currentIdx}`}
+                />
+              );
+            } else {
+              const test = item.data as typeof topicTests[0];
               const testLocked = test.isPremium && !isLoggedIn;
               return (
                 <Link
@@ -717,9 +723,48 @@ export default function TopicDetail() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-gray-900 text-sm truncate">{test.title}</p>
-                    <p className="text-[10px] text-primary-500 font-medium truncate mt-0.5">
-                      {topic ? cleanTopicTitle(topic.title) : ""}
-                    </p>
+                    <div className="flex items-center gap-3 mt-1">
+                      <span className="text-[10px] text-gray-500">❓ {test.questions?.length || 0} savol</span>
+                      <span className="text-[10px] text-gray-500">⏱ {test.totalTime} daqiqa</span>
+                      <span className="text-[10px] text-orange-600 font-medium">Test</span>
+                    </div>
+                  </div>
+                  <span className={`text-[11px] font-semibold px-3 py-1.5 rounded-lg shrink-0 ${testLocked ? "bg-yellow-500 text-white" : "bg-primary-500 text-white"}`}>
+                    {testLocked ? "🔒 Sotib olish" : "Boshlash"}
+                  </span>
+                </Link>
+              );
+            }
+          });
+        })()}
+
+        {/* Lazy load sentinel */}
+        {problems.length < totalProblemsCount && (
+          <div ref={loadMoreRef} className="flex items-center justify-center py-6">
+            <div className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+            <span className="ml-2 text-sm text-gray-400">Yuklanmoqda...</span>
+          </div>
+        )}
+      </div>
+
+      {/* internalOrder yo'q testlar — alohida bo'limda ko'rsatish */}
+      {topicTests.filter(t => (t as any).internalOrder == null).length > 0 && (
+        <div className="px-5 mt-6">
+          <h3 className="font-bold text-gray-900 mb-3">Testlar</h3>
+          <div className="space-y-3">
+            {topicTests.filter(t => (t as any).internalOrder == null).map((test) => {
+              const testLocked = test.isPremium && !isLoggedIn;
+              return (
+                <Link
+                  to={testLocked ? "/premium-gate" : `/test/${test.id}`}
+                  key={test.id}
+                  className={`flex items-center border rounded-xl p-4 gap-3 hover:shadow-sm transition-shadow ${testLocked ? "border-yellow-200 bg-yellow-50/30" : "border-orange-100 bg-orange-50/30"}`}
+                >
+                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${testLocked ? "bg-yellow-100" : "bg-orange-100"}`}>
+                    {testLocked ? <Lock size={18} className="text-yellow-500" /> : <FileText size={20} className="text-orange-500" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-gray-900 text-sm truncate">{test.title}</p>
                     <div className="flex items-center gap-3 mt-1">
                       <span className="text-[10px] text-gray-500">❓ {test.questions?.length || 0} savol</span>
                       <span className="text-[10px] text-gray-500">⏱ {test.totalTime} daqiqa</span>
