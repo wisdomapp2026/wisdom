@@ -45,7 +45,7 @@ export default function Login({ onLogin }: LoginProps) {
               <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">EduKids Admin</h1>
+          <h1 className="text-2xl font-bold text-gray-900">tushunGo Admin</h1>
           <p className="text-sm text-gray-500 mt-1">Boshqaruv panelga kirish</p>
         </div>
 

@@ -172,7 +172,7 @@ export default function App() {
       <div className="page-content flex items-center justify-center min-h-screen">
         <div className="flex flex-col items-center gap-3">
           <div className="w-12 h-12 border-[3px] border-primary-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm text-gray-400">EduKids yuklanmoqda...</p>
+          <p className="text-sm text-gray-400">tushunGo yuklanmoqda...</p>
         </div>
       </div>
     );

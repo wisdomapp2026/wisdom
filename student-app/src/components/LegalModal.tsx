@@ -14,7 +14,7 @@ Oxirgi yangilanish: 2024-yil, 1-dekabr
 
 1. UMUMIY QOIDALAR
 
-1.1. Ushbu foydalanish shartlari (keyingi o'rinlarda – "Shartlar") EduKids mobil ilovasi (keyingi o'rinlarda – "Ilova") va uning xizmatlaridan foydalanish qoidalarini belgilaydi.
+1.1. Ushbu foydalanish shartlari (keyingi o'rinlarda – "Shartlar") tushunGo mobil ilovasi (keyingi o'rinlarda – "Ilova") va uning xizmatlaridan foydalanish qoidalarini belgilaydi.
 
 1.2. Ilovadan foydalanish orqali siz ushbu Shartlarga rozilik bildirasiz. Agar siz Shartlarga rozi bo'lmasangiz, iltimos, Ilovadan foydalanmang.
 
@@ -64,7 +64,7 @@ Oxirgi yangilanish: 2024-yil, 1-dekabr
 
 6. INTELLEKTUAL MULK
 
-6.1. Ilovadagi barcha materiallar (darslar, testlar, rasmlar, videolar) EduKids mulki hisoblanadi.
+6.1. Ilovadagi barcha materiallar (darslar, testlar, rasmlar, videolar) tushunGo mulki hisoblanadi.
 
 6.2. Materiallarni ruxsatsiz nusxalash, tarqatish yoki qayta nashr etish taqiqlanadi.
 
@@ -86,9 +86,9 @@ Oxirgi yangilanish: 2024-yil, 1-dekabr
 
 9. ALOQA
 
-Savollar yoki shikoyatlar uchun: support@edukids.uz
+Savollar yoki shikoyatlar uchun: support@tushunGo.uz
 
-© 2024 EduKids. Barcha huquqlar himoyalangan.`;
+© 2024 tushunGo. Barcha huquqlar himoyalangan.`;
 
 const DEFAULT_PRIVACY = `Maxfiylik siyosati
 
@@ -96,7 +96,7 @@ Oxirgi yangilanish: 2024-yil, 1-dekabr
 
 1. KIRISH
 
-1.1. Ushbu maxfiylik siyosati EduKids mobil ilovasi foydalanuvchilarining shaxsiy ma'lumotlarini qanday yig'ish, saqlash va ishlatishimiz haqida ma'lumot beradi.
+1.1. Ushbu maxfiylik siyosati tushunGo mobil ilovasi foydalanuvchilarining shaxsiy ma'lumotlarini qanday yig'ish, saqlash va ishlatishimiz haqida ma'lumot beradi.
 
 1.2. Ilovadan foydalanish orqali siz ushbu siyosatga rozilik bildirasiz.
 
@@ -145,7 +145,7 @@ Oxirgi yangilanish: 2024-yil, 1-dekabr
 - Hisobni o'chirish va ma'lumotlarni olib tashlash so'rovi
 - Marketing xabarlaridan voz kechish
 
-5.2. Huquqlaringizdan foydalanish uchun support@edukids.uz ga murojaat qiling.
+5.2. Huquqlaringizdan foydalanish uchun support@tushunGo.uz ga murojaat qiling.
 
 6. BOLALAR MAXFIYLIGI
 
@@ -177,9 +177,9 @@ Oxirgi yangilanish: 2024-yil, 1-dekabr
 
 10. ALOQA
 
-Maxfiylik masalalari bo'yicha: support@edukids.uz
+Maxfiylik masalalari bo'yicha: support@tushunGo.uz
 
-© 2024 EduKids. Barcha huquqlar himoyalangan.`;
+© 2024 tushunGo. Barcha huquqlar himoyalangan.`;
 
 export default function LegalModal({ open, type, onClose }: LegalModalProps) {
   const [content, setContent] = useState("");

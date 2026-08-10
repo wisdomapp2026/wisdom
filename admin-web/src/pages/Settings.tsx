@@ -68,7 +68,7 @@ const DEFAULT_SETTINGS: PlatformSettings = {
     "Sertifikat olish imkoniyati",
     "Reklama va cheklovlarsiz",
   ],
-  platformName: "EduKids",
+  platformName: "tushunGo",
   logoUrl: "",
   supportPhone: "+998 90 123 45 67",
   supportEmail: "support@edukids.uz",
@@ -379,7 +379,7 @@ export default function Settings() {
           <Server size={18} className="text-gray-400" />
           <div>
             <p className="text-sm font-medium text-gray-700">Tizim ma'lumotlari</p>
-            <p className="text-xs text-gray-500 mt-0.5">EduKids Admin Panel v2.5.0 · Firebase Firestore · Vite + React</p>
+            <p className="text-xs text-gray-500 mt-0.5">tushunGo Admin Panel v2.5.0 · Supabase · Vite + React</p>
           </div>
         </div>
       </div>
@@ -487,7 +487,7 @@ function ThemeEditor({ theme, onChange, onReset }: {
                   <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ backgroundColor: theme.primaryColor }}>
                     <span className="text-xs" style={{ color: theme.buttonTextColor }}>⚡</span>
                   </div>
-                  <span className="text-sm font-bold" style={{ color: theme.primaryColor }}>EduKids</span>
+                  <span className="text-sm font-bold" style={{ color: theme.primaryColor }}>tushunGo</span>
                 </div>
                 <div className="flex gap-2">
                   <div className="w-6 h-6 rounded-full" style={{ backgroundColor: theme.bgColor }} />

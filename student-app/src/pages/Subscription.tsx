@@ -94,7 +94,7 @@ export default function Subscription() {
           <div className="w-8 h-8 bg-primary-500 rounded-lg flex items-center justify-center">
             <Crown size={16} className="text-white" />
           </div>
-          <span className="font-bold text-gray-900">EduKids Premium</span>
+          <span className="font-bold text-gray-900">tushunGo Premium</span>
         </div>
         <Link to="/" className="text-gray-400"><X size={22} /></Link>
       </header>

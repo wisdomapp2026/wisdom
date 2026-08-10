@@ -14,7 +14,7 @@ export default function HamburgerMenu() {
   const { isLoggedIn } = useAuth();
   const { isDark, toggle: toggleDark } = useDarkMode();
   const [logoUrl, setLogoUrl] = useState("");
-  const [appName, setAppName] = useState("EduKids");
+  const [appName, setAppName] = useState("tushunGo");
 
   // Swipe gesture refs
   const touchStartX = useRef(0);

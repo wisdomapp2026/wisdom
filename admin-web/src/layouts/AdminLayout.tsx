@@ -136,7 +136,7 @@ export default function AdminLayout() {
                 <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
               </svg>
             </div>
-            <span className="text-lg font-bold text-primary-500">EduKids Admin</span>
+            <span className="text-lg font-bold text-primary-500">tushunGo Admin</span>
           </div>
           <button onClick={() => setMobileMenuOpen(false)} className="lg:hidden p-1 text-gray-400 hover:text-gray-600">
             <X className="w-5 h-5" />

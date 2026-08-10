@@ -24,7 +24,7 @@ export default function Backup() {
             </div>
             <h2 className="text-2xl md:text-3xl font-bold">Avtomatik Bulutli Zaxira</h2>
             <p className="text-white/80 text-sm max-w-xl leading-relaxed">
-              EduKids platformasi endi <strong>Supabase</strong> (PostgreSQL) bulutli texnologiyasiga o'tkazildi. 
+              tushunGo platformasi endi <strong>Supabase</strong> (PostgreSQL) bulutli texnologiyasiga o'tkazildi.
               Barcha ma'lumotlar bazasi va media fayllar har kuni avtomatik ravishda xavfsiz serverlarga zaxiralanadi.
             </p>
           </div>

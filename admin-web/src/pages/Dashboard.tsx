@@ -98,7 +98,7 @@ export default function Dashboard() {
 
     // CSV hisobot yaratish
     const lines: string[] = [];
-    lines.push("EduKids — Dashboard Hisoboti");
+    lines.push("tushunGo — Dashboard Hisoboti");
     lines.push(`Sana: ${dateStr}`);
     lines.push("");
     lines.push("=== UMUMIY STATISTIKA ===");
@@ -133,7 +133,7 @@ export default function Dashboard() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `edukids-hisobot-${dateStr}.csv`;
+    link.download = `tushungo-hisobot-${dateStr}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

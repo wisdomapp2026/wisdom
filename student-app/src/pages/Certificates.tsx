@@ -106,7 +106,7 @@ export default function Certificates() {
     ctx.fillStyle = "#2196F3";
     ctx.font = "bold 28px Arial, sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("⚡ EduKids", 600, 100);
+    ctx.fillText("⚡ tushunGo", 600, 100);
 
     // Title
     ctx.fillStyle = "#1a237e";
