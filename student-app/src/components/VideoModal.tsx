@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { X, Maximize2, Minimize2 } from "lucide-react";
 
 interface Props {
@@ -7,22 +7,30 @@ interface Props {
   onClose: () => void;
 }
 
+// YouTube IFrame API global type
+declare global {
+  interface Window {
+    YT: any;
+    onYouTubeIframeAPIReady: (() => void) | undefined;
+  }
+}
+
 /**
  * Video Player — To'liq ekranda ochiladi (portret rejim).
  * YouTube kontrollarini ko'rsatadi.
- * Kattalashtirish bosilganda albom (landscape) rejimga o'tadi.
- * X yoki Back tugmasi bosilganda video yopiladi.
+ * End time ga yetganda video pause bo'ladi (modal yopilmaydi).
  */
 export default function VideoModal({ open, videoUrl, onClose }: Props) {
   const [isLandscape, setIsLandscape] = useState(false);
+  const playerRef = useRef<any>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // Back tugmasi (browser) bilan yopish
   useEffect(() => {
     if (!open) return;
 
-    // History state qo'shish — back bosilganda video yopilsin (sahifa o'zgarmasin)
     window.history.pushState({ videoOpen: true }, "");
-    // Popstate orqali yopilganini belgilash — cleanup da qo'shimcha back qilmaslik uchun
     let closedByPop = false;
 
     function handlePopState() {
@@ -33,15 +41,13 @@ export default function VideoModal({ open, videoUrl, onClose }: Props) {
     window.addEventListener("popstate", handlePopState);
     return () => {
       window.removeEventListener("popstate", handlePopState);
-      // Video X tugmasi bilan yopilgan bo'lsa — qo'shilgan history yozuvini tozalash.
-      // Aks holda tarixda ortiqcha yozuv qolib, keyingi "back" sahifani o'zgartirmaydi.
       if (!closedByPop && window.history.state?.videoOpen) {
         window.history.back();
       }
     };
   }, [open, onClose]);
 
-  // Landscape rejimda screen orientation lock qilish (agar API mavjud bo'lsa)
+  // Landscape rejimda screen orientation lock
   useEffect(() => {
     if (!open) return;
 
@@ -71,24 +77,128 @@ export default function VideoModal({ open, videoUrl, onClose }: Props) {
     return () => window.removeEventListener("keydown", handleKey);
   }, [open, isLandscape, onClose]);
 
+  // YouTube IFrame API yuklash
+  useEffect(() => {
+    if (!open || !videoUrl || !isYouTube(videoUrl)) return;
+
+    // API allaqachon yuklangan bo'lsa — player yaratish
+    if (window.YT && window.YT.Player) {
+      createPlayer();
+      return;
+    }
+
+    // API yuklash
+    if (!document.getElementById("yt-iframe-api")) {
+      const tag = document.createElement("script");
+      tag.id = "yt-iframe-api";
+      tag.src = "https://www.youtube.com/iframe_api";
+      document.head.appendChild(tag);
+    }
+
+    window.onYouTubeIframeAPIReady = () => {
+      createPlayer();
+    };
+
+    return () => {
+      cleanupPlayer();
+    };
+  }, [open, videoUrl]);
+
+  function cleanupPlayer() {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    if (playerRef.current) {
+      try { playerRef.current.destroy(); } catch {}
+      playerRef.current = null;
+    }
+  }
+
+  function createPlayer() {
+    if (!containerRef.current || playerRef.current) return;
+
+    const { videoId, start, end } = parseYouTubeUrl(videoUrl);
+    if (!videoId) return;
+
+    // Player container div yaratish
+    const playerDiv = document.createElement("div");
+    playerDiv.id = "yt-player-" + Date.now();
+    containerRef.current.innerHTML = "";
+    containerRef.current.appendChild(playerDiv);
+
+    playerRef.current = new window.YT.Player(playerDiv.id, {
+      videoId,
+      playerVars: {
+        autoplay: 1,
+        controls: 1,
+        modestbranding: 1,
+        rel: 0,
+        playsinline: 1,
+        fs: 1,
+        start: start ?? undefined,
+      },
+      events: {
+        onReady: (event: any) => {
+          // End time bo'lsa — interval bilan kuzatish
+          if (end != null) {
+            intervalRef.current = setInterval(() => {
+              try {
+                const currentTime = event.target.getCurrentTime();
+                if (currentTime >= end) {
+                  event.target.pauseVideo();
+                  event.target.seekTo(end, true);
+                  if (intervalRef.current) {
+                    clearInterval(intervalRef.current);
+                    intervalRef.current = null;
+                  }
+                }
+              } catch {}
+            }, 500);
+          }
+        },
+        onStateChange: (event: any) => {
+          // Video qayta o'ynab ketganda ham end time ni kuzatish
+          if (end != null && event.data === 1) { // 1 = playing
+            if (!intervalRef.current) {
+              intervalRef.current = setInterval(() => {
+                try {
+                  const currentTime = event.target.getCurrentTime();
+                  if (currentTime >= end) {
+                    event.target.pauseVideo();
+                    event.target.seekTo(end, true);
+                    if (intervalRef.current) {
+                      clearInterval(intervalRef.current);
+                      intervalRef.current = null;
+                    }
+                  }
+                } catch {}
+              }, 500);
+            }
+          }
+        },
+      },
+    });
+  }
+
+  // Cleanup on close
+  useEffect(() => {
+    if (!open) {
+      cleanupPlayer();
+    }
+  }, [open]);
+
   if (!open || !videoUrl) return null;
 
-  /**
-   * YouTube URL ni embed formatga o'girish — kontrollar yoqilgan.
-   * Admin belgilagan start/end (boshlanish va tugash vaqti) saqlanadi.
-   */
-  function getEmbedUrl(url: string): string {
+  function parseYouTubeUrl(url: string): { videoId: string | null; start: number | null; end: number | null } {
     const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([\w-]+)/);
-    if (!match) return url;
+    if (!match) return { videoId: null, start: null, end: null };
 
     const videoId = match[1];
-
-    // URL dagi start/end (yoki t) parametrlarini o'qish
     const params = new URLSearchParams(url.includes("?") ? url.slice(url.indexOf("?") + 1) : "");
     const startRaw = params.get("start") || params.get("t");
     const endRaw = params.get("end");
 
-    // "90", "90s", "1m30s" kabi qiymatlarni soniyaga o'girish
     function toSeconds(value: string | null): number | null {
       if (!value) return null;
       if (/^\d+$/.test(value)) return Number(value);
@@ -99,22 +209,11 @@ export default function VideoModal({ open, videoUrl, onClose }: Props) {
       return null;
     }
 
-    const start = toSeconds(startRaw);
-    const end = toSeconds(endRaw);
-
-    const embedParams = new URLSearchParams({
-      autoplay: "1",
-      controls: "1",
-      modestbranding: "1",
-      rel: "0",
-      playsinline: "1",
-      fs: "1",
-    });
-    if (start != null) embedParams.set("start", String(start));
-    // end faqat start dan katta bo'lsa mantiqiy
-    if (end != null && (start == null || end > start)) embedParams.set("end", String(end));
-
-    return `https://www.youtube-nocookie.com/embed/${videoId}?${embedParams.toString()}`;
+    return {
+      videoId,
+      start: toSeconds(startRaw),
+      end: toSeconds(endRaw),
+    };
   }
 
   function isYouTube(url: string): boolean {
@@ -123,7 +222,7 @@ export default function VideoModal({ open, videoUrl, onClose }: Props) {
 
   function handleClose() {
     setIsLandscape(false);
-    // Tarix tozalash cleanup effektida bajariladi — bu yerda faqat yopamiz
+    cleanupPlayer();
     onClose();
   }
 
@@ -138,7 +237,7 @@ export default function VideoModal({ open, videoUrl, onClose }: Props) {
       }`}
       style={isLandscape ? { transform: "rotate(90deg)", transformOrigin: "center center", width: "100vh", height: "100vw", position: "fixed", top: "50%", left: "50%", marginTop: "calc(-50vw)", marginLeft: "calc(-50vh)" } : undefined}
     >
-      {/* Header — yopish va kattalashtirish tugmalari */}
+      {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-black/90 z-10 shrink-0">
         <button
           onClick={handleClose}
@@ -167,13 +266,7 @@ export default function VideoModal({ open, videoUrl, onClose }: Props) {
       <div className="flex-1 flex items-center justify-center bg-black overflow-hidden">
         <div className={`w-full ${isLandscape ? "h-full" : "aspect-video max-h-[60vh]"}`}>
           {isYouTube(videoUrl) ? (
-            <iframe
-              src={getEmbedUrl(videoUrl)}
-              className="w-full h-full"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
-              allowFullScreen
-              style={{ border: "none" }}
-            />
+            <div ref={containerRef} className="w-full h-full" />
           ) : (
             <video
               src={videoUrl}
