@@ -177,12 +177,32 @@ export default function ImportTestModal({ open, courseId, existingTestIds, folde
   async function handleImportFromLibrary() {
     if (selectedIds.size === 0) return;
     const title = testTitle.trim() || `Test — ${selectedIds.size} savol`;
+
+    // To'g'ri javob belgilanmagan savollarni tekshirish
+    const selectedQuestions = questions.filter((q) => selectedIds.has(q.id));
+    const missingAnswer = selectedQuestions.filter((q) => !q.correctAnswer);
+    if (missingAnswer.length > 0) {
+      const proceed = confirm(
+        `⚠️ ${missingAnswer.length} ta savolda to'g'ri javob belgilanmagan!\n\n` +
+        `Savollar: ${missingAnswer.map((q, i) => `#${selectedQuestions.indexOf(q) + 1}`).join(", ")}\n\n` +
+        `To'g'ri javob belgilanmagan savollar testga kiritilmaydi.\n` +
+        `Davom etsinmi?`
+      );
+      if (!proceed) return;
+    }
+
+    // Faqat to'g'ri javob belgilangan savollarni olish
+    const validQuestions = selectedQuestions.filter((q) => !!q.correctAnswer);
+    if (validQuestions.length === 0) {
+      alert("❌ Birorta ham savolda to'g'ri javob belgilanmagan. Avval savollarni tahrirlang.");
+      return;
+    }
+
     setImporting(true);
     try {
       const testId = `test-${Date.now()}`;
-      const selectedQuestions = questions.filter((q) => selectedIds.has(q.id));
 
-      const testQuestions: TQuestion[] = selectedQuestions.map((q, idx) => ({
+      const testQuestions: TQuestion[] = validQuestions.map((q, idx) => ({
         id: `${testId}-q${idx + 1}`,
         type: "multiple_choice" as const,
         content: q.content,
@@ -192,14 +212,13 @@ export default function ImportTestModal({ open, courseId, existingTestIds, folde
           { label: "C", text: "" },
           { label: "D", text: "" },
         ],
-        correctAnswer: q.correctAnswer || "A",
+        correctAnswer: q.correctAnswer!,
         points: 1,
         estimatedMinutes: parseInt(q.time) || 3,
         difficulty: q.difficulty,
         tags: q.tags,
         ...(q.videoUrl ? { videoUrl: q.videoUrl } : {}),
         ...(q.videoType ? { videoType: q.videoType } : {}),
-        // Misol bog'lanishi va yechimlar — test natijasida ko'rsatish uchun
         ...(q.problemId ? { problemId: q.problemId } : {}),
         ...(q.solution ? { solution: q.solution } : {}),
         ...(q.solutionImage ? { solutionImage: q.solutionImage } : {}),
@@ -211,12 +230,12 @@ export default function ImportTestModal({ open, courseId, existingTestIds, folde
         ...(folderId ? { folderId } : {}),
         ...(afterTopicOrder != null ? { afterTopicOrder } : {}),
         title,
-        description: `${selectedQuestions.length} ta savol · ${testTime} daqiqa`,
+        description: `${validQuestions.length} ta savol · ${testTime} daqiqa`,
         version: "Published",
         status: "published",
-        passingScore: Math.ceil(selectedQuestions.length * 0.6),
+        passingScore: Math.ceil(validQuestions.length * 0.6),
         shuffleQuestions: false,
-        totalPoints: selectedQuestions.length,
+        totalPoints: validQuestions.length,
         totalTime: testTime,
         questions: testQuestions,
         createdAt: Date.now(),
@@ -236,14 +255,32 @@ export default function ImportTestModal({ open, courseId, existingTestIds, folde
 
   async function handleImportFromTestLists() {
     if (selectedListIds.size === 0) return;
+
+    // To'g'ri javob belgilanmagan savollarni tekshirish
+    let totalMissing = 0;
+    for (const listId of selectedListIds) {
+      const list = testLists.find((l) => l.id === listId);
+      if (!list) continue;
+      const listQuestions = questions.filter((q) => list.testIds.includes(q.id));
+      totalMissing += listQuestions.filter((q) => !q.correctAnswer).length;
+    }
+    if (totalMissing > 0) {
+      const proceed = confirm(
+        `⚠️ ${totalMissing} ta savolda to'g'ri javob belgilanmagan!\n\n` +
+        `To'g'ri javob belgilanmagan savollar testga kiritilmaydi.\n` +
+        `Davom etsinmi?`
+      );
+      if (!proceed) return;
+    }
+
     setImporting(true);
     try {
       for (const listId of selectedListIds) {
         const list = testLists.find((l) => l.id === listId);
         if (!list) continue;
 
-        // Test list dagi savollarni topib, test yaratish
-        const listQuestions = questions.filter((q) => list.testIds.includes(q.id));
+        // Faqat to'g'ri javob belgilangan savollarni olish
+        const listQuestions = questions.filter((q) => list.testIds.includes(q.id) && !!q.correctAnswer);
         if (listQuestions.length === 0) continue;
 
         const testId = `test-${Date.now()}-${listId}`;
@@ -257,14 +294,13 @@ export default function ImportTestModal({ open, courseId, existingTestIds, folde
             { label: "C", text: "" },
             { label: "D", text: "" },
           ],
-          correctAnswer: q.correctAnswer || "A",
+          correctAnswer: q.correctAnswer!,
           points: 1,
           estimatedMinutes: parseInt(q.time) || 3,
           difficulty: q.difficulty,
           tags: q.tags,
           ...(q.videoUrl ? { videoUrl: q.videoUrl } : {}),
           ...(q.videoType ? { videoType: q.videoType } : {}),
-          // Misol bog'lanishi va yechimlar — test natijasida ko'rsatish uchun
           ...(q.problemId ? { problemId: q.problemId } : {}),
           ...(q.solution ? { solution: q.solution } : {}),
           ...(q.solutionImage ? { solutionImage: q.solutionImage } : {}),

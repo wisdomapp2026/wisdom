@@ -471,10 +471,24 @@ export default function TestBuilder() {
               <div className="mt-6 pt-4 border-t border-gray-100 flex justify-center">
                 <button
                   onClick={async () => {
+                    // To'g'ri javob belgilanmagan savollarni tekshirish
+                    const missingAnswer = questions.filter((q) => !q.correctAnswer);
+                    if (missingAnswer.length > 0) {
+                      const proceed = confirm(
+                        `⚠️ ${missingAnswer.length} ta savolda to'g'ri javob belgilanmagan!\n\n` +
+                        `To'g'ri javob belgilanmagan savollar testga kiritilmaydi.\nDavom etsinmi?`
+                      );
+                      if (!proceed) { return; }
+                    }
+                    const validQuestions = questions.filter((q) => !!q.correctAnswer);
+                    if (validQuestions.length === 0) {
+                      alert("❌ Birorta ham savolda to'g'ri javob belgilanmagan.");
+                      return;
+                    }
                     setSaving(true);
                     try {
                       const testId = `test-${Date.now()}`;
-                      const testQuestions: TQuestion[] = questions.map((q, idx) => ({
+                      const testQuestions: TQuestion[] = validQuestions.map((q, idx) => ({
                         id: `${testId}-q${idx + 1}`,
                         type: "multiple_choice" as const,
                         content: q.content,
@@ -484,7 +498,7 @@ export default function TestBuilder() {
                           { label: "C", text: "" },
                           { label: "D", text: "" },
                         ],
-                        correctAnswer: q.correctAnswer || "A",
+                        correctAnswer: q.correctAnswer!,
                         points: 1,
                         estimatedMinutes: parseInt(q.time) || 3,
                         difficulty: q.difficulty,
@@ -496,13 +510,13 @@ export default function TestBuilder() {
                       const test: Test = {
                         id: testId,
                         courseId: "",
-                        title: `Test — ${questions.length} savol`,
-                        description: `${questions.length} ta savol · ${totalTime} daqiqa`,
+                        title: `Test — ${validQuestions.length} savol`,
+                        description: `${validQuestions.length} ta savol · ${totalTime} daqiqa`,
                         version: "Published",
                         status: "published",
-                        passingScore: Math.ceil(questions.length * 0.6),
+                        passingScore: Math.ceil(validQuestions.length * 0.6),
                         shuffleQuestions: false,
-                        totalPoints: questions.length,
+                        totalPoints: validQuestions.length,
                         totalTime,
                         questions: testQuestions,
                         createdAt: Date.now(),
