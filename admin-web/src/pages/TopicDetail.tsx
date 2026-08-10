@@ -305,7 +305,9 @@ export default function TopicDetail() {
           </div>
         )}
 
-        {combinedItems.map((item, idx) => (
+        {(() => {
+          let problemCounter = 0;
+          return combinedItems.map((item, idx) => (
           <div
             key={`${item.type}-${item.data.id}`}
             draggable
@@ -317,7 +319,7 @@ export default function TopicDetail() {
             {item.type === "problem" ? (
               <ProblemCard
                 problem={item.data as Problem}
-                index={idx}
+                index={problemCounter++}
                 courseId={courseId!}
                 topicId={topicId!}
                 onStartEdit={(p) => setEditingProblem(p)}
@@ -361,7 +363,8 @@ export default function TopicDetail() {
               </div>
             )}
           </div>
-        ))}
+        ));
+        })()}
       </div>
 
       {/* Create problem modal */}
