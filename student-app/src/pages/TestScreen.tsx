@@ -57,8 +57,7 @@ export default function TestScreen() {
     try {
       // Avval kurslarni olish, keyin ulardan faqat to'g'ri kurs testini yuklash
       const courses = await cachedFetch("all-courses", getAllCourses);
-      // Parallel — barcha kurslardan testlarni yuklash o'rniga,
-      // har bir kursning testlarini parallel tekshiramiz
+      // Parallel — barcha kurslardan testlarni yuklash
       const results = await Promise.all(
         courses.map(async (course) => {
           const tests = await cachedFetch(`tests-${course.id}`, () => getTestsByCourse(course.id));
@@ -66,7 +65,20 @@ export default function TestScreen() {
           return found ? { test: found, courseId: course.id } : null;
         })
       );
-      const match = results.find((r) => r !== null);
+      let match = results.find((r) => r !== null);
+
+      // Keshda topilmasa — keshsiz qayta qidirish (yangi yaratilgan test bo'lishi mumkin)
+      if (!match) {
+        const freshResults = await Promise.all(
+          courses.map(async (course) => {
+            const tests = await getTestsByCourse(course.id);
+            const found = tests.find((t) => t.id === tId);
+            return found ? { test: found, courseId: course.id } : null;
+          })
+        );
+        match = freshResults.find((r) => r !== null);
+      }
+
       if (match) {
         setTest(match.test);
         setCourseId(match.courseId);
