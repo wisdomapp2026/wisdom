@@ -65,10 +65,11 @@ export default function TopicDetail() {
       ...problems.map((p) => ({ type: "problem" as const, data: p })),
       ...tests.map((t) => ({ type: "test" as const, data: t })),
     ];
-    // Misol order va test order (internalOrder yoki afterTopicOrder * 1000) bo'yicha tartiblash
+    // Misol order va test order (internalOrder) bo'yicha tartiblash
+    // internalOrder bor bo'lsa — to'g'ridan-to'g'ri ishlatamiz (misollar bilan bir xil tizim)
     items.sort((a, b) => {
-      const orderA = a.type === "problem" ? a.data.order : ((a.data as Test).internalOrder || (a.data as Test).afterTopicOrder || 0) * 1000 + 999;
-      const orderB = b.type === "problem" ? b.data.order : ((b.data as Test).internalOrder || (b.data as Test).afterTopicOrder || 0) * 1000 + 999;
+      const orderA = a.type === "problem" ? a.data.order : ((a.data as Test).internalOrder ?? 99999);
+      const orderB = b.type === "problem" ? b.data.order : ((b.data as Test).internalOrder ?? 99999);
       return orderA - orderB;
     });
     setCombinedItems(items);
