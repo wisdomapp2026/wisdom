@@ -69,6 +69,10 @@ export default function ImportTestModal({ open, courseId, existingTestIds, folde
   const [testTitle, setTestTitle] = useState("");
   const [testTime, setTestTime] = useState(20);
 
+  // Joylashuv — qaysi misoldan keyin
+  const [placement, setPlacement] = useState<"after" | "start" | "end">("end");
+  const [placementAfter, setPlacementAfter] = useState("");
+
   // Test Lists
   const [testLists, setTestLists] = useState<TestList[]>([]);
   const [selectedListIds, setSelectedListIds] = useState<Set<string>>(new Set());
@@ -82,6 +86,8 @@ export default function ImportTestModal({ open, courseId, existingTestIds, folde
       setPreviewId(null);
       setTestTitle("");
       setTestTime(20);
+      setPlacement("end");
+      setPlacementAfter("");
       setActiveTab("library");
 
       // Test listlarni yuklash
@@ -198,6 +204,18 @@ export default function ImportTestModal({ open, courseId, existingTestIds, folde
       return;
     }
 
+    // internalOrder ni hisoblash
+    let internalOrder: number | undefined;
+    if (placement === "start") {
+      internalOrder = 0;
+    } else if (placement === "after") {
+      const afterNum = parseInt(placementAfter, 10);
+      if (afterNum && afterNum > 0) {
+        internalOrder = afterNum + 0.5; // misol order'idan 0.5 katta — misoldan keyin joylashadi
+      }
+    }
+    // placement === "end" → internalOrder = undefined (oxirida ko'rsatiladi)
+
     setImporting(true);
     try {
       const testId = `test-${Date.now()}`;
@@ -229,6 +247,7 @@ export default function ImportTestModal({ open, courseId, existingTestIds, folde
         courseId,
         ...(folderId ? { folderId } : {}),
         ...(afterTopicOrder != null ? { afterTopicOrder } : {}),
+        ...(internalOrder != null ? { internalOrder } : {}),
         title,
         description: `${validQuestions.length} ta savol · ${testTime} daqiqa`,
         version: "Published",
@@ -404,6 +423,39 @@ export default function ImportTestModal({ open, courseId, existingTestIds, folde
                   />
                   <span className="text-xs text-gray-400">daq</span>
                 </div>
+              </div>
+
+              {/* Joylashuv tanlash */}
+              <div className="flex items-center gap-2 px-4 pb-3 flex-wrap">
+                <span className="text-xs text-gray-500 font-medium">Joylashuv:</span>
+                <button
+                  onClick={() => setPlacement("start")}
+                  className={`text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${placement === "start" ? "bg-primary-50 border-primary-300 text-primary-700" : "bg-gray-50 border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                >
+                  Eng boshida
+                </button>
+                <button
+                  onClick={() => setPlacement("after")}
+                  className={`text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${placement === "after" ? "bg-primary-50 border-primary-300 text-primary-700" : "bg-gray-50 border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                >
+                  Misoldan keyin
+                </button>
+                {placement === "after" && (
+                  <input
+                    type="number"
+                    value={placementAfter}
+                    onChange={(e) => setPlacementAfter(e.target.value)}
+                    placeholder="#"
+                    min={1}
+                    className="w-14 px-2 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs text-center"
+                  />
+                )}
+                <button
+                  onClick={() => setPlacement("end")}
+                  className={`text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${placement === "end" ? "bg-primary-50 border-primary-300 text-primary-700" : "bg-gray-50 border-gray-200 text-gray-600 hover:border-gray-300"}`}
+                >
+                  Eng oxirida
+                </button>
               </div>
             </div>
 
