@@ -195,7 +195,8 @@ export default function CourseDetail() {
           const rank = sorted.findIndex((p) => p.userId === user.uid) + 1;
           setUserRank(rank > 0 ? rank : allProgress.length);
         } else {
-          setUserRank(allProgress.length > 0 ? allProgress.length + 1 : 1);
+          // Foydalanuvchi kursga qatnashmagan — reyting ko'rsatilmasin
+          setUserRank(null);
         }
       }
 

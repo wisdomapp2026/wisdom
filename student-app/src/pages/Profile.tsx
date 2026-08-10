@@ -189,8 +189,8 @@ export default function Profile() {
 
           {/* Ism va badge */}
           <div className="flex-1 min-w-0 pt-1">
-            <h2 className="text-xl font-bold text-white truncate">{displayName}</h2>
-            <p className="text-xs text-white/60 truncate mt-0.5">{userData?.phone || user?.email || ""}</p>
+            <h2 className="text-xl font-bold text-white">{displayName}</h2>
+            <p className="text-xs text-white/60 mt-0.5">{userData?.phone || user?.email || ""}</p>
             <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2.5 py-1 rounded-full mt-2 ${
               isPremium ? "bg-yellow-400 text-yellow-900" : "bg-white/20 text-white"
             }`}>

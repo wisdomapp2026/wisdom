@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">EduKids</string>
+    <string name="title_activity_main">EduKids</string>
+    <string name="package_name">uz.edukids.app</string>
+    <string name="custom_url_scheme">uz.edukids.app</string>
+</resources>

@@ -35,7 +35,7 @@ const diffLabels: Record<string, string> = { easy: "Easy", medium: "Medium", har
 export default function TopicDetail() {
   const { courseId, topicId } = useParams<{ courseId: string; topicId: string }>();
   const navigate = useNavigate();
-  const { user, isLoggedIn } = useAuth();
+  const { user, isLoggedIn, loading: authLoading } = useAuth();
   const { hasAccess: hasSubscription, loading: accessLoading } = useCourseAccess(courseId);
   const [topic, setTopic] = useState<Topic | null>(null);
   const [problems, setProblems] = useState<Problem[]>([]);
@@ -239,6 +239,7 @@ export default function TopicDetail() {
   }, [user, topicId]);
 
   async function handleToggleFavorite() {
+    if (authLoading) return; // Auth hali yuklanayotgan bo'lsa, kutish
     if (!user) { setShowAuthModal(true); return; }
     if (!courseId || !topicId || !topic) return;
     setFavLoading(true);
@@ -540,7 +541,7 @@ export default function TopicDetail() {
       </header>
 
       {/* Mehmon ogohlantirish */}
-      {!isLoggedIn && (
+      {!authLoading && !isLoggedIn && (
         <div className="mx-5 mt-3 bg-amber-50 border border-amber-200 rounded-xl p-3.5 flex items-start gap-3">
           <span className="text-xl shrink-0">⚠️</span>
           <div>
@@ -816,7 +817,7 @@ function StudentProblemCard({ problem, index, isPremium, isLoggedIn, onRequireAu
   return (
     <div
       ref={cardRef}
-      className={`bg-white rounded-xl border transition-all ${isPremium ? "border-yellow-100" : flipped ? "border-blue-300 ring-1 ring-blue-200" : "border-gray-100"}`}
+      className={`bg-white rounded-xl border transition-all overflow-hidden ${isPremium ? "border-yellow-100" : flipped ? "border-blue-300 ring-1 ring-blue-200" : "border-gray-100"}`}
     >
       {/* FRONT — Misol (flipped bo'lganda yashiriladi) */}
       {!flipped && (
@@ -829,7 +830,7 @@ function StudentProblemCard({ problem, index, isPremium, isLoggedIn, onRequireAu
               {isPremium && <Lock size={16} className="text-gray-400" />}
             </div>
 
-            <p className="text-sm leading-relaxed text-gray-900"><LatexText text={problem.content} /></p>
+            <p className="text-sm leading-relaxed text-gray-900 break-words overflow-hidden"><LatexText text={problem.content} /></p>
             {problem.image && <img src={problem.image} alt="" className="mt-2 max-h-40 rounded-lg" />}
 
             {!isPremium && (

@@ -59,6 +59,7 @@ export default function Messages() {
         fromUserId: user.uid,
         fromName: userName,
         fromRole: "student",
+        toUserId: "admin",
         text: newMessage.trim(),
         isRead: false,
         createdAt: Date.now(),

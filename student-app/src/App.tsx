@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
+import { App as CapApp } from "@capacitor/app";
 import BottomNav from "./components/BottomNav";
 import TopHeader from "./components/TopHeader";
 import { NavigationLoader } from "./components/PageTransition";
@@ -9,6 +10,7 @@ import Tests from "./pages/Tests";
 import Profile from "./pages/Profile";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import TelegramCallback from "./pages/TelegramCallback";
 import CourseDetail from "./pages/CourseDetail";
 import FolderDetail from "./pages/FolderDetail";
 import TopicDetail from "./pages/TopicDetail";
@@ -43,6 +45,27 @@ export default function App() {
   const { user, loading: authLoading } = useAuth();
   const [userData, setUserData] = useState<User | null>(null);
   const [checkingBan, setCheckingBan] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Android back button handler
+  useEffect(() => {
+    const listener = CapApp.addListener("backButton", ({ canGoBack }) => {
+      // Asosiy sahifalarda (home, courses, tests, profile) — app'ni yopish
+      const mainRoutes = ["/", "/courses", "/tests", "/profile"];
+      if (mainRoutes.includes(location.pathname)) {
+        CapApp.exitApp();
+      } else if (canGoBack) {
+        window.history.back();
+      } else {
+        navigate(-1);
+      }
+    });
+
+    return () => {
+      listener.then(l => l.remove());
+    };
+  }, [location.pathname, navigate]);
 
   useEffect(() => {
     if (!user) {
@@ -189,6 +212,7 @@ export default function App() {
         <Route path="/search" element={<Search />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/auth/telegram-callback" element={<TelegramCallback />} />
         <Route path="/course/:courseId" element={<CourseDetail />} />
         <Route path="/course/:courseId/folder/:folderId" element={<FolderDetail />} />
         <Route path="/course/:courseId/topic/:topicId" element={<TopicDetail />} />

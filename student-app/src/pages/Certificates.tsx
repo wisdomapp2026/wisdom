@@ -231,10 +231,10 @@ export default function Certificates() {
   return (
     <div className="page-content pb-24 max-w-mobile mx-auto">
       {/* Header */}
-      <header className="px-5 pt-4 pb-3 flex items-center gap-3">
-        <Link to="/profile" className="text-gray-500"><ChevronLeft size={22} /></Link>
-        <h1 className="text-lg font-bold text-gray-900">{t.pageTitle}</h1>
-        <div className="ml-auto">
+      <header className="px-5 pt-4 pb-3 flex items-center">
+        <Link to="/profile" className="text-gray-500 shrink-0"><ChevronLeft size={22} /></Link>
+        <h1 className="text-lg font-bold text-gray-900 flex-1 text-center">{t.pageTitle}</h1>
+        <div className="shrink-0">
           <select
             value={lang}
             onChange={(e) => setLang(e.target.value as Lang)}

@@ -165,7 +165,8 @@ export default function ProfileEdit() {
           <Save size={16} /> {saving ? "Saqlanmoqda..." : "Saqlash"}
         </button>
 
-        {/* Parol o'zgartirish */}
+        {/* Parol o'zgartirish — faqat parol bilan ro'yxatdan o'tgan foydalanuvchilarga ko'rsatiladi */}
+        {user?.provider === "email" && (
         <div className="pt-5 border-t border-gray-100">
           <h3 className="font-semibold text-gray-900 mb-3">Parolni o'zgartirish</h3>
           <div className="space-y-3">
@@ -195,6 +196,7 @@ export default function ProfileEdit() {
             </button>
           </div>
         </div>
+        )}
       </div>
     </div>
   );

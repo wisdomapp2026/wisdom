@@ -17,8 +17,20 @@ interface Props {
  */
 export default function LatexText({ text, className = "" }: Props) {
   function renderContent(input: string): string {
+    // 0. Agar butun matn faqat rasm URL bo'lsa — img tag qaytarish
+    const trimmed = input.trim();
+    if (/^https?:\/\/\S+\.(png|jpg|jpeg|gif|webp|svg)(\?\S*)?$/i.test(trimmed)) {
+      return `<img src="${trimmed}" alt="" style="display:block;max-width:100%;border-radius:8px;margin:6px 0;" />`;
+    }
+
+    // 0b. Agar matnda URL bor bo'lsa (rasm URL) — inline img ga aylantirish
+    let result = input.replace(
+      /(?<!\[IMG:)(?<!")(?<!=)(https?:\/\/\S+\.(?:png|jpg|jpeg|gif|webp|svg)(?:\?\S*)?)/gi,
+      '<img src="$1" alt="" style="display:block;max-width:100%;max-height:200px;border-radius:8px;margin:6px 0;" />'
+    );
+
     // 1. [IMG:url] larni img tagga aylantirish
-    let result = input.replace(/\[IMG:([^\]]+)\]/g, '<img src="$1" alt="" style="display:inline-block;max-height:160px;max-width:100%;border-radius:8px;margin:6px 0;vertical-align:middle;" />');
+    result = result.replace(/\[IMG:([^\]]+)\]/g, '<img src="$1" alt="" style="display:inline-block;max-height:160px;max-width:100%;border-radius:8px;margin:6px 0;vertical-align:middle;" />');
 
     // 2. \[...\] — Display mode LaTeX (ko'p qatorli)
     result = result.replace(/\\\[([\s\S]*?)\\\]/g, (_, formula) => {

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Save, DollarSign, Globe, Shield, Bell, Palette, Server, User, Check } from "lucide-react";
+import { Save, DollarSign, Globe, Shield, Bell, Palette, Server, User, Check, FileText } from "lucide-react";
 import { supabase } from "@shared/supabase";
 import LoadingButton from "../components/LoadingButton";
 import type { AuthorInfo, AuthorSocialLink, SocialPlatform } from "@shared/types";
@@ -87,7 +87,7 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [activeTab, setActiveTab] = useState<"general" | "payments" | "notifications" | "theme" | "author">("general");
+  const [activeTab, setActiveTab] = useState<"general" | "payments" | "notifications" | "theme" | "author" | "legal">("general");
 
   useEffect(() => { loadSettings(); }, []);
 
@@ -139,6 +139,7 @@ export default function Settings() {
     { id: "payments" as const, label: "To'lov usullari", icon: <Shield size={16} /> },
     { id: "notifications" as const, label: "Bildirishnomalar", icon: <Bell size={16} /> },
     { id: "theme" as const, label: "Interfeys", icon: <Palette size={16} /> },
+    { id: "legal" as const, label: "Huquqiy", icon: <FileText size={16} /> },
     { id: "author" as const, label: "Muallif", icon: <User size={16} /> },
   ];
 
@@ -361,6 +362,10 @@ export default function Settings() {
             onChange={(theme) => updateField("theme", theme)}
             onReset={() => updateField("theme", DEFAULT_THEME)}
           />
+        )}
+
+        {activeTab === "legal" && (
+          <LegalEditor />
         )}
 
         {activeTab === "author" && (
@@ -825,6 +830,131 @@ function AuthorEditor() {
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+
+// ===== Huquqiy hujjatlar tahrirlash =====
+function LegalEditor() {
+  const [termsContent, setTermsContent] = useState("");
+  const [privacyContent, setPrivacyContent] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState("");
+
+  useEffect(() => {
+    loadLegalContent();
+  }, []);
+
+  async function loadLegalContent() {
+    try {
+      const [termsRes, privacyRes] = await Promise.all([
+        supabase.from("settings").select("value").eq("key", "legal_terms").maybeSingle(),
+        supabase.from("settings").select("value").eq("key", "legal_privacy").maybeSingle(),
+      ]);
+      if (termsRes.data?.value) {
+        setTermsContent(typeof termsRes.data.value === "string" ? termsRes.data.value : (termsRes.data.value as any).content || "");
+      }
+      if (privacyRes.data?.value) {
+        setPrivacyContent(typeof privacyRes.data.value === "string" ? privacyRes.data.value : (privacyRes.data.value as any).content || "");
+      }
+    } catch (err) {
+      console.error("Huquqiy hujjatlarni yuklashda xatolik:", err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleSaveTerms() {
+    setSaving(true);
+    setSaved("");
+    try {
+      const { error } = await supabase.from("settings").upsert({ key: "legal_terms", value: { content: termsContent } });
+      if (error) throw error;
+      setSaved("terms");
+      setTimeout(() => setSaved(""), 3000);
+    } catch (err: any) {
+      alert("Saqlashda xatolik: " + err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSavePrivacy() {
+    setSaving(true);
+    setSaved("");
+    try {
+      const { error } = await supabase.from("settings").upsert({ key: "legal_privacy", value: { content: privacyContent } });
+      if (error) throw error;
+      setSaved("privacy");
+      setTimeout(() => setSaved(""), 3000);
+    } catch (err: any) {
+      alert("Saqlashda xatolik: " + err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) {
+    return <div className="flex items-center justify-center py-12"><div className="w-8 h-8 border-3 border-primary-500 border-t-transparent rounded-full animate-spin" /></div>;
+  }
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h3 className="text-lg font-semibold text-gray-900 mb-1">Huquqiy hujjatlar</h3>
+        <p className="text-sm text-gray-500">Foydalanish shartlari va maxfiylik siyosati matnlarini tahrirlash. Bu matnlar student ilovasida modal oynada ko'rsatiladi.</p>
+      </div>
+
+      {/* Foydalanish shartlari */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <label className="text-sm font-medium text-gray-900">Foydalanish shartlari</label>
+          <button
+            onClick={handleSaveTerms}
+            disabled={saving}
+            className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white text-sm font-medium rounded-lg hover:bg-primary-600 disabled:opacity-50"
+          >
+            {saved === "terms" ? <><Check size={14} /> Saqlandi</> : <><Save size={14} /> Saqlash</>}
+          </button>
+        </div>
+        <textarea
+          value={termsContent}
+          onChange={(e) => setTermsContent(e.target.value)}
+          placeholder="Foydalanish shartlari matnini kiriting..."
+          rows={16}
+          className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y"
+        />
+      </div>
+
+      {/* Maxfiylik siyosati */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <label className="text-sm font-medium text-gray-900">Maxfiylik siyosati</label>
+          <button
+            onClick={handleSavePrivacy}
+            disabled={saving}
+            className="flex items-center gap-2 px-4 py-2 bg-primary-500 text-white text-sm font-medium rounded-lg hover:bg-primary-600 disabled:opacity-50"
+          >
+            {saved === "privacy" ? <><Check size={14} /> Saqlandi</> : <><Save size={14} /> Saqlash</>}
+          </button>
+        </div>
+        <textarea
+          value={privacyContent}
+          onChange={(e) => setPrivacyContent(e.target.value)}
+          placeholder="Maxfiylik siyosati matnini kiriting..."
+          rows={16}
+          className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y"
+        />
+      </div>
+
+      <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
+        <p className="text-xs text-blue-700">
+          💡 Matnlar student ilovasida "Foydalanish shartlari" va "Maxfiylik siyosati" tugmalarini bosganida modal oynada ko'rsatiladi.
+          Agar matn kiritilmasa, standart namuna matn ko'rsatiladi.
+        </p>
       </div>
     </div>
   );
