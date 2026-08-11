@@ -840,6 +840,8 @@ function AuthorEditor() {
 function LegalEditor() {
   const [termsContent, setTermsContent] = useState("");
   const [privacyContent, setPrivacyContent] = useState("");
+  const [termsUpdated, setTermsUpdated] = useState<number | null>(null);
+  const [privacyUpdated, setPrivacyUpdated] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState("");
@@ -848,6 +850,12 @@ function LegalEditor() {
     loadLegalContent();
   }, []);
 
+  function formatDate(ts: number): string {
+    const d = new Date(ts);
+    const months = ["yanvar", "fevral", "mart", "aprel", "may", "iyun", "iyul", "avgust", "sentyabr", "oktyabr", "noyabr", "dekabr"];
+    return `${d.getFullYear()}-yil, ${d.getDate()}-${months[d.getMonth()]}`;
+  }
+
   async function loadLegalContent() {
     try {
       const [termsRes, privacyRes] = await Promise.all([
@@ -855,15 +863,46 @@ function LegalEditor() {
         supabase.from("settings").select("value").eq("key", "legal_privacy").maybeSingle(),
       ]);
       if (termsRes.data?.value) {
-        setTermsContent(typeof termsRes.data.value === "string" ? termsRes.data.value : (termsRes.data.value as any).content || "");
+        const v = termsRes.data.value as any;
+        setTermsContent(typeof v === "string" ? v : v.content || "");
+        setTermsUpdated(typeof v === "object" && v.updatedAt ? v.updatedAt : null);
+      } else {
+        setTermsContent(DEFAULT_TERMS_TEXT);
       }
       if (privacyRes.data?.value) {
-        setPrivacyContent(typeof privacyRes.data.value === "string" ? privacyRes.data.value : (privacyRes.data.value as any).content || "");
+        const v = privacyRes.data.value as any;
+        setPrivacyContent(typeof v === "string" ? v : v.content || "");
+        setPrivacyUpdated(typeof v === "object" && v.updatedAt ? v.updatedAt : null);
+      } else {
+        setPrivacyContent(DEFAULT_PRIVACY_TEXT);
       }
     } catch (err) {
       console.error("Huquqiy hujjatlarni yuklashda xatolik:", err);
+      setTermsContent(DEFAULT_TERMS_TEXT);
+      setPrivacyContent(DEFAULT_PRIVACY_TEXT);
     } finally {
       setLoading(false);
+    }
+  }
+
+  /** Barcha o'quvchilarga bildirishnoma yuborish */
+  async function notifyStudents(docType: "terms" | "privacy") {
+    try {
+      const now = Date.now();
+      const { data } = await supabase.from("settings").select("value").eq("key", "studentNotifications").maybeSingle();
+      const list = (data?.value as any[]) || [];
+      const newNotif = {
+        id: `legal-${docType}-${now}`,
+        type: "legal",
+        legalType: docType,
+        title: docType === "terms" ? "Foydalanish shartlari yangilandi" : "Maxfiylik siyosati yangilandi",
+        body: "Hujjatni o'qib chiqishingizni so'raymiz. Bosing va tanishing.",
+        isRead: false,
+        createdAt: now,
+      };
+      await supabase.from("settings").upsert({ key: "studentNotifications", value: [...list, newNotif] });
+    } catch (err) {
+      console.error("Bildirishnoma yuborishda xatolik:", err);
     }
   }
 
@@ -871,8 +910,11 @@ function LegalEditor() {
     setSaving(true);
     setSaved("");
     try {
-      const { error } = await supabase.from("settings").upsert({ key: "legal_terms", value: { content: termsContent } });
+      const now = Date.now();
+      const { error } = await supabase.from("settings").upsert({ key: "legal_terms", value: { content: termsContent, updatedAt: now } });
       if (error) throw error;
+      setTermsUpdated(now);
+      await notifyStudents("terms");
       setSaved("terms");
       setTimeout(() => setSaved(""), 3000);
     } catch (err: any) {
@@ -886,8 +928,11 @@ function LegalEditor() {
     setSaving(true);
     setSaved("");
     try {
-      const { error } = await supabase.from("settings").upsert({ key: "legal_privacy", value: { content: privacyContent } });
+      const now = Date.now();
+      const { error } = await supabase.from("settings").upsert({ key: "legal_privacy", value: { content: privacyContent, updatedAt: now } });
       if (error) throw error;
+      setPrivacyUpdated(now);
+      await notifyStudents("privacy");
       setSaved("privacy");
       setTimeout(() => setSaved(""), 3000);
     } catch (err: any) {
@@ -911,7 +956,10 @@ function LegalEditor() {
       {/* Foydalanish shartlari */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <label className="text-sm font-medium text-gray-900">Foydalanish shartlari</label>
+          <div>
+            <label className="text-sm font-medium text-gray-900">Foydalanish shartlari</label>
+            {termsUpdated && <p className="text-xs text-gray-400 mt-0.5">Oxirgi yangilanish: {formatDate(termsUpdated)}</p>}
+          </div>
           <button
             onClick={handleSaveTerms}
             disabled={saving}
@@ -932,7 +980,10 @@ function LegalEditor() {
       {/* Maxfiylik siyosati */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <label className="text-sm font-medium text-gray-900">Maxfiylik siyosati</label>
+          <div>
+            <label className="text-sm font-medium text-gray-900">Maxfiylik siyosati</label>
+            {privacyUpdated && <p className="text-xs text-gray-400 mt-0.5">Oxirgi yangilanish: {formatDate(privacyUpdated)}</p>}
+          </div>
           <button
             onClick={handleSavePrivacy}
             disabled={saving}
@@ -959,3 +1010,170 @@ function LegalEditor() {
     </div>
   );
 }
+
+
+// ===== Huquqiy hujjatlar — standart namuna matnlar =====
+const DEFAULT_TERMS_TEXT = `1. UMUMIY QOIDALAR
+
+1.1. Ushbu foydalanish shartlari (keyingi o'rinlarda – "Shartlar") tushunGo mobil ilovasi (keyingi o'rinlarda – "Ilova") va uning xizmatlaridan foydalanish qoidalarini belgilaydi.
+
+1.2. Ilovadan foydalanish orqali siz ushbu Shartlarga rozilik bildirasiz. Agar siz Shartlarga rozi bo'lmasangiz, iltimos, Ilovadan foydalanmang.
+
+1.3. Ilova 6 yoshdan 18 yoshgacha bo'lgan o'quvchilar uchun mo'ljallangan ta'lim platformasidir.
+
+2. RO'YXATDAN O'TISH VA HISOB
+
+2.1. Ilovadan to'liq foydalanish uchun ro'yxatdan o'tish talab etiladi.
+
+2.2. Ro'yxatdan o'tishda siz haqiqiy ma'lumotlaringizni kiritishingiz shart.
+
+2.3. 16 yoshga to'lmagan foydalanuvchilar ota-onasi yoki qonuniy vasiysi roziligida ro'yxatdan o'tishlari kerak.
+
+2.4. Hisobingiz xavfsizligi uchun siz javobgarsiz. Parolingizni uchinchi shaxslarga bermang.
+
+3. XIZMATLAR
+
+3.1. Ilova quyidagi xizmatlarni taqdim etadi:
+- Matematika, fizika, kimyo va boshqa fanlar bo'yicha video darslar
+- Interaktiv testlar va mashqlar
+- O'quv materiallari va konspektlar
+- Bilim darajasini baholash va sertifikatlash
+
+3.2. Ba'zi xizmatlar pullik (Premium) bo'lib, alohida obuna talab qiladi.
+
+3.3. Biz xizmatlar tarkibini oldindan ogohlantirmasdan o'zgartirish huquqini saqlab qolamiz.
+
+4. TO'LOV VA OBUNA
+
+4.1. Premium obuna narxlari Ilovada ko'rsatilgan.
+
+4.2. To'lov amalga oshirilgandan so'ng, obuna belgilangan muddat davomida amal qiladi.
+
+4.3. Obunani bekor qilish keyingi to'lov muddatidan boshlab amalga oshiriladi.
+
+4.4. Qaytarish siyosati: to'lovdan keyin 3 kun ichida pulni qaytarish so'rovi yuborish mumkin.
+
+5. FOYDALANUVCHI MAJBURIYATLARI
+
+5.1. Foydalanuvchi quyidagilarga rozi bo'ladi:
+- Ilovadan faqat qonuniy maqsadlarda foydalanish
+- Boshqa foydalanuvchilarning huquqlarini hurmat qilish
+- O'quv materiallarini ruxsatsiz tarqatmaslik
+- Ilova xavfsizligiga tahdid soluvchi harakatlar qilmaslik
+
+5.2. Qoidalarni buzish hisobning bloklanishiga olib kelishi mumkin.
+
+6. INTELLEKTUAL MULK
+
+6.1. Ilovadagi barcha materiallar (darslar, testlar, rasmlar, videolar) tushunGo mulki hisoblanadi.
+
+6.2. Materiallarni ruxsatsiz nusxalash, tarqatish yoki qayta nashr etish taqiqlanadi.
+
+7. JAVOBGARLIKNI CHEKLASH
+
+7.1. Ilova "boricha" tamoyili asosida taqdim etiladi.
+
+7.2. Biz texnik nosozliklar, ma'lumotlar yo'qotilishi yoki xizmat uzilishi uchun javobgar emasmiz.
+
+7.3. Biz uchinchi tomon xizmatlari (to'lov tizimlari, ijtimoiy tarmoqlar) ishlashi uchun kafolat bermaymiz.
+
+8. SHARTLARNI O'ZGARTIRISH
+
+8.1. Biz ushbu Shartlarni istalgan vaqtda o'zgartirish huquqini saqlab qolamiz.
+
+8.2. O'zgarishlar Ilovada e'lon qilingan paytdan boshlab kuchga kiradi.
+
+8.3. Ilovadan foydalanishni davom ettirish yangi Shartlarga rozilik hisoblanadi.
+
+9. ALOQA
+
+Savollar yoki shikoyatlar uchun: support@tushungo.uz
+
+© tushunGo. Barcha huquqlar himoyalangan.`;
+
+const DEFAULT_PRIVACY_TEXT = `1. KIRISH
+
+1.1. Ushbu maxfiylik siyosati tushunGo mobil ilovasi foydalanuvchilarining shaxsiy ma'lumotlarini qanday yig'ish, saqlash va ishlatishimiz haqida ma'lumot beradi.
+
+1.2. Ilovadan foydalanish orqali siz ushbu siyosatga rozilik bildirasiz.
+
+2. YIG'ILADIGAN MA'LUMOTLAR
+
+2.1. Ro'yxatdan o'tish ma'lumotlari:
+- Ism va familiya
+- Telefon raqam
+- Email manzil (ixtiyoriy)
+- Tug'ilgan sana (ixtiyoriy)
+
+2.2. Foydalanish ma'lumotlari:
+- Ilova ichidagi harakatlar (darslarni ko'rish, testlar natijasi)
+- O'quv progressi va statistika
+- Qurilma turi va operatsion tizim versiyasi
+
+2.3. Texnik ma'lumotlar:
+- IP manzil
+- Qurilma identifikatori
+- Ilova versiyasi
+
+3. MA'LUMOTLARDAN FOYDALANISH
+
+3.1. Yig'ilgan ma'lumotlar quyidagi maqsadlarda ishlatiladi:
+- Xizmatlarni taqdim etish va yaxshilash
+- Shaxsiylashtirilgan o'quv tavsiyalari berish
+- Texnik muammolarni hal qilish
+- Xavfsizlikni ta'minlash
+- Statistik tahlil (anonim holda)
+
+3.2. Biz ma'lumotlaringizni uchinchi shaxslarga SOTMAYMIZ yoki BERMAYMIZ.
+
+4. MA'LUMOTLARNI SAQLASH
+
+4.1. Ma'lumotlar xavfsiz serverlarda shifrlangan holda saqlanadi.
+
+4.2. Biz ma'lumotlarni faqat kerakli muddat davomida saqlaymiz.
+
+4.3. Hisob o'chirilganda, shaxsiy ma'lumotlar 30 kun ichida o'chiriladi.
+
+5. FOYDALANUVCHI HUQUQLARI
+
+5.1. Siz quyidagi huquqlarga egasiz:
+- O'z ma'lumotlaringizni ko'rish va yuklab olish
+- Ma'lumotlarni tuzatish yoki yangilash
+- Hisobni o'chirish va ma'lumotlarni olib tashlash so'rovi
+- Marketing xabarlaridan voz kechish
+
+5.2. Huquqlaringizdan foydalanish uchun support@tushungo.uz ga murojaat qiling.
+
+6. BOLALAR MAXFIYLIGI
+
+6.1. Biz 16 yoshdan kichik foydalanuvchilarning maxfiyligiga alohida e'tibor beramiz.
+
+6.2. 16 yoshdan kichik foydalanuvchilardan minimal ma'lumot olamiz.
+
+6.3. Ota-onalar istalgan vaqtda farzandlarining ma'lumotlarini ko'rish yoki o'chirish so'rovini yuborishi mumkin.
+
+7. COOKIE VA KUZATISH
+
+7.1. Ilova foydalanuvchi sessiyasini saqlash uchun local storage ishlatadi.
+
+7.2. Biz uchinchi tomon kuzatish xizmatlari (analytics) ishlatamiz (faqat anonim statistika uchun).
+
+8. XAVFSIZLIK
+
+8.1. Ma'lumotlar SSL/TLS shifrlash orqali uzatiladi.
+
+8.2. Serverlar xavfsiz ma'lumotlar markazlarida joylashgan.
+
+8.3. Doimiy xavfsizlik tekshiruvlari o'tkaziladi.
+
+9. O'ZGARISHLAR
+
+9.1. Biz ushbu siyosatni vaqti-vaqti bilan yangilashimiz mumkin.
+
+9.2. Muhim o'zgarishlar haqida Ilova orqali xabar beramiz.
+
+10. ALOQA
+
+Maxfiylik masalalari bo'yicha: support@tushungo.uz
+
+© tushunGo. Barcha huquqlar himoyalangan.`;

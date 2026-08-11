@@ -3,6 +3,7 @@ import { useState } from "react";
 import { supabase } from "@shared/supabase";
 import { getSafeReturnTo } from "../utils/authRedirect";
 import TelegramLoginButton from "../components/TelegramLoginButton";
+import LegalModal from "../components/LegalModal";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -10,6 +11,8 @@ export default function Login() {
   const returnTo = getSafeReturnTo(searchParams.get("returnTo"));
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [legalModal, setLegalModal] = useState<{ open: boolean; type: "terms" | "privacy" }>({ open: false, type: "terms" });
+  const [accepted, setAccepted] = useState(false);
 
   async function handleGoogleLogin() {
     setError("");
@@ -61,6 +64,27 @@ export default function Login() {
         />
       </div>
 
+      {/* Rozilik matni */}
+      <p className="w-full mt-5 text-[11px] text-center leading-relaxed" style={{ color: 'var(--theme-text-secondary)' }}>
+        Davom ettirish orqali siz{" "}
+        <a
+          href="#"
+          onClick={(e) => { e.preventDefault(); setLegalModal({ open: true, type: "terms" }); }}
+          className="text-primary-500 underline font-medium"
+        >
+          Foydalanish shartlari
+        </a>
+        {" "}va{" "}
+        <a
+          href="#"
+          onClick={(e) => { e.preventDefault(); setLegalModal({ open: true, type: "privacy" }); }}
+          className="text-primary-500 underline font-medium"
+        >
+          Maxfiylik siyosati
+        </a>
+        ga rozilik bildirasiz.
+      </p>
+
       {/* Error */}
       {error && (
         <div className="w-full mt-4 bg-red-50 border border-red-200 rounded-lg p-3">
@@ -69,7 +93,16 @@ export default function Login() {
       )}
 
       {/* Mehmon sifatida kirish */}
-      <Link to={returnTo} className="mt-10 text-sm text-gray-400 font-medium">Mehmon sifatida kirish →</Link>
+      <Link to={returnTo} className="mt-8 text-sm text-gray-400 font-medium">Mehmon sifatida kirish →</Link>
+
+      {/* Legal Modal */}
+      <LegalModal
+        open={legalModal.open}
+        type={legalModal.type}
+        showAccept
+        onAccept={() => setAccepted(true)}
+        onClose={() => setLegalModal({ ...legalModal, open: false })}
+      />
     </div>
   );
 }

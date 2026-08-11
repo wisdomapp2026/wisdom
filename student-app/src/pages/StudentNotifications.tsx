@@ -1,19 +1,22 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { ChevronLeft, Bell, CheckCheck, BookOpen, Trophy, CreditCard, MessageCircle } from "lucide-react";
+import { ChevronLeft, Bell, CheckCheck, BookOpen, Trophy, CreditCard, MessageCircle, FileText } from "lucide-react";
 import { supabase } from "@shared/supabase";
 import { useAuth } from "../hooks/useAuth";
 import { notifyBadgeUpdate } from "../hooks/useNotificationCount";
+import LegalModal from "../components/LegalModal";
 
 interface StudentNotif {
   id: string;
-  type: "course_update" | "test_result" | "payment" | "message" | "promo" | "general";
+  type: "course_update" | "test_result" | "payment" | "message" | "promo" | "general" | "legal";
   title: string;
   body: string;
   isRead: boolean;
   createdAt: number;
   /** Aniq foydalanuvchiga tegishli bo'lsa — uning ID si. Bo'sh bo'lsa umumiy (broadcast). */
   userId?: string;
+  /** Huquqiy hujjat turi (legal type bildirishnomalar uchun) */
+  legalType?: "terms" | "privacy";
 }
 
 /** Umumiy (broadcast) bildirishnomalarning o'qilgan ID lari — har user uchun alohida */
@@ -39,6 +42,7 @@ const typeConfig: Record<string, { icon: React.ReactNode; bg: string }> = {
   message: { icon: <MessageCircle size={16} className="text-purple-500" />, bg: "bg-purple-50" },
   promo: { icon: <span className="text-sm">🏷️</span>, bg: "bg-orange-50" },
   general: { icon: <Bell size={16} className="text-gray-500" />, bg: "bg-gray-50" },
+  legal: { icon: <FileText size={16} className="text-indigo-500" />, bg: "bg-indigo-50" },
 };
 
 export default function StudentNotifications() {
@@ -46,6 +50,7 @@ export default function StudentNotifications() {
   const [notifications, setNotifications] = useState<StudentNotif[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [legalModal, setLegalModal] = useState<{ open: boolean; type: "terms" | "privacy" }>({ open: false, type: "terms" });
 
   useEffect(() => {
     if (user) loadNotifications();
@@ -174,6 +179,11 @@ export default function StudentNotifications() {
                   key={notif.id}
                   onClick={() => {
                     if (!notif.isRead) markAsRead(notif.id);
+                    // Huquqiy hujjat bildirishnomasi — modal ochish
+                    if (notif.type === "legal" && notif.legalType) {
+                      setLegalModal({ open: true, type: notif.legalType });
+                      return;
+                    }
                     setExpandedId(expandedId === notif.id ? null : notif.id);
                   }}
                   className={`w-full flex items-start gap-3 p-4 rounded-xl text-left transition-colors ${
@@ -197,6 +207,13 @@ export default function StudentNotifications() {
           </div>
         )}
       </div>
+
+      {/* Legal Modal */}
+      <LegalModal
+        open={legalModal.open}
+        type={legalModal.type}
+        onClose={() => setLegalModal({ ...legalModal, open: false })}
+      />
     </div>
   );
 }

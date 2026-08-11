@@ -82,25 +82,32 @@ export default function Register() {
         <Link to={returnTo} className="text-sm text-gray-400 font-medium">Mehmon sifatida kirish →</Link>
       </p>
 
-      {/* Security */}
-      <div className="mt-8 bg-blue-50 border border-blue-100 rounded-xl p-4">
-        <div className="flex items-start gap-3">
-          <span className="text-primary-500">🛡️</span>
-          <div>
-            <p className="text-sm font-bold uppercase">Xavfsizlik kafolati</p>
-            <p className="text-xs text-gray-600 mt-1">
-              Tugmani bosish orqali siz bizning{" "}
-              <button type="button" onClick={() => setLegalModal({ open: true, type: "terms" })} className="text-primary-500 underline font-medium">Foydalanish shartlari</button> va{" "}
-              <button type="button" onClick={() => setLegalModal({ open: true, type: "privacy" })} className="text-primary-500 underline font-medium">Maxfiylik siyosati</button>ga rozilik bildirasiz.
-            </p>
-          </div>
-        </div>
-      </div>
+      {/* Rozilik matni */}
+      <p className="mt-6 text-[11px] text-center text-gray-500 leading-relaxed px-2">
+        Davom ettirish orqali siz{" "}
+        <a
+          href="#"
+          onClick={(e) => { e.preventDefault(); setLegalModal({ open: true, type: "terms" }); }}
+          className="text-primary-500 underline font-medium"
+        >
+          Foydalanish shartlari
+        </a>
+        {" "}va{" "}
+        <a
+          href="#"
+          onClick={(e) => { e.preventDefault(); setLegalModal({ open: true, type: "privacy" }); }}
+          className="text-primary-500 underline font-medium"
+        >
+          Maxfiylik siyosati
+        </a>
+        ga rozilik bildirasiz.
+      </p>
 
       {/* Legal Modal */}
       <LegalModal
         open={legalModal.open}
         type={legalModal.type}
+        showAccept
         onClose={() => setLegalModal({ ...legalModal, open: false })}
       />
     </div>
