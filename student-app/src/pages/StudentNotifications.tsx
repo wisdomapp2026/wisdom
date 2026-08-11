@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { ChevronLeft, Bell, CheckCheck, BookOpen, Trophy, CreditCard, MessageCircle, FileText } from "lucide-react";
+import { ChevronLeft, Bell, CheckCheck, BookOpen, Trophy, CreditCard, MessageCircle, FileText, Trash2 } from "lucide-react";
 import { supabase } from "@shared/supabase";
 import { useAuth } from "../hooks/useAuth";
 import { notifyBadgeUpdate } from "../hooks/useNotificationCount";
@@ -32,6 +32,22 @@ function addReadBroadcast(userId: string, notifId: string) {
   const list = getReadBroadcasts(userId);
   if (!list.includes(notifId)) {
     localStorage.setItem(`edukids_read_broadcasts_${userId}`, JSON.stringify([...list, notifId]));
+  }
+}
+
+/** O'chirilgan (dismissed) bildirishnomalar — user bu habarlarni ko'rmaydi */
+function getDismissedNotifs(userId: string): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(`edukids_dismissed_notifs_${userId}`) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function addDismissedNotif(userId: string, notifId: string) {
+  const list = getDismissedNotifs(userId);
+  if (!list.includes(notifId)) {
+    localStorage.setItem(`edukids_dismissed_notifs_${userId}`, JSON.stringify([...list, notifId]));
   }
 }
 
@@ -67,9 +83,12 @@ export default function StudentNotifications() {
 
       // Umumiy bildirishnomalar uchun o'qilgan holati localStorage da (har user uchun alohida)
       const readBroadcasts = getReadBroadcasts(user!.uid);
-      const normalized = mine.map((n) =>
-        n.userId ? n : { ...n, isRead: readBroadcasts.includes(n.id) }
-      );
+      const dismissedList = getDismissedNotifs(user!.uid);
+      const normalized = mine
+        .filter((n) => !dismissedList.includes(n.id)) // O'chirilganlarni ko'rsatmaslik
+        .map((n) =>
+          n.userId ? n : { ...n, isRead: readBroadcasts.includes(n.id) }
+        );
 
       setNotifications(normalized.sort((a, b) => b.createdAt - a.createdAt));
     } catch (err) {
@@ -130,6 +149,13 @@ export default function StudentNotifications() {
   }
 
   const unreadCount = notifications.filter((n) => !n.isRead).length;
+
+  function dismissNotification(id: string) {
+    if (!user) return;
+    addDismissedNotif(user.uid, id);
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+    notifyBadgeUpdate();
+  }
 
   if (loading) {
     return (
@@ -199,7 +225,17 @@ export default function StudentNotifications() {
                       {!notif.isRead && <span className="w-2 h-2 bg-primary-500 rounded-full shrink-0" />}
                     </div>
                     <p className={`text-xs text-gray-500 mt-0.5 whitespace-pre-wrap break-words ${expandedId === notif.id ? "" : "line-clamp-2"}`}>{notif.body}</p>
-                    <p className="text-[10px] text-gray-400 mt-1">{timeAgo}</p>
+                    <div className="flex items-center justify-between mt-1">
+                      <p className="text-[10px] text-gray-400">{timeAgo}</p>
+                      {expandedId === notif.id && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); dismissNotification(notif.id); }}
+                          className="text-[10px] text-red-400 flex items-center gap-1 active:text-red-600"
+                        >
+                          <Trash2 size={10} /> O'chirish
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </button>
               );

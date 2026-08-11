@@ -25,9 +25,11 @@ export default function News() {
   const [broadcastTitle, setBroadcastTitle] = useState("");
   const [broadcastBody, setBroadcastBody] = useState("");
   const [broadcastSending, setBroadcastSending] = useState(false);
+  const [broadcastHistory, setBroadcastHistory] = useState<any[]>([]);
 
   useEffect(() => {
     loadMessages();
+    loadBroadcastHistory();
   }, []);
 
   async function loadMessages() {
@@ -38,6 +40,24 @@ export default function News() {
       console.error("Habarlarni yuklashda xatolik:", err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadBroadcastHistory() {
+    try {
+      const { data } = await supabase.from("settings").select("value").eq("key", "studentNotifications").maybeSingle();
+      setBroadcastHistory(((data?.value as any[]) || []).sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0)));
+    } catch {}
+  }
+
+  async function deleteBroadcast(id: string) {
+    if (!confirm("Bu bildirishnomani o'chirishga ishonchingiz komilmi?")) return;
+    try {
+      const updated = broadcastHistory.filter((n) => n.id !== id);
+      await supabase.from("settings").upsert({ key: "studentNotifications", value: updated });
+      setBroadcastHistory(updated);
+    } catch (err: any) {
+      alert("O'chirishda xatolik: " + err.message);
     }
   }
 
@@ -62,6 +82,7 @@ export default function News() {
       setBroadcastTitle("");
       setBroadcastBody("");
       setShowBroadcastForm(false);
+      loadBroadcastHistory();
       alert("✅ Habar barcha o'quvchilarga yuborildi!");
     } catch (err: any) {
       console.error("Habar yuborishda xatolik:", err);
@@ -206,6 +227,35 @@ export default function News() {
               <button type="button" onClick={() => setShowBroadcastForm(false)} className="btn-outline text-sm">Bekor</button>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Yuborilgan bildirishnomalar tarixi */}
+      {broadcastHistory.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-gray-900">📋 Yuborilgan bildirishnomalar ({broadcastHistory.length})</h3>
+          </div>
+          <div className="divide-y divide-gray-50 max-h-[300px] overflow-y-auto">
+            {broadcastHistory.map((notif: any) => (
+              <div key={notif.id} className="px-5 py-3 flex items-center gap-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">{notif.title}</p>
+                  <p className="text-xs text-gray-500 truncate">{notif.body}</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">
+                    {notif.createdAt ? new Date(notif.createdAt).toLocaleDateString("uz") : ""}
+                  </p>
+                </div>
+                <button
+                  onClick={() => deleteBroadcast(notif.id)}
+                  className="text-gray-300 hover:text-red-500 shrink-0"
+                  title="O'chirish"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
