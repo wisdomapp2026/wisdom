@@ -247,7 +247,7 @@ export default function FolderDetail() {
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
-              <p className="font-semibold text-gray-900 text-sm leading-snug truncate">{cleanTopicTitle(topic.title)}</p>
+              <p className="font-semibold text-gray-900 text-sm leading-snug">{cleanTopicTitle(topic.title)}</p>
               {topic.isPremium && <span className="shrink-0 text-yellow-500 text-xs">👑</span>}
             </div>
             <div className="flex items-center mt-1.5 gap-2">

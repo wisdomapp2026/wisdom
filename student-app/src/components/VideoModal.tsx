@@ -263,8 +263,8 @@ export default function VideoModal({ open, videoUrl, onClose }: Props) {
       </div>
 
       {/* Video container */}
-      <div className="flex-1 flex items-center justify-center bg-black overflow-hidden">
-        <div className={`w-full ${isLandscape ? "h-full" : "aspect-video max-h-[60vh]"}`}>
+      <div className="flex-1 flex items-center justify-center bg-black overflow-hidden px-1">
+        <div className={`w-full ${isLandscape ? "h-full" : "max-h-full"}`} style={!isLandscape ? { aspectRatio: "16/9" } : undefined}>
           {isYouTube(videoUrl) ? (
             <div ref={containerRef} className="w-full h-full" />
           ) : (
