@@ -2,6 +2,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useState } from "react";
 import { supabase } from "@shared/supabase";
 import { getSafeReturnTo } from "../utils/authRedirect";
+import { getAuthRedirectBase } from "../utils/platform";
 import TelegramLoginButton from "../components/TelegramLoginButton";
 import LegalModal from "../components/LegalModal";
 
@@ -21,7 +22,8 @@ export default function Login() {
       const { error: gErr } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: window.location.origin + returnTo,
+          // Native app da localhost emas, haqiqiy web domen ishlatiladi
+          redirectTo: getAuthRedirectBase() + returnTo,
         },
       });
       if (gErr) throw gErr;

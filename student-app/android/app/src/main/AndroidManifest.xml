@@ -38,4 +38,17 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Bildirishnomalar (Android 13+ da foydalanuvchidan ruxsat so'raladi) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Profil rasmi / to'lov skrinshotini galereyadan tanlash uchun.
+         Android 13 (API 33) dan boshlab READ_MEDIA_IMAGES ishlatiladi,
+         undan oldingi versiyalar uchun READ_EXTERNAL_STORAGE qoldiriladi. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission
+        android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
 </manifest>

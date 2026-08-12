@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  tushunGo logotipi — adaptive icon foreground.
+  Adaptive icon 108x108 dp bo'ladi, markazdagi xavfsiz zona ~66x66 dp.
+  Shuning uchun logotip 108x108 viewport ichida markazlashtirilgan va
+  kesilmasligi uchun kichraytirilgan holda joylashtirilgan.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <group android:translateX="22" android:translateY="22">
+        <!-- Ko'k yoy (chap/yuqori yarim doira) -->
+        <path
+            android:strokeColor="#1D4ED8"
+            android:strokeWidth="5.5"
+            android:strokeLineCap="round"
+            android:fillColor="#00000000"
+            android:pathData="M32,3.5 A28.5,28.5 0 0 0 3.5,32 A28.5,28.5 0 0 0 32,60.5" />
+
+        <!-- Yashil yoy (o'ng/yuqori yarim doira) -->
+        <path
+            android:strokeColor="#16A34A"
+            android:strokeWidth="5.5"
+            android:strokeLineCap="round"
+            android:fillColor="#00000000"
+            android:pathData="M32,3.5 A28.5,28.5 0 0 1 60.5,32" />
+
+        <!-- Ochilgan kitob (pastda) -->
+        <path
+            android:fillColor="#2563EB"
+            android:pathData="M32,50.5 L15,44 C15,44 21,52 32,53.5 Z" />
+        <path
+            android:fillColor="#1E40AF"
+            android:pathData="M32,50.5 L49,44 C49,44 43,52 32,53.5 Z" />
+
+        <!-- "T" harfi -->
+        <path
+            android:fillColor="#132A52"
+            android:pathData="M15.5,17 h33 a2.6,2.6 0 0 1 2.6,2.6 v3.4 a2.6,2.6 0 0 1 -2.6,2.6 h-33 a2.6,2.6 0 0 1 -2.6,-2.6 v-3.4 a2.6,2.6 0 0 1 2.6,-2.6 z" />
+        <path
+            android:fillColor="#132A52"
+            android:pathData="M29.2,24 h5.6 v25 h-5.6 z" />
+
+        <!-- Yashil strelka (o'ngga) -->
+        <path
+            android:fillColor="#16A34A"
+            android:pathData="M36,33 h12 l-4.5,-5 h6.5 l7,6.8 -7,6.8 h-6.5 l4.5,-5 h-12 z" />
+
+        <!-- Tezlik chiziqlari -->
+        <path
+            android:fillColor="#2AA087"
+            android:pathData="M55,26 h9 a1.6,1.6 0 0 1 0,3.2 h-9 a1.6,1.6 0 0 1 0,-3.2 z" />
+        <path
+            android:fillColor="#2AA087"
+            android:pathData="M58,33 h8 a1.6,1.6 0 0 1 0,3.2 h-8 a1.6,1.6 0 0 1 0,-3.2 z" />
+        <path
+            android:fillColor="#2AA087"
+            android:pathData="M55,40 h9 a1.6,1.6 0 0 1 0,3.2 h-9 a1.6,1.6 0 0 1 0,-3.2 z" />
+
+        <!-- Yuqoridagi kichik uchqunlar -->
+        <path
+            android:fillColor="#22C55E"
+            android:pathData="M31,9 h2.6 v5 h-2.6 z" />
+        <path
+            android:fillColor="#2563EB"
+            android:pathData="M23,11 l2.2,-1.1 2.2,4.2 -2.2,1.1 z" />
+        <path
+            android:fillColor="#22C55E"
+            android:pathData="M39,10 l2.2,1.1 -2.2,4.2 -2.2,-1.1 z" />
+    </group>
+</vector>

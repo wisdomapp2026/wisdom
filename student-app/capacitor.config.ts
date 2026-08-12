@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'uz.edukids.app',
-  appName: 'EduKids',
+  appName: 'tushunGo',
   webDir: 'dist',
   server: {
     // Production da web URL ishlatmaslik (lokal fayllardan ishlaydi)

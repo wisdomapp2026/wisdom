@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@shared/supabase";
 import { useAuth } from "./useAuth";
+import { requestNotificationPermission, showNewNotifications } from "../utils/nativeNotifications";
 
 /** Umumiy (broadcast) bildirishnomalarning o'qilgan ID lari — har user uchun alohida */
 function getReadBroadcasts(userId: string): string[] {
@@ -24,6 +25,9 @@ export function useNotificationCount() {
       setCount(0);
       return;
     }
+    // Native app da bildirishnoma ruxsatini so'rash (web da hech narsa qilmaydi)
+    requestNotificationPermission();
+
     loadCount();
     // Har 30 sekund yangilanadi
     const interval = setInterval(loadCount, 30000);
@@ -48,13 +52,18 @@ export function useNotificationCount() {
       const all = (data?.value as any[]) || [];
       const readBroadcasts = getReadBroadcasts(user.uid);
 
-      const unread = all.filter((n) => {
+      const unreadItems = all.filter((n) => {
         if (n.userId && n.userId !== user.uid) return false;
         if (!n.userId) return !readBroadcasts.includes(n.id);
         return !n.isRead;
-      }).length;
+      });
 
-      setCount(unread);
+      setCount(unreadItems.length);
+
+      // Native app da o'qilmagan yangi bildirishnomalarni status barda ko'rsatish
+      showNewNotifications(
+        unreadItems.map((n) => ({ id: String(n.id), title: n.title || "tushunGo", body: n.message || n.body || "" }))
+      );
     } catch {
       // jim
     }
