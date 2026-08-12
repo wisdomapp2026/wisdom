@@ -2,7 +2,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useState } from "react";
 import { supabase } from "@shared/supabase";
 import { getAuthPath, getSafeReturnTo } from "../utils/authRedirect";
-import { getAuthRedirectBase } from "../utils/platform";
+import { getAuthRedirectBase, isNativeApp } from "../utils/platform";
 import TelegramLoginButton from "../components/TelegramLoginButton";
 import LegalModal from "../components/LegalModal";
 
@@ -41,13 +41,25 @@ export default function Register() {
           disabled={loading}
           onClick={async () => {
             setLoading(true);
-            const { error: gErr } = await supabase.auth.signInWithOAuth({
-              provider: "google",
-              // Native app da localhost emas, haqiqiy web domen ishlatiladi
-              options: { redirectTo: getAuthRedirectBase() + returnTo },
-            });
-            if (gErr) setError(gErr.message);
-            setLoading(false);
+            if (isNativeApp()) {
+              const redirectUrl = "uz.edukids.app://auth/callback";
+              const { data, error: gErr } = await supabase.auth.signInWithOAuth({
+                provider: "google",
+                options: { redirectTo: redirectUrl, skipBrowserRedirect: true },
+              });
+              if (gErr) { setError(gErr.message); setLoading(false); return; }
+              if (data?.url) {
+                const { Browser } = await import("@capacitor/browser");
+                await Browser.open({ url: data.url });
+              }
+            } else {
+              const { error: gErr } = await supabase.auth.signInWithOAuth({
+                provider: "google",
+                options: { redirectTo: getAuthRedirectBase() + returnTo },
+              });
+              if (gErr) setError(gErr.message);
+              setLoading(false);
+            }
           }}
           className="w-full flex items-center justify-center gap-3 border border-gray-200 rounded-xl py-3.5 bg-white hover:bg-gray-50 active:scale-[0.98] transition-all disabled:opacity-50"
         >

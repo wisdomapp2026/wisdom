@@ -87,19 +87,27 @@ export default function App() {
   }, [location.pathname, navigate]);
 
   // Deep link handler — OAuth callback (Google login APK da qaytganda)
+  // OAuth tugagach brauzer uz.edukids.app://auth/callback#access_token=...&refresh_token=...
+  // ga redirect qiladi. Android bu URL'ni ushlaydi va shu event'ni ishga tushiradi.
   useEffect(() => {
     const urlListener = CapApp.addListener("appUrlOpen", async ({ url }) => {
-      // OAuth redirect URL'dan token'ni ajratib olish
-      if (url.includes("access_token") || url.includes("/auth/callback")) {
-        const hashPart = url.split("#")[1];
-        if (hashPart) {
-          const params = new URLSearchParams(hashPart);
-          const accessToken = params.get("access_token");
-          const refreshToken = params.get("refresh_token");
-          if (accessToken && refreshToken) {
-            await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-            navigate("/", { replace: true });
-          }
+      // Token'ni hash fragment yoki query dan olish
+      const hashPart = url.includes("#") ? url.split("#")[1] : "";
+      const queryPart = url.includes("?") ? url.split("?")[1]?.split("#")[0] : "";
+      const combined = hashPart || queryPart;
+
+      if (combined) {
+        const params = new URLSearchParams(combined);
+        const accessToken = params.get("access_token");
+        const refreshToken = params.get("refresh_token");
+        if (accessToken && refreshToken) {
+          await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+          // Brauzer ochiq bo'lsa yopish
+          try {
+            const { Browser } = await import("@capacitor/browser");
+            await Browser.close();
+          } catch {}
+          navigate("/", { replace: true });
         }
       }
     });

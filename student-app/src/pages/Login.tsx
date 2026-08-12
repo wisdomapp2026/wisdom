@@ -20,11 +20,12 @@ export default function Login() {
     setLoading(true);
     try {
       if (isNativeApp()) {
-        // Native app: In-App Browser ochib, OAuth token'ni URL'dan ushlab olamiz
-        const { Browser } = await import("@capacitor/browser");
-        const redirectUrl = getAuthRedirectBase() + "/auth/callback";
+        // Native app: Custom URL scheme ga redirect qilamiz.
+        // OAuth tugaganda brauzer uz.edukids.app://auth/callback#access_token=...
+        // ga yo'naltiradi. Android bu URL ni ushlaydi va app'ni ochadi.
+        // App.tsx dagi appUrlOpen handler token'ni oladi va session'ni o'rnatadi.
+        const redirectUrl = "uz.edukids.app://auth/callback";
 
-        // Supabase OAuth URL ni olish (brauzer ochmasdan)
         const { data, error: gErr } = await supabase.auth.signInWithOAuth({
           provider: "google",
           options: {
@@ -35,37 +36,10 @@ export default function Login() {
         if (gErr) throw gErr;
         if (!data?.url) throw new Error("OAuth URL olinmadi");
 
-        // In-App Browser da ochish
-        await Browser.open({ url: data.url, windowName: "_self" });
-
-        // URL o'zgarishini kuzatish — token kelganda session o'rnatish
-        Browser.addListener("browserFinished", () => {
-          // Brauzer yopilganda session tekshirish
-          supabase.auth.getSession().then(({ data: { session } }) => {
-            if (session) {
-              navigate(returnTo, { replace: true });
-            }
-          });
-          setLoading(false);
-        });
-
-        // App URL listener — deep link orqali qaytsa
-        const { App: CapApp } = await import("@capacitor/app");
-        CapApp.addListener("appUrlOpen", async ({ url }) => {
-          if (url.includes("access_token") || url.includes("#")) {
-            const hashPart = url.split("#")[1];
-            if (hashPart) {
-              const params = new URLSearchParams(hashPart);
-              const accessToken = params.get("access_token");
-              const refreshToken = params.get("refresh_token");
-              if (accessToken && refreshToken) {
-                await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
-                await Browser.close();
-                navigate(returnTo, { replace: true });
-              }
-            }
-          }
-        });
+        // Tizim brauzerida ochish (Chrome Custom Tab) — u OAuth tugaganda
+        // custom scheme'ga redirect qiladi va Android app'ga qaytaradi
+        const { Browser } = await import("@capacitor/browser");
+        await Browser.open({ url: data.url });
       } else {
         // Web: oddiy redirect
         const { error: gErr } = await supabase.auth.signInWithOAuth({
