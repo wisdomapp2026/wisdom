@@ -1,0 +1,361 @@
+/* ============================================================
+   DESKTOP DIZAYN — faqat `html.dk` klassi bo'lganda ishlaydi.
+   Mobil (APK) versiyaga hech qanday ta'sir qilmaydi.
+   ============================================================ */
+
+/* Mobil ramkani (max-width: 430px) bekor qilish */
+html.dk #root {
+  max-width: none;
+  margin: 0;
+  box-shadow: none;
+}
+
+html.dk body {
+  /* Desktopda scrollbar joyi sakramasligi uchun */
+  scrollbar-gutter: stable;
+}
+
+/* Desktopda touch-target minimumi kerak emas — kompakt UI */
+html.dk button,
+html.dk a,
+html.dk [role="button"] {
+  min-height: 0;
+}
+
+/* Sahifa fade animatsiyasini desktop shell o'zi boshqaradi */
+html.dk .page-content {
+  animation: none;
+  padding-bottom: 0;
+  min-height: 0;
+  background-color: transparent !important;
+}
+
+/* ============================================================
+   MOBIL SAHIFALARNI DESKTOP RAMKASIGA MOSLASH
+   Bu sahifalar (kurs ichi, mavzu, test, sertifikatlar...) mobil kodni
+   qayta ishlatadi — mantiqqa tegmasdan faqat o'lchov cheklovlarini olib
+   tashlaymiz, aks holda kontent 430px ustunda qisilib qoladi.
+   ============================================================ */
+html.dk .dk-frame .max-w-mobile,
+html.dk .dk-frame.max-w-mobile {
+  max-width: none !important;
+}
+
+/* Mobil sahifalarda `min-h-screen` ramka ichida bo'sh joy hosil qiladi */
+html.dk .dk-frame .min-h-screen {
+  min-height: 0 !important;
+}
+
+/* Mobil sahifalar ichidagi `bottom-nav` balandligi uchun qo'yilgan bo'sh joy.
+   MUHIM: faqat tashqi `.page-content` konteynerga tegishli — ichki hero
+   bloklaridagi `pb-24` (masalan CourseDetail'dagi "Davom etish" tugmasi
+   uchun bo'sh joy) buzilmasligi kerak, aks holda hero elementlar bir-birini
+   bosib qoladi. */
+html.dk .dk-frame .page-content.pb-20,
+html.dk .dk-frame .page-content.pb-24 {
+  padding-bottom: 1.5rem !important;
+}
+
+/* Mobil `sticky top-0` headerlar desktopda topbar ostiga tushib qolmasin */
+html.dk .dk-frame .sticky.top-0 {
+  top: 0;
+}
+
+/* Mobil modallar `max-w-mobile` bilan cheklangan — desktopda kengaytiramiz */
+html.dk .dk-frame .fixed.inset-0 .max-w-mobile {
+  max-width: 34rem !important;
+  border-radius: 24px !important;
+}
+
+/* ===== DESIGN TOKENS ===== */
+html.dk {
+  --dk-sidebar-w: 264px;
+  --dk-sidebar-w-collapsed: 76px;
+  --dk-topbar-h: 68px;
+  --dk-content-max: 1440px;
+  --dk-radius: 20px;
+  --dk-shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
+  --dk-shadow-md: 0 4px 8px -2px rgba(16, 24, 40, 0.08), 0 2px 4px -2px rgba(16, 24, 40, 0.04);
+  --dk-shadow-lg: 0 12px 24px -6px rgba(16, 24, 40, 0.1), 0 4px 8px -4px rgba(16, 24, 40, 0.06);
+  --dk-shadow-xl: 0 24px 48px -12px rgba(16, 24, 40, 0.18);
+  --dk-border: rgba(16, 24, 40, 0.07);
+  --dk-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --dk-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+html.dk.dark {
+  --dk-border: rgba(255, 255, 255, 0.08);
+  --dk-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --dk-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --dk-shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.4);
+  --dk-shadow-xl: 0 24px 56px rgba(0, 0, 0, 0.5);
+}
+
+/* ===== KOMPONENT KLASSLARI ===== */
+
+.dk-surface {
+  background-color: var(--theme-card-bg);
+  border: 1px solid var(--dk-border);
+  border-radius: var(--dk-radius);
+}
+
+.dk-card {
+  background-color: var(--theme-card-bg);
+  border: 1px solid var(--dk-border);
+  border-radius: var(--dk-radius);
+  box-shadow: var(--dk-shadow-sm);
+  transition: transform 0.34s var(--dk-ease), box-shadow 0.34s var(--dk-ease),
+    border-color 0.34s var(--dk-ease);
+  will-change: transform;
+}
+
+.dk-card-hover:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--dk-shadow-lg);
+  border-color: color-mix(in srgb, var(--theme-primary) 34%, transparent);
+}
+
+/* Glass panel — topbar va overlaylar uchun */
+.dk-glass {
+  background-color: color-mix(in srgb, var(--theme-bg) 78%, transparent);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+}
+
+/* Nozik scrollbar */
+.dk-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
+}
+.dk-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.dk-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.dk-scroll::-webkit-scrollbar-thumb {
+  background-color: rgba(148, 163, 184, 0.4);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+.dk-scroll::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(100, 116, 139, 0.6);
+}
+
+/* Focus ring — klaviatura navigatsiyasi uchun aniq ko'rinish */
+html.dk :focus-visible {
+  outline: 2px solid var(--theme-primary);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* ===== ANIMATSIYALAR ===== */
+
+@keyframes dkFadeUp {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0);
+  }
+  to {
+    opacity: 1;
+    /* MUHIM: "none" bo'lishi shart (translate3d(0,0,0) emas) — aks holda
+       animatsiya tugagandan keyin ham bu element `position: fixed`
+       bolalari uchun yangi containing block yaratib, modal oynalarni
+       markazdan chiqarib yuboradi va scroll muammosiga olib keladi. */
+    transform: none;
+  }
+}
+
+@keyframes dkFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes dkScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.965);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes dkSlideRight {
+  from {
+    opacity: 0;
+    transform: translate3d(-18px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes dkShimmer {
+  0% {
+    background-position: -420px 0;
+  }
+  100% {
+    background-position: 420px 0;
+  }
+}
+
+@keyframes dkFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-9px);
+  }
+}
+
+@keyframes dkPulseRing {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.55;
+  }
+  70% {
+    transform: scale(1.7);
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes dkProgressGrow {
+  from {
+    width: 0;
+  }
+}
+
+.dk-anim-fade-up {
+  animation: dkFadeUp 0.5s var(--dk-ease) both;
+}
+.dk-anim-fade-in {
+  animation: dkFadeIn 0.4s ease-out both;
+}
+.dk-anim-scale-in {
+  animation: dkScaleIn 0.32s var(--dk-ease) both;
+}
+.dk-anim-slide-right {
+  animation: dkSlideRight 0.4s var(--dk-ease) both;
+}
+.dk-anim-float {
+  animation: dkFloat 6s ease-in-out infinite;
+}
+
+/* Ketma-ket (stagger) kirish — grid elementlari uchun */
+.dk-stagger > * {
+  animation: dkFadeUp 0.5s var(--dk-ease) both;
+}
+.dk-stagger > *:nth-child(1) { animation-delay: 0.02s; }
+.dk-stagger > *:nth-child(2) { animation-delay: 0.06s; }
+.dk-stagger > *:nth-child(3) { animation-delay: 0.1s; }
+.dk-stagger > *:nth-child(4) { animation-delay: 0.14s; }
+.dk-stagger > *:nth-child(5) { animation-delay: 0.18s; }
+.dk-stagger > *:nth-child(6) { animation-delay: 0.22s; }
+.dk-stagger > *:nth-child(7) { animation-delay: 0.26s; }
+.dk-stagger > *:nth-child(8) { animation-delay: 0.3s; }
+.dk-stagger > *:nth-child(9) { animation-delay: 0.34s; }
+.dk-stagger > *:nth-child(n + 10) { animation-delay: 0.38s; }
+
+/* Skeleton shimmer */
+.dk-skeleton {
+  background-color: rgba(148, 163, 184, 0.16);
+  background-image: linear-gradient(
+    90deg,
+    rgba(148, 163, 184, 0) 0,
+    rgba(148, 163, 184, 0.22) 50%,
+    rgba(148, 163, 184, 0) 100%
+  );
+  background-size: 420px 100%;
+  background-repeat: no-repeat;
+  animation: dkShimmer 1.3s linear infinite;
+  border-radius: 12px;
+}
+
+/* Rasm ustidan yumshoq zoom (kartochka hoverida) */
+.dk-zoom-wrap {
+  overflow: hidden;
+}
+.dk-zoom-img {
+  transition: transform 0.62s var(--dk-ease);
+  will-change: transform;
+}
+.dk-card-hover:hover .dk-zoom-img {
+  transform: scale(1.055);
+}
+
+/* Gradient matn */
+.dk-gradient-text {
+  background-image: linear-gradient(
+    100deg,
+    var(--theme-primary),
+    color-mix(in srgb, var(--theme-primary) 45%, #8b5cf6)
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Bosishda mayin siqilish */
+.dk-press {
+  transition: transform 0.14s var(--dk-ease-in-out);
+}
+.dk-press:active {
+  transform: scale(0.975);
+}
+
+/* Line clamp yordamchilari (Tailwind plugin o'rniga) */
+.dk-clamp-1,
+.dk-clamp-2,
+.dk-clamp-3,
+.dk-clamp-4 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.dk-clamp-1 { -webkit-line-clamp: 1; }
+.dk-clamp-2 { -webkit-line-clamp: 2; }
+.dk-clamp-3 { -webkit-line-clamp: 3; }
+.dk-clamp-4 { -webkit-line-clamp: 4; }
+
+/* ===== REDUCED MOTION ===== */
+@media (prefers-reduced-motion: reduce) {
+  html.dk .dk-anim-fade-up,
+  html.dk .dk-anim-fade-in,
+  html.dk .dk-anim-scale-in,
+  html.dk .dk-anim-slide-right,
+  html.dk .dk-anim-float,
+  html.dk .dk-stagger > * {
+    animation: none !important;
+  }
+  html.dk .dk-card,
+  html.dk .dk-zoom-img,
+  html.dk .dk-press {
+    transition: none !important;
+  }
+  html.dk .dk-card-hover:hover {
+    transform: none;
+  }
+  html.dk .dk-card-hover:hover .dk-zoom-img {
+    transform: none;
+  }
+}
+
+/* ===== PRINT ===== */
+@media print {
+  html.dk .dk-no-print {
+    display: none !important;
+  }
+}

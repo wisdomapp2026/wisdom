@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { Menu, X, Moon, Star, CreditCard, Settings, Shield, Bell, HelpCircle, MessageSquare, LogOut, ChevronRight, BookOpen, Award, FileText } from "lucide-react";
+import { Menu, X, Moon, Star, CreditCard, Settings, Shield, Bell, HelpCircle, MessageSquare, LogOut, ChevronRight, BookOpen, Award, FileText, Download, Smartphone } from "lucide-react";
 import { supabase } from "@shared/supabase";
 import { useAuth } from "../hooks/useAuth";
 import { useDarkMode } from "../hooks/useDarkMode";
@@ -15,6 +15,7 @@ export default function HamburgerMenu() {
   const { isDark, toggle: toggleDark } = useDarkMode();
   const [logoUrl, setLogoUrl] = useState("");
   const [appName, setAppName] = useState("tushunGo");
+  const [apkUrl, setApkUrl] = useState("");
 
   // Swipe gesture refs
   const touchStartX = useRef(0);
@@ -36,6 +37,7 @@ export default function HamburgerMenu() {
         const data = resData.value as any;
         if (data.logoUrl) setLogoUrl(data.logoUrl);
         if (data.platformName) setAppName(data.platformName);
+        if (data.apkUrl) setApkUrl(data.apkUrl);
       } catch {
         // ixtiyoriy — sozlama yuklanmasa standart qiymatlar qoladi
       }
@@ -234,6 +236,24 @@ export default function HamburgerMenu() {
                 <ChevronRight size={16} className="text-gray-300" />
               </Link>
             ))}
+
+            <div className="h-px bg-gray-100 mx-5 my-1" />
+
+            {/* Android ilovani yuklab olish */}
+            {apkUrl && (
+              <a
+                href={apkUrl}
+                download
+                onClick={() => setOpen(false)}
+                className="flex items-center w-full px-5 py-3.5 active:bg-green-50"
+              >
+                <div className="w-9 h-9 bg-green-50 rounded-xl flex items-center justify-center mr-3">
+                  <Smartphone size={18} className="text-green-600" />
+                </div>
+                <span className="flex-1 text-left text-[15px] text-gray-900 font-medium">Android ilovani yuklash</span>
+                <Download size={16} className="text-green-500" />
+              </a>
+            )}
 
             <div className="h-px bg-gray-100 mx-5 my-1" />
 

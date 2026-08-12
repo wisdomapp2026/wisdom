@@ -65,17 +65,19 @@ export default function Messages() {
         createdAt: Date.now(),
       });
 
-      // Admin uchun bildirishnoma yaratish
-      const notif: AdminNotification = {
-        id: `notif-msg-${Date.now()}`,
-        type: "new_message",
-        title: "Yangi habar",
-        body: `${userName}: ${newMessage.trim().slice(0, 50)}`,
-        isRead: false,
-        data: { userId: user.uid },
-        createdAt: Date.now(),
-      };
-      await createAdminNotification(notif);
+      // Admin uchun bildirishnoma — RLS cheklovi sababli xato bo'lishi mumkin
+      try {
+        const notif: AdminNotification = {
+          id: `notif-msg-${Date.now()}`,
+          type: "new_message",
+          title: "Yangi habar",
+          body: `${userName}: ${newMessage.trim().slice(0, 50)}`,
+          isRead: false,
+          data: { userId: user.uid },
+          createdAt: Date.now(),
+        };
+        await createAdminNotification(notif);
+      } catch {}
 
       setNewMessage("");
       await loadMessages();

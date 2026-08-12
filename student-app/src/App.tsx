@@ -40,6 +40,14 @@ import { getUserById, createUser } from "@shared/repositories";
 import { supabase } from "@shared/supabase";
 import { syncLocalProgressToDb, hasLocalProgress } from "./hooks/useLocalProgress";
 import type { User } from "@shared/types";
+// Desktop versiya — mobil kodga tegmaydigan alohida qatlam (src/desktop).
+// `lazy` qilib yuklaymiz: shunda desktop dizayn kodi APK/mobil bundle'ga
+// tushmaydi va faqat kompyuterda ochilganda yuklab olinadi.
+import { lazy, Suspense } from "react";
+import { useIsDesktop } from "./desktop/hooks/useIsDesktop";
+import "./desktop/desktop.css";
+
+const DesktopApp = lazy(() => import("./desktop/DesktopApp"));
 
 export default function App() {
   const { user, loading: authLoading } = useAuth();
@@ -47,6 +55,17 @@ export default function App() {
   const [checkingBan, setCheckingBan] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Kompyuter ekrani (>=1024px, faqat brauzer). Capacitor APK ichida — har doim false.
+  const isDesktop = useIsDesktop();
+
+  // `html.dk` klassi desktop CSS ni yoqadi (mobil uslublarga ta'sir qilmaydi)
+  useEffect(() => {
+    const root = document.documentElement;
+    if (isDesktop) root.classList.add("dk");
+    else root.classList.remove("dk");
+    return () => root.classList.remove("dk");
+  }, [isDesktop]);
 
   // Android back button handler
   useEffect(() => {
@@ -190,6 +209,20 @@ export default function App() {
     return <BannedScreen userId={user.uid} userName={userData.name} />;
   }
 
+  // ===== DESKTOP VERSIYA =====
+  // Kompyuter ekranida alohida (src/desktop) qatlam ishlaydi. Yuqoridagi barcha
+  // tekshiruvlar (auth, ban, qurilma limiti, tema) ikkala versiya uchun umumiy.
+  if (isDesktop) {
+    return (
+      <ErrorBoundary>
+        <Suspense fallback={<DesktopBootLoader />}>
+          <DesktopApp />
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+
+  // ===== MOBIL / PLANSHET VERSIYA (APK uchun ham shu) =====
   return (
     <ErrorBoundary>
       <NavigationLoader />
@@ -225,5 +258,26 @@ export default function App() {
       </Routes>
       <BottomNav />
     </ErrorBoundary>
+  );
+}
+
+/**
+ * Desktop qatlam (lazy chunk) yuklanayotganda ko'rinadigan ekran.
+ * Sidebar + kontent shakli oldindan chizilib, "sakrash" (layout shift) oldi olinadi.
+ */
+function DesktopBootLoader() {
+  return (
+    <div className="min-h-screen flex" style={{ backgroundColor: "var(--theme-bg)" }}>
+      <div
+        className="w-[264px] shrink-0 hidden lg:block"
+        style={{ backgroundColor: "var(--theme-card-bg)", borderRight: "1px solid rgba(16,24,40,0.07)" }}
+      />
+      <div className="flex-1 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-12 h-12 border-[3px] border-primary-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-gray-400">Desktop versiya yuklanmoqda...</p>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -26,12 +26,18 @@ CREATE TABLE IF NOT EXISTS courses (
     title TEXT NOT NULL,
     description TEXT NOT NULL,
     category TEXT NOT NULL,
-    cover_image TEXT,
+    cover_image TEXT,             -- mobil muqova (tavsiya 800x450 px)
     cover_position TEXT,
     cover_fit TEXT,
-    hero_image TEXT,
+    cover_image_desktop TEXT,     -- desktop muqova (tavsiya 1600x900 px)
+    cover_position_desktop TEXT,
+    cover_fit_desktop TEXT,
+    hero_image TEXT,              -- mobil hero (tavsiya 300x400 px)
     hero_image_position TEXT,
     hero_image_fit TEXT,
+    hero_image_desktop TEXT,      -- desktop hero (tavsiya 600x800 px)
+    hero_image_position_desktop TEXT,
+    hero_image_fit_desktop TEXT,
     is_premium BOOLEAN DEFAULT false,
     is_hidden BOOLEAN DEFAULT false,
     show_on_homepage BOOLEAN DEFAULT true,
@@ -248,7 +254,8 @@ CREATE TABLE IF NOT EXISTS news_items (
     title TEXT NOT NULL,
     body TEXT,
     "type" TEXT NOT NULL,
-    image_url TEXT,
+    image_url TEXT,             -- mobil yangilik rasmi (tavsiya 320x440 px)
+    image_url_desktop TEXT,     -- desktop yangilik rasmi (tavsiya 640x880 px)
     video_url TEXT,
     video_type TEXT,
     duration TEXT,
@@ -268,11 +275,15 @@ CREATE TABLE IF NOT EXISTS home_banners (
     course_id TEXT REFERENCES courses(id) ON DELETE CASCADE,
     link_url TEXT,
     bg_color TEXT NOT NULL,
-    image_url TEXT,
+    image_url TEXT,                   -- mobil banner rasmi (tavsiya 800x450 px)
     image_position TEXT,
     image_fit TEXT,
     image_full_width BOOLEAN DEFAULT false,
     image_opacity BIGINT DEFAULT 100,
+    image_url_desktop TEXT,           -- desktop banner rasmi (tavsiya 2400x800 px)
+    image_position_desktop TEXT,
+    image_fit_desktop TEXT,
+    image_opacity_desktop BIGINT,
     image_crop_top BIGINT DEFAULT 0,
     image_crop_bottom BIGINT DEFAULT 0,
     text_color TEXT,

@@ -3,6 +3,13 @@ import { Plus, Edit, Trash2, Eye, EyeOff, X, Image, Video, FileText } from "luci
 import { getAllNewsItems, createNewsItem, updateNewsItem, deleteNewsItem } from "@shared/repositories";
 import { uploadFile } from "@shared/supabase";
 import type { NewsItem, NewsItemType } from "@shared/types";
+import DesktopImageUpload from "../components/DesktopImageUpload";
+
+/** Yangilik rasmi uchun tavsiya etiladigan o'lchamlar (px) */
+const NEWS_PX = {
+  mobile: { width: 320, height: 440 },  // 8:11 — telefonda kartochka 128×176
+  desktop: { width: 640, height: 880 }, // 8:11 — desktopda kartochka 248×341 (2x)
+};
 
 export default function NewsItems() {
   const [items, setItems] = useState<NewsItem[]>([]);
@@ -16,6 +23,9 @@ export default function NewsItems() {
   const [type, setType] = useState<NewsItemType>("image");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState("");
+  // Desktop versiyasi uchun alohida rasm
+  const [imageFileDesktop, setImageFileDesktop] = useState<File | null>(null);
+  const [imagePreviewDesktop, setImagePreviewDesktop] = useState("");
   const [videoUrl, setVideoUrl] = useState("");
   const [duration, setDuration] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
@@ -32,6 +42,7 @@ export default function NewsItems() {
   function openCreate() {
     setEditItem(null);
     setTitle(""); setBody(""); setType("image"); setImageFile(null); setImagePreview(""); setVideoUrl(""); setDuration(""); setLinkUrl("");
+    setImageFileDesktop(null); setImagePreviewDesktop("");
     setShowForm(true);
   }
 
@@ -40,6 +51,7 @@ export default function NewsItems() {
     setTitle(item.title); setBody(item.body || ""); setType(item.type);
     setImagePreview(item.imageUrl || ""); setVideoUrl(item.videoUrl || ""); setDuration(item.duration || "");
     setLinkUrl(item.linkUrl || ""); setImageFile(null);
+    setImagePreviewDesktop(item.imageUrlDesktop || ""); setImageFileDesktop(null);
     setShowForm(true);
   }
 
@@ -48,26 +60,45 @@ export default function NewsItems() {
     setSaving(true);
     const now = Date.now();
 
+    // Mobil rasm
     let imageUrl = editItem?.imageUrl || "";
     if (imageFile) {
       try {
-        imageUrl = await uploadFile("edukids", `news/${now}-${imageFile.name}`, imageFile);
+        imageUrl = await uploadFile("edukids", `news/${now}-mobile-${imageFile.name}`, imageFile);
       } catch (err: any) {
-        console.error("Rasm yuklashda xatolik:", err);
+        console.error("Mobil rasm yuklashda xatolik:", err);
       }
     }
+    if (!imagePreview && !imageFile) imageUrl = "";
+
+    // Desktop rasm (ixtiyoriy — bo'sh bo'lsa desktopda mobil rasm ishlatiladi)
+    let imageUrlDesktop = editItem?.imageUrlDesktop || "";
+    if (imageFileDesktop) {
+      try {
+        imageUrlDesktop = await uploadFile(
+          "edukids",
+          `news/${now}-desktop-${imageFileDesktop.name}`,
+          imageFileDesktop
+        );
+      } catch (err: any) {
+        console.error("Desktop rasm yuklashda xatolik:", err);
+      }
+    }
+    if (!imagePreviewDesktop && !imageFileDesktop) imageUrlDesktop = "";
 
     try {
       if (editItem) {
         await updateNewsItem(editItem.id, {
           title: title.trim(), body: body.trim(), type,
-          imageUrl: imageUrl || undefined, videoUrl: videoUrl.trim() || undefined,
+          imageUrl: imageUrl || undefined, imageUrlDesktop: imageUrlDesktop || undefined,
+          videoUrl: videoUrl.trim() || undefined,
           duration: duration.trim() || undefined, linkUrl: linkUrl.trim() || undefined,
         });
       } else {
         const item: NewsItem = {
           id: `news-${now}`, title: title.trim(), body: body.trim(), type,
-          imageUrl: imageUrl || undefined, videoUrl: videoUrl.trim() || undefined,
+          imageUrl: imageUrl || undefined, imageUrlDesktop: imageUrlDesktop || undefined,
+          videoUrl: videoUrl.trim() || undefined,
           videoType: videoUrl.includes("youtube") || videoUrl.includes("youtu.be") ? "youtube" : "upload",
           duration: duration.trim() || undefined, linkUrl: linkUrl.trim() || undefined,
           isActive: true, order: items.length + 1,
@@ -144,17 +175,53 @@ export default function NewsItems() {
               <textarea value={body} onChange={(e) => setBody(e.target.value)} placeholder="Yangilik haqida batafsil yozing..." rows={4} className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm resize-none" />
             </div>
 
-            {/* Rasm */}
+            {/* Rasm — mobil */}
             {(type === "image" || type === "video") && (
               <div className="col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Rasm {type === "image" ? "*" : "(thumbnail)"}</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  📱 Rasm — mobil versiya {type === "image" ? "*" : "(thumbnail)"}
+                </label>
+                <p className="text-[11px] text-gray-400 mb-2">
+                  Tavsiya: <strong>{NEWS_PX.mobile.width}×{NEWS_PX.mobile.height} px</strong> (8:11 — tik to'rtburchak)
+                </p>
                 <div className="flex items-center gap-3">
                   {imagePreview && <img src={imagePreview} alt="" className="h-16 rounded-lg border" />}
                   <label className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 cursor-pointer hover:bg-gray-50">
                     📷 Rasm tanlash
                     <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setImageFile(f); setImagePreview(URL.createObjectURL(f)); } }} />
                   </label>
+                  {imagePreview && (
+                    <button
+                      type="button"
+                      onClick={() => { setImageFile(null); setImagePreview(""); }}
+                      className="px-3 py-2 border border-gray-200 rounded-lg text-xs text-gray-500 hover:text-red-500 hover:bg-red-50"
+                    >
+                      O'chirish
+                    </button>
+                  )}
                 </div>
+              </div>
+            )}
+
+            {/* Rasm — desktop */}
+            {(type === "image" || type === "video") && (
+              <div className="col-span-2">
+                <DesktopImageUpload
+                  label={`🖥 Rasm — desktop versiya ${type === "video" ? "(thumbnail)" : ""}`}
+                  preview={imagePreviewDesktop}
+                  onFileSelect={(f) => {
+                    setImageFileDesktop(f);
+                    setImagePreviewDesktop(URL.createObjectURL(f));
+                  }}
+                  onClear={() => {
+                    setImageFileDesktop(null);
+                    setImagePreviewDesktop("");
+                  }}
+                  recommended={NEWS_PX.desktop}
+                  mobileRecommended={NEWS_PX.mobile}
+                  aspectRatio="8 / 11"
+                  hint="Desktopda yangilik kartochkasi ~248 px kenglikda — Retina ekran uchun 2x (640 px) rasm kerak."
+                />
               </div>
             )}
 

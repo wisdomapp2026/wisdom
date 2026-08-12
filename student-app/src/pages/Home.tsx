@@ -1,4 +1,4 @@
-import { Search, Bell, ChevronRight, Play, Clock, X, FileText, Moon, Sun, Star } from "lucide-react";
+import { Search, Bell, ChevronRight, Play, Clock, X, FileText, Moon, Sun, Star, Sparkles } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
 import { getAllCourses, getTopicsByCourse, getMotivationPhrases, getMotivationSettings, getAllProgressByUser, getCourseById, getTopicById, getAllSocialLinks, getUserById, getActiveBanners, getActiveNewsItems, getUserProgress, getActiveTestimonials } from "@shared/repositories";
@@ -612,21 +612,38 @@ export default function Home() {
       )}
 
       {/* Kunlik motivatsiya */}
-      <div className="mx-5 mt-6 bg-gradient-to-br from-primary-500 via-primary-600 to-indigo-600 rounded-3xl p-6 text-center relative overflow-hidden shadow-lg shadow-primary-500/20">
-        {/* Dekorativ elementlar */}
-        <div className="absolute -top-10 -right-10 w-36 h-36 rounded-full bg-white/10" />
-        <div className="absolute -bottom-12 -left-8 w-32 h-32 rounded-full bg-white/5" />
+      <div
+        className="mx-5 mt-6 rounded-3xl p-6 relative overflow-hidden shadow-lg shadow-primary-500/20"
+        style={{
+          background:
+            "radial-gradient(circle at 20% 15%, color-mix(in srgb, var(--theme-primary) 70%, #6366f1) 0%, transparent 50%), linear-gradient(135deg, var(--theme-primary) 0%, color-mix(in srgb, var(--theme-primary) 45%, #4338ca) 65%, #312e81 100%)",
+        }}
+      >
+        {/* Nozik nuqta naqsh */}
+        <div
+          className="absolute inset-0 opacity-[0.12]"
+          style={{
+            backgroundImage: "radial-gradient(circle, #fff 1px, transparent 1px)",
+            backgroundSize: "16px 16px",
+          }}
+        />
+        {/* Dekorativ nurlar */}
+        <div className="absolute -top-10 -right-10 w-36 h-36 rounded-full bg-white/10 blur-xl" />
+        <div className="absolute -bottom-12 -left-8 w-32 h-32 rounded-full bg-indigo-400/15 blur-xl" />
+        <div className="absolute inset-0 rounded-3xl ring-1 ring-white/15" />
 
-        <div className="relative z-10">
-          <div className="w-12 h-12 mx-auto rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center shadow-lg">
-            <span className="text-2xl">⭐</span>
+        <div className="relative z-10 text-center">
+          <div className="relative inline-block">
+            <span className="absolute inset-0 rounded-2xl bg-white/25 blur-md" />
+            <div className="relative w-12 h-12 mx-auto rounded-2xl bg-white/15 backdrop-blur-md ring-1 ring-white/30 flex items-center justify-center shadow-lg">
+              <Sparkles size={20} className="text-yellow-300" strokeWidth={2.2} />
+            </div>
           </div>
-          <p className="text-white font-bold text-[15px] leading-relaxed mt-3.5">"{motivationPhrase}"</p>
-          <div className="flex items-center justify-center gap-2 mt-3.5">
-            <span className="w-6 h-px bg-white/30" />
-            <p className="text-white/70 text-[11px] font-medium">Muvaffaqiyat formulasi</p>
-            <span className="w-6 h-px bg-white/30" />
-          </div>
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/15 backdrop-blur-sm ring-1 ring-white/20 text-white/80 text-[10px] font-bold uppercase tracking-widest mt-3.5">
+            <Star size={9} className="fill-current" />
+            Muvaffaqiyat formulasi
+          </span>
+          <p className="text-white font-bold text-[15px] leading-relaxed mt-3">“{motivationPhrase}”</p>
         </div>
       </div>
 

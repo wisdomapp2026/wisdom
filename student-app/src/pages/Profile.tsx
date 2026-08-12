@@ -2,10 +2,11 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   CreditCard, Play, Pencil, LogOut, Award, Receipt, HelpCircle,
-  BookOpen, ClipboardList, Target, Crown, Clock, X, TrendingUp,
+  BookOpen, ClipboardList, Target, Crown, Clock, X, TrendingUp, Monitor,
 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
 import { ProfileLoader } from "../components/PageLoader";
+import { isForceMobile, setForceMobile } from "../desktop/hooks/useIsDesktop";
 import {
   getUserById, getAllProgressByUser, getTestResultsByUser, getAllUserSubscriptions,
   getTopicsByCourse, getTopicById, getCourseById, getTestsByCourse,
@@ -429,6 +430,18 @@ export default function Profile() {
           </div>
         )}
       </section>
+
+      {/* ===== Desktop ko'rinishga qaytish (faqat qo'lda mobil rejimga o'tgan bo'lsa) ===== */}
+      {isForceMobile() && (
+        <section className="px-4 mt-6">
+          <button
+            onClick={() => setForceMobile(false)}
+            className="w-full flex items-center justify-center gap-2 py-3.5 bg-white border border-indigo-100 rounded-2xl text-indigo-600 font-semibold text-sm active:bg-indigo-50"
+          >
+            <Monitor size={16} /> Desktop ko'rinishga o'tish
+          </button>
+        </section>
+      )}
 
       {/* ===== Akkauntdan chiqish ===== */}
       <section className="px-4 mt-6">

@@ -96,17 +96,19 @@ export default function AuthorModal({ open, onClose }: Props) {
     try {
       await createTestimonial(testimonial);
 
-      // Admin bildirishnoma
-      const notif: AdminNotification = {
-        id: `notif-review-${now}`,
-        type: "new_message",
-        title: "Yangi fikr qoldirildi",
-        body: `${testimonial.name} ${rating} yulduz bilan fikr qoldirdi: "${reviewText.trim().slice(0, 50)}..."`,
-        isRead: false,
-        data: { testimonialId: testimonial.id, userId: user.uid },
-        createdAt: now,
-      };
-      await createAdminNotification(notif);
+      // Admin bildirishnoma — RLS cheklovi sababli xato bo'lishi mumkin
+      try {
+        const notif: AdminNotification = {
+          id: `notif-review-${now}`,
+          type: "new_message",
+          title: "Yangi fikr qoldirildi",
+          body: `${testimonial.name} ${rating} yulduz bilan fikr qoldirdi: "${reviewText.trim().slice(0, 50)}..."`,
+          isRead: false,
+          data: { testimonialId: testimonial.id, userId: user.uid },
+          createdAt: now,
+        };
+        await createAdminNotification(notif);
+      } catch {}
 
       setSubmitted(true);
       setReviewText("");

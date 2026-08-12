@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { ChevronLeft, Play, X } from "lucide-react";
+import { ChevronLeft, Play, X, Calendar } from "lucide-react";
 import { getActiveNewsItems } from "@shared/repositories";
 import type { NewsItem } from "@shared/types";
+import { useIsDesktop } from "../desktop/hooks/useIsDesktop";
 
 function getYouTubeThumbnail(url: string): string {
   const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([\w-]+)/);
@@ -15,6 +16,7 @@ function getEmbedUrl(url: string): string {
 }
 
 export default function AllNews() {
+  const isDesktop = useIsDesktop();
   const [items, setItems] = useState<NewsItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedItem, setSelectedItem] = useState<NewsItem | null>(null);
@@ -51,7 +53,53 @@ export default function AllNews() {
         </div>
       )}
 
-      {!loading && items.length > 0 && (
+      {!loading && items.length > 0 && isDesktop && (
+        // Desktop — bir qatorda 3 tadan kartochka
+        <div className="px-5 mt-4 grid grid-cols-3 gap-5">
+          {items.map((item) => {
+            const thumb = item.imageUrl || (item.type === "video" && item.videoUrl ? getYouTubeThumbnail(item.videoUrl) : "");
+            const date = new Date(item.createdAt);
+            return (
+              <button
+                key={item.id}
+                onClick={() => handleClick(item)}
+                className="bg-white border border-gray-100 rounded-2xl overflow-hidden text-left hover:shadow-md hover:-translate-y-0.5 transition-all shadow-sm flex flex-col"
+              >
+                {/* Rasm / Video thumbnail — bosh sahifadagi bilan bir xil balandlik */}
+                <div className="w-full relative overflow-hidden bg-gray-900" style={{ height: "260px" }}>
+                  {thumb ? (
+                    <img src={thumb} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-gray-700 to-gray-900 grid place-items-center">
+                      <Play size={30} className="text-white/50" />
+                    </div>
+                  )}
+                  {item.type === "video" && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                      <div className="w-12 h-12 bg-white/90 rounded-full flex items-center justify-center">
+                        <Play size={20} className="text-gray-800 ml-0.5" fill="currentColor" />
+                      </div>
+                    </div>
+                  )}
+                  {item.duration && (
+                    <span className="absolute bottom-2 right-2 text-xs text-white bg-black/70 px-2 py-0.5 rounded-md font-medium">{item.duration}</span>
+                  )}
+                </div>
+                {/* Matn */}
+                <div className="p-4">
+                  <h3 className="text-sm font-bold text-gray-900 line-clamp-2">{item.title}</h3>
+                  <p className="text-[11px] text-gray-400 mt-2 flex items-center gap-1.5">
+                    <Calendar size={11} />
+                    {date.toLocaleDateString("uz-UZ", { day: "numeric", month: "long", year: "numeric" })}
+                  </p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {!loading && items.length > 0 && !isDesktop && (
         <div className="px-5 mt-4 space-y-4">
           {items.map((item) => {
             const thumb = item.imageUrl || (item.type === "video" && item.videoUrl ? getYouTubeThumbnail(item.videoUrl) : "");

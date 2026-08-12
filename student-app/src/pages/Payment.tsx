@@ -2,9 +2,9 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ChevronLeft, Copy, Check, Shield, Upload, Image } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth } from "../hooks/useAuth";
-import { getPromoByCode, updatePromoCode, usePromoCodeAtomic, createPayment, getUserById, createAdminNotification } from "@shared/repositories";
+import { getPromoByCode, updatePromoCode, usePromoCodeAtomic, createPayment, getUserById } from "@shared/repositories";
 import { supabase, uploadFile } from "@shared/supabase";
-import type { Payment as PaymentType, AdminNotification } from "@shared/types";
+import type { Payment as PaymentType } from "@shared/types";
 
 export default function Payment() {
   const { user } = useAuth();
@@ -124,18 +124,6 @@ export default function Payment() {
     try {
       // Payment ga screenshot URL qo'shish
       await createPayment({ ...payment, screenshotUrl } as any);
-
-      // Admin bildirishnoma
-      const notif: AdminNotification = {
-        id: `notif-pay-${now}`,
-        type: "new_payment",
-        title: "Yangi to'lov — tasdiqlash kerak",
-        body: `${userName} ${finalAmount.toLocaleString()} so'm o'tkazdi (${planLabel}). Screenshot yuklangan.`,
-        isRead: false,
-        data: { userId: user.uid, paymentId: payment.id, plan: planId, amount: String(finalAmount), screenshotUrl },
-        createdAt: now,
-      };
-      await createAdminNotification(notif);
 
       setSubmitted(true);
     } catch (err) {

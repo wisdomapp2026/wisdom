@@ -44,7 +44,7 @@ Bu qo'llanma Supabase Auth bilan Google, Apple va Telegram login ni ketma-ket so
 
 1. **Authentication → URL Configuration** bo'limiga o'ting
 2. **Redirect URLs** ga quyidagilarni qo'shing:
-   ```
+   ```https://ybltddehavbczcwvyjrt.supabase.co/auth/v1/callback
    http://localhost:5173/**
    http://localhost:3001/**
    https://sizning-domen.netlify.app/**
@@ -115,7 +115,7 @@ Supabase Telegram ni standart provider sifatida qo'llab-quvvatlamaydi. Shuning u
 2. `/newbot` buyrug'ini yuboring
 3. Bot nomini kiriting: `EduKids Login Bot`
 4. Username kiriting: `edukids_login_bot` (yoki boshqa bo'sh nom)
-5. **Bot Token** ni nusxalang (masalan: `7123456789:AAF...`)
+5. **Bot Token** ni nusxalang (8623503044:AAG2zb2OW3G4rhUgAj6oMr3Fx7k88zWobhc)
 6. `/setdomain` buyrug'ini yuboring:
    - Bot ni tanlang
    - Domen kiriting: `ybltddehavbczcwvyjrt.supabase.co`

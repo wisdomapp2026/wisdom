@@ -158,7 +158,7 @@
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+  to { opacity: 1; transform: none; }
 }
 
 @keyframes spinSmooth {
@@ -185,7 +185,7 @@
 
 @keyframes slideUp {
   from { transform: translateY(100%); }
-  to { transform: translateY(0); }
+  to { transform: none; }
 }
 
 .animate-slide-up {

@@ -16,6 +16,9 @@ interface PlatformSettings {
   logoUrl: string;
   supportPhone: string;
   supportEmail: string;
+  // Mobil ilova (APK)
+  apkUrl: string;
+  apkVersion: string;
   // To'lov kartasi
   cardNumber: string;
   cardHolder: string;
@@ -72,6 +75,8 @@ const DEFAULT_SETTINGS: PlatformSettings = {
   logoUrl: "",
   supportPhone: "+998 90 123 45 67",
   supportEmail: "support@edukids.uz",
+  apkUrl: "",
+  apkVersion: "",
   cardNumber: "8600 1234 5678 9012",
   cardHolder: "EDUKIDS ADMIN",
   paymeEnabled: true,
@@ -232,6 +237,74 @@ export default function Settings() {
                     </button>
                   )}
                   <p className="text-xs text-gray-400 mt-1">Tavsiya: 512x512 px, PNG yoki SVG</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Android APK */}
+            <div className="bg-gray-50 rounded-xl p-5 border border-gray-200">
+              <h4 className="font-medium text-gray-900 mb-3">🤖 Android ilova (APK)</h4>
+              <div className="flex items-center gap-4">
+                <div className="w-14 h-14 rounded-xl overflow-hidden bg-green-500 flex items-center justify-center shrink-0 border-2 border-gray-200">
+                  <span className="text-white text-2xl">📦</span>
+                </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">
+                      ⬆️ APK faylni yuklash
+                      <input
+                        type="file"
+                        accept=".apk,application/vnd.android.package-archive"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          if (file.size > 200 * 1024 * 1024) { alert("Maksimal 200MB!"); return; }
+                          try {
+                            const filePath = `apk/tushungo-${Date.now()}.apk`;
+                            const { error: uploadErr } = await supabase.storage.from("edukids").upload(filePath, file);
+                            if (uploadErr) throw uploadErr;
+                            const url = supabase.storage.from("edukids").getPublicUrl(filePath).data.publicUrl;
+                            updateField("apkUrl", url);
+                            await supabase.from("settings").upsert({ key: "platform", value: { ...settings, apkUrl: url } });
+                          } catch (err: any) {
+                            console.error("APK yuklashda xatolik:", err);
+                            alert("APK yuklashda xatolik: " + err.message);
+                          }
+                        }}
+                      />
+                    </label>
+                    {settings.apkUrl && (
+                      <>
+                        <a
+                          href={settings.apkUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-primary-500 hover:underline"
+                        >
+                          Ko'rish
+                        </a>
+                        <button
+                          onClick={() => updateField("apkUrl", "")}
+                          className="text-xs text-red-500 hover:underline"
+                        >
+                          O'chirish
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1.5">
+                    {settings.apkUrl ? "APK yuklangan — student ilovada yuklab olish havolasi ko'rinadi" : "Hali APK yuklanmagan"}
+                  </p>
+                  <div className="mt-2.5">
+                    <label className="block text-xs font-medium text-gray-500 mb-1">Versiya (ixtiyoriy, masalan 1.2.0)</label>
+                    <input
+                      value={settings.apkVersion}
+                      onChange={(e) => updateField("apkVersion", e.target.value)}
+                      placeholder="1.0.0"
+                      className="w-40 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                  </div>
                 </div>
               </div>
             </div>

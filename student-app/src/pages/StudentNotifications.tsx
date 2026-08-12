@@ -201,7 +201,7 @@ export default function StudentNotifications() {
               const config = typeConfig[notif.type] || typeConfig.general;
               const timeAgo = getTimeAgo(notif.createdAt);
               return (
-                <button
+                <div
                   key={notif.id}
                   onClick={() => {
                     if (!notif.isRead) markAsRead(notif.id);
@@ -212,7 +212,7 @@ export default function StudentNotifications() {
                     }
                     setExpandedId(expandedId === notif.id ? null : notif.id);
                   }}
-                  className={`w-full flex items-start gap-3 p-4 rounded-xl text-left transition-colors ${
+                  className={`w-full flex items-start gap-3 p-4 rounded-xl text-left transition-colors cursor-pointer ${
                     !notif.isRead ? "bg-blue-50/50 border border-blue-100" : "bg-white border border-gray-100"
                   }`}
                 >
@@ -237,7 +237,7 @@ export default function StudentNotifications() {
                       )}
                     </div>
                   </div>
-                </button>
+                </div>
               );
             })}
           </div>

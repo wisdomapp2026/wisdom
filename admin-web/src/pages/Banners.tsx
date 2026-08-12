@@ -4,6 +4,13 @@ import { getAllBanners, createBanner, updateBanner, deleteBanner, getAllCourses 
 import { uploadFile } from "@shared/supabase";
 import type { HomeBanner, Course } from "@shared/types";
 import LoadingButton from "../components/LoadingButton";
+import DesktopImageUpload from "../components/DesktopImageUpload";
+
+/** Banner rasmi uchun tavsiya etiladigan o'lchamlar (px) */
+const BANNER_PX = {
+  mobile: { width: 800, height: 450 },   // 16:9 — telefon ekrani
+  desktop: { width: 2400, height: 800 }, // 3:1 — kompyuterda banner keng va baland
+};
 
 export default function Banners() {
   const [banners, setBanners] = useState<HomeBanner[]>([]);
@@ -24,6 +31,12 @@ export default function Banners() {
   const [imageFit, setImageFit] = useState<"cover" | "contain">("cover");
   const [imageFullWidth, setImageFullWidth] = useState(false);
   const [imageOpacity, setImageOpacity] = useState(70);
+  // Desktop versiyasi uchun alohida rasm
+  const [imageFileDesktop, setImageFileDesktop] = useState<File | null>(null);
+  const [imagePreviewDesktop, setImagePreviewDesktop] = useState("");
+  const [imagePositionDesktop, setImagePositionDesktop] = useState("center");
+  const [imageFitDesktop, setImageFitDesktop] = useState<"cover" | "contain">("cover");
+  const [imageOpacityDesktop, setImageOpacityDesktop] = useState(70);
   const [textColor, setTextColor] = useState("#ffffff");
   const [textOpacity, setTextOpacity] = useState(100);
   const [buttonPosition, setButtonPosition] = useState("");
@@ -44,6 +57,8 @@ export default function Banners() {
     setTitle(""); setSubtitle(""); setButtonText("Boshlash"); setCourseId(""); setBgColor("#3b82f6");
     setImageFile(null); setImagePreview(""); setImagePosition("center"); setImageFit("cover"); setImageFullWidth(false);
     setImageOpacity(70);
+    setImageFileDesktop(null); setImagePreviewDesktop(""); setImagePositionDesktop("center");
+    setImageFitDesktop("cover"); setImageOpacityDesktop(70);
     setTextColor("#ffffff"); setTextOpacity(100); setButtonPosition(""); setShowButton(true);
     setShowForm(true);
   }
@@ -56,6 +71,10 @@ export default function Banners() {
     setImagePosition(banner.imagePosition || "center"); setImageFit(banner.imageFit || "cover");
     setImageFullWidth(banner.imageFullWidth || false);
     setImageOpacity(banner.imageOpacity ?? (banner.imageFullWidth ? 70 : 50));
+    setImagePreviewDesktop(banner.imageUrlDesktop || ""); setImageFileDesktop(null);
+    setImagePositionDesktop(banner.imagePositionDesktop || banner.imagePosition || "center");
+    setImageFitDesktop(banner.imageFitDesktop || banner.imageFit || "cover");
+    setImageOpacityDesktop(banner.imageOpacityDesktop ?? banner.imageOpacity ?? (banner.imageFullWidth ? 70 : 50));
     setTextColor(banner.textColor || "#ffffff"); setTextOpacity(banner.textOpacity ?? 100);
     setButtonPosition(banner.buttonPosition || ""); setShowButton(banner.showButton !== false);
     setShowForm(true);
@@ -65,14 +84,31 @@ export default function Banners() {
     setSaving(true);
     const now = Date.now();
 
+    // Mobil rasm
     let imageUrl = editBanner?.imageUrl || "";
     if (imageFile) {
       try {
-        imageUrl = await uploadFile("edukids", `banners/${now}-${imageFile.name}`, imageFile);
+        imageUrl = await uploadFile("edukids", `banners/${now}-mobile-${imageFile.name}`, imageFile);
       } catch (err: any) {
-        console.error("Rasm yuklashda xatolik:", err);
+        console.error("Mobil rasm yuklashda xatolik:", err);
       }
     }
+    if (!imagePreview && !imageFile) imageUrl = "";
+
+    // Desktop rasm (ixtiyoriy — bo'sh bo'lsa student app mobil rasmga qaytadi)
+    let imageUrlDesktop = editBanner?.imageUrlDesktop || "";
+    if (imageFileDesktop) {
+      try {
+        imageUrlDesktop = await uploadFile(
+          "edukids",
+          `banners/${now}-desktop-${imageFileDesktop.name}`,
+          imageFileDesktop
+        );
+      } catch (err: any) {
+        console.error("Desktop rasm yuklashda xatolik:", err);
+      }
+    }
+    if (!imagePreviewDesktop && !imageFileDesktop) imageUrlDesktop = "";
 
     try {
       if (editBanner) {
@@ -80,6 +116,8 @@ export default function Banners() {
           title: title.trim(), subtitle: subtitle.trim(), buttonText: buttonText.trim(),
           courseId: courseId || undefined, bgColor, imageUrl: imageUrl || undefined,
           imagePosition, imageFit, imageFullWidth, imageOpacity,
+          imageUrlDesktop: imageUrlDesktop || undefined,
+          imagePositionDesktop, imageFitDesktop, imageOpacityDesktop,
           textColor, textOpacity, buttonPosition: buttonPosition || undefined,
           showButton,
         });
@@ -89,6 +127,8 @@ export default function Banners() {
           buttonText: buttonText.trim(), courseId: courseId || undefined,
           bgColor, imageUrl: imageUrl || undefined,
           imagePosition, imageFit, imageFullWidth, imageOpacity,
+          imageUrlDesktop: imageUrlDesktop || undefined,
+          imagePositionDesktop, imageFitDesktop, imageOpacityDesktop,
           textColor, textOpacity, buttonPosition: buttonPosition || undefined,
           showButton,
           isActive: true, order: banners.length + 1,
@@ -211,16 +251,100 @@ export default function Banners() {
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Rasm (ixtiyoriy)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                📱 Mobil rasm (ixtiyoriy)
+              </label>
               <div className="flex items-center gap-2">
                 {imagePreview && <img src={imagePreview} alt="" className="h-10 rounded-lg border" />}
                 <label className="px-3 py-2.5 border border-gray-200 rounded-lg text-sm text-gray-600 cursor-pointer hover:bg-gray-50">
                   📷 Tanlash
                   <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) { setImageFile(f); setImagePreview(URL.createObjectURL(f)); } }} />
                 </label>
+                {imagePreview && (
+                  <button
+                    type="button"
+                    onClick={() => { setImageFile(null); setImagePreview(""); }}
+                    className="px-2.5 py-2.5 border border-gray-200 rounded-lg text-xs text-gray-500 hover:text-red-500 hover:bg-red-50"
+                  >
+                    O'chirish
+                  </button>
+                )}
               </div>
+              <p className="text-[11px] text-gray-400 mt-1.5">
+                Tavsiya: <strong>{BANNER_PX.mobile.width}×{BANNER_PX.mobile.height} px</strong> (16:9)
+              </p>
             </div>
           </div>
+
+          {/* Desktop versiyasi uchun alohida banner rasmi */}
+          <DesktopImageUpload
+            label="🖥 Desktop banner rasmi"
+            preview={imagePreviewDesktop}
+            onFileSelect={(f) => {
+              setImageFileDesktop(f);
+              setImagePreviewDesktop(URL.createObjectURL(f));
+            }}
+            onClear={() => {
+              setImageFileDesktop(null);
+              setImagePreviewDesktop("");
+            }}
+            recommended={BANNER_PX.desktop}
+            mobileRecommended={BANNER_PX.mobile}
+            aspectRatio="3 / 1"
+            fit={imageFitDesktop}
+            position={imagePositionDesktop}
+            hint="Kompyuterda banner ekran bo'ylab keng va baland ko'rinadi — shuning uchun kengroq (3:1) rasm kerak. Matn chap tomonda joylashadi, shuning uchun rasmning muhim qismi o'ng tomonda bo'lsa yaxshi."
+          />
+
+          {/* Desktop rasm sozlamalari */}
+          {imagePreviewDesktop && (
+            <div className="rounded-xl border border-indigo-100 bg-white p-4 grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Desktop rasm o'lchami</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setImageFitDesktop("cover")}
+                    className={`flex-1 px-3 py-2 text-xs rounded-lg border font-medium ${imageFitDesktop === "cover" ? "border-indigo-400 bg-indigo-50 text-indigo-700" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}
+                  >
+                    Cover (to'liq)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setImageFitDesktop("contain")}
+                    className={`flex-1 px-3 py-2 text-xs rounded-lg border font-medium ${imageFitDesktop === "contain" ? "border-indigo-400 bg-indigo-50 text-indigo-700" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}
+                  >
+                    Contain (sig'adi)
+                  </button>
+                </div>
+                <div className="flex items-center justify-between mt-3 mb-1">
+                  <label className="text-xs font-medium text-gray-600">Desktop rasm shaffofligi</label>
+                  <span className="text-[11px] font-mono text-indigo-600">{imageOpacityDesktop}%</span>
+                </div>
+                <input
+                  type="range" min={0} max={100} step={5}
+                  value={imageOpacityDesktop}
+                  onChange={(e) => setImageOpacityDesktop(Number(e.target.value))}
+                  className="w-full accent-indigo-500 cursor-pointer"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Desktopda qaysi qismi ko'rinsin</label>
+                <div className="grid grid-cols-3 gap-1">
+                  {["top left", "top center", "top right", "center left", "center", "center right", "bottom left", "bottom center", "bottom right"].map((pos) => (
+                    <button
+                      key={pos}
+                      type="button"
+                      onClick={() => setImagePositionDesktop(pos)}
+                      className={`px-1 py-1.5 text-[10px] rounded border text-center ${imagePositionDesktop === pos ? "border-indigo-400 bg-indigo-50 text-indigo-700 font-medium" : "border-gray-200 text-gray-500 hover:bg-gray-100"}`}
+                    >
+                      {pos.replace("center", "O'rta").replace("top", "Yuqori").replace("bottom", "Pastki").replace("left", "Chap").replace("right", "O'ng")}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Rasm pozitsiyasi sozlamalari */}
           {imagePreview && (
@@ -290,18 +414,95 @@ export default function Banners() {
               </div>
 
               {/* Tavsiya o'lchami */}
-              <div className="bg-blue-50 border border-blue-100 rounded-lg p-3">
-                <p className="text-xs text-blue-700 font-medium">📐 Tavsiya etiladigan rasm o'lchami:</p>
-                <p className="text-xs text-blue-600 mt-1">• To'liq yoyish uchun: <strong>800×450 px</strong> (16:9 nisbat)</p>
-                <p className="text-xs text-blue-600">• O'ng tomonda ko'rsatish uchun: <strong>300×200 px</strong></p>
-                <p className="text-xs text-blue-600">• Banner balandligi: ~130 px (mobilda), ~150 px (desktop)</p>
+              <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 space-y-1">
+                <p className="text-xs text-blue-700 font-medium">📐 Tavsiya etiladigan rasm o'lchamlari:</p>
+                <p className="text-xs text-blue-600">
+                  📱 <strong>Mobil (telefon / planshet):</strong>{" "}
+                  <code className="font-mono">{BANNER_PX.mobile.width}×{BANNER_PX.mobile.height} px</code> (16:9)
+                  {" "}— banner balandligi ~180 px
+                </p>
+                <p className="text-xs text-blue-600">
+                  🖥 <strong>Desktop (kompyuter):</strong>{" "}
+                  <code className="font-mono">{BANNER_PX.desktop.width}×{BANNER_PX.desktop.height} px</code> (3:1)
+                  {" "}— banner balandligi 320–460 px, kengligi ekran bo'ylab
+                </p>
+                <p className="text-xs text-blue-600">
+                  • Rasmni faqat o'ng tomonda ko'rsatish uchun (yoyilmagan holat):{" "}
+                  <code className="font-mono">600×450 px</code> mobil,{" "}
+                  <code className="font-mono">1200×800 px</code> desktop
+                </p>
+                <p className="text-[11px] text-blue-500 pt-0.5">
+                  Har bir fayl 500 KB dan oshmasligi tavsiya etiladi — shunda sahifa tez yuklanadi.
+                </p>
               </div>
             </div>
           )}
 
+          {/* Desktop preview — kompyuterdagi haqiqiy ko'rinish */}
+          <div>
+            <p className="text-xs text-gray-500 mb-2">🖥 Desktop (kompyuter) versiyasidagi ko'rinishi:</p>
+            <div className="rounded-xl border border-gray-200 bg-gray-100 p-3 overflow-hidden">
+              <div
+                className="rounded-2xl relative overflow-hidden"
+                style={{ backgroundColor: bgColor, aspectRatio: "3 / 1" }}
+              >
+                {(() => {
+                  const dkImg = imagePreviewDesktop || imagePreview;
+                  const dkFit = imagePreviewDesktop ? imageFitDesktop : imageFit;
+                  const dkPos = imagePreviewDesktop ? imagePositionDesktop : imagePosition;
+                  const dkOpacity = (imagePreviewDesktop ? imageOpacityDesktop : imageOpacity) / 100;
+                  if (!dkImg) return null;
+                  return (
+                    <img
+                      src={dkImg}
+                      alt=""
+                      className={imageFullWidth ? "absolute inset-0 w-full h-full" : "absolute right-0 top-0 h-full w-1/2"}
+                      style={{ objectFit: dkFit, objectPosition: dkPos, opacity: dkOpacity }}
+                      draggable={false}
+                    />
+                  );
+                })()}
+                <div
+                  className="absolute inset-0 pointer-events-none"
+                  style={{
+                    background: imageFullWidth
+                      ? "linear-gradient(100deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.22) 46%, rgba(0,0,0,0) 72%)"
+                      : "linear-gradient(100deg, rgba(0,0,0,0.14) 0%, rgba(0,0,0,0) 55%)",
+                  }}
+                />
+                <div className="relative z-10 h-full flex flex-col justify-center px-8 max-w-[62%]">
+                  <p
+                    className="font-extrabold leading-tight"
+                    style={{ color: textColor, opacity: textOpacity / 100, fontSize: "clamp(15px, 2.4vw, 30px)" }}
+                  >
+                    {title || "Sarlavha"}
+                  </p>
+                  {subtitle && (
+                    <p
+                      className="mt-2 leading-snug"
+                      style={{ color: textColor, opacity: (textOpacity / 100) * 0.86, fontSize: "clamp(10px, 1vw, 14px)" }}
+                    >
+                      {subtitle}
+                    </p>
+                  )}
+                  {showButton && (
+                    <span className="mt-4 self-start inline-block bg-white/95 text-gray-900 text-xs font-bold px-5 py-2 rounded-full shadow-lg">
+                      {buttonText || "Tugma"}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+            {!imagePreviewDesktop && imagePreview && (
+              <p className="text-[11px] text-amber-600 mt-1.5 flex items-center gap-1">
+                ⚠️ Desktop rasmi yuklanmagan — mobil rasm cho'zib ko'rsatilmoqda (xiralashishi mumkin)
+              </p>
+            )}
+          </div>
+
           {/* Preview — student appdagi ko'rinish (mobil ramka) */}
           <div>
-            <p className="text-xs text-gray-500 mb-2">📱 Student app dagi ko'rinishi:</p>
+            <p className="text-xs text-gray-500 mb-2">📱 Mobil (telefon) versiyasidagi ko'rinishi:</p>
             <div className="border-[3px] border-gray-800 rounded-[1.5rem] overflow-hidden mx-auto" style={{ width: "320px" }}>
               <div className="bg-gray-50 p-4">
                 <div

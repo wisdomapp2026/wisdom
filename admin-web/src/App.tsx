@@ -34,6 +34,8 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false;
+    /** Hozirgi authenticated user ID — takroriy SIGNED_IN eventlarini filtrlash uchun */
+    let currentUserId: string | null = null;
 
     /** Foydalanuvchi haqiqatan admin rolida ekanligini `users` jadvalidan tekshirish */
     async function resolveRole(u: any | null) {
@@ -41,11 +43,14 @@ export default function App() {
       setUser(u);
 
       if (!u) {
+        currentUserId = null;
         setIsAdmin(false);
         setAccessDenied(false);
         setChecking(false);
         return;
       }
+
+      currentUserId = u.id;
 
       try {
         const profile = await getUserById(u.id);
@@ -66,9 +71,22 @@ export default function App() {
 
     supabase.auth.getSession().then(({ data: { session } }) => resolveRole(session?.user || null));
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setChecking(true);
-      resolveRole(session?.user || null);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT") {
+        setChecking(true);
+        resolveRole(null);
+      } else if (event === "SIGNED_IN") {
+        // Supabase har safar tab-ga qaytganda SIGNED_IN eventini yuboradi.
+        // Agar user o'zgarmagan bo'lsa — qayta loading qilishning hojati yo'q.
+        const newUserId = session?.user?.id || null;
+        if (newUserId && newUserId === currentUserId) {
+          // Xuddi shu user — hech narsa qilmaymiz
+          return;
+        }
+        setChecking(true);
+        resolveRole(session?.user || null);
+      }
+      // TOKEN_REFRESHED, INITIAL_SESSION va boshqa eventlarni e'tiborsiz qoldiramiz
     });
 
     return () => {

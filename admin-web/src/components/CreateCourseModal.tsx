@@ -4,6 +4,15 @@ import { createCourse, updateCourse, getAllCategories, createCategory, updateCat
 import { uploadFile } from "@shared/supabase";
 import type { Course, Category } from "@shared/types";
 import LoadingButton from "./LoadingButton";
+import DesktopImageUpload from "./DesktopImageUpload";
+
+/** Kurs rasmlari uchun tavsiya etiladigan o'lchamlar (px) */
+const COURSE_PX = {
+  coverMobile: { width: 800, height: 450 },   // 16:9 — telefon kartochkasi
+  coverDesktop: { width: 1600, height: 900 }, // 16:9 — desktop kartochkasi (2x)
+  heroMobile: { width: 300, height: 400 },    // 3:4 — kitob muqovasi
+  heroDesktop: { width: 600, height: 800 },   // 3:4 — desktop (2x)
+};
 
 interface Props {
   open: boolean;
@@ -25,17 +34,29 @@ export default function CreateCourseModal({ open, editCourse, onClose, onCreated
   const [newBenefit, setNewBenefit] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Cover image
+  // Cover image (mobil)
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState("");
   const [coverPosition, setCoverPosition] = useState("50% 50%");
   const [coverFit, setCoverFit] = useState<"cover" | "contain">("cover");
 
-  // Hero image — kurs sahifasi headeridagi kichik rasm
+  // Cover image (desktop) — alohida, kattaroq rasm
+  const [coverFileDesktop, setCoverFileDesktop] = useState<File | null>(null);
+  const [coverPreviewDesktop, setCoverPreviewDesktop] = useState("");
+  const [coverPositionDesktop, setCoverPositionDesktop] = useState("50% 50%");
+  const [coverFitDesktop, setCoverFitDesktop] = useState<"cover" | "contain">("cover");
+
+  // Hero image — kurs sahifasi headeridagi kichik rasm (mobil)
   const [heroFile, setHeroFile] = useState<File | null>(null);
   const [heroPreview, setHeroPreview] = useState("");
   const [heroPosition, setHeroPosition] = useState("50% 50%");
   const [heroFit, setHeroFit] = useState<"cover" | "contain">("cover");
+
+  // Hero image (desktop)
+  const [heroFileDesktop, setHeroFileDesktop] = useState<File | null>(null);
+  const [heroPreviewDesktop, setHeroPreviewDesktop] = useState("");
+  const [heroPositionDesktop, setHeroPositionDesktop] = useState("50% 50%");
+  const [heroFitDesktop, setHeroFitDesktop] = useState<"cover" | "contain">("cover");
 
   // Kategoriya boshqaruvi
   const [categories, setCategories] = useState<Category[]>([]);
@@ -65,10 +86,18 @@ export default function CreateCourseModal({ open, editCourse, onClose, onCreated
         setCoverPosition(editCourse.coverPosition || "50% 50%");
         setCoverFit(editCourse.coverFit || "cover");
         setCoverFile(null);
+        setCoverPreviewDesktop(editCourse.coverImageDesktop || "");
+        setCoverPositionDesktop(editCourse.coverPositionDesktop || editCourse.coverPosition || "50% 50%");
+        setCoverFitDesktop(editCourse.coverFitDesktop || editCourse.coverFit || "cover");
+        setCoverFileDesktop(null);
         setHeroPreview(editCourse.heroImage || "");
         setHeroPosition(editCourse.heroImagePosition || "50% 50%");
         setHeroFit(editCourse.heroImageFit || "cover");
         setHeroFile(null);
+        setHeroPreviewDesktop(editCourse.heroImageDesktop || "");
+        setHeroPositionDesktop(editCourse.heroImagePositionDesktop || editCourse.heroImagePosition || "50% 50%");
+        setHeroFitDesktop(editCourse.heroImageFitDesktop || editCourse.heroImageFit || "cover");
+        setHeroFileDesktop(null);
       } else {
         setTitle("");
         setDescription("");
@@ -83,10 +112,18 @@ export default function CreateCourseModal({ open, editCourse, onClose, onCreated
         setCoverPreview("");
         setCoverPosition("50% 50%");
         setCoverFit("cover");
+        setCoverFileDesktop(null);
+        setCoverPreviewDesktop("");
+        setCoverPositionDesktop("50% 50%");
+        setCoverFitDesktop("cover");
         setHeroFile(null);
         setHeroPreview("");
         setHeroPosition("50% 50%");
         setHeroFit("cover");
+        setHeroFileDesktop(null);
+        setHeroPreviewDesktop("");
+        setHeroPositionDesktop("50% 50%");
+        setHeroFitDesktop("cover");
       }
     }
   }, [open, editCourse]);
@@ -183,12 +220,32 @@ export default function CreateCourseModal({ open, editCourse, onClose, onCreated
       coverImage = "";
     }
 
+    const slugId = isEditMode
+      ? editCourse!.id
+      : title.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-");
+
+    // Cover image (desktop) upload — ixtiyoriy
+    let coverImageDesktop = isEditMode ? (editCourse!.coverImageDesktop || "") : "";
+    if (coverFileDesktop) {
+      try {
+        coverImageDesktop = await uploadFile(
+          "edukids",
+          `courses/${slugId}/cover-desktop-${now}-${coverFileDesktop.name}`,
+          coverFileDesktop
+        );
+      } catch (err) {
+        console.error("Desktop muqova yuklashda xatolik:", err);
+      }
+    }
+    if (!coverPreviewDesktop && !coverFileDesktop) {
+      coverImageDesktop = "";
+    }
+
     // Hero image upload (kurs headeridagi kichik rasm)
     let heroImage = isEditMode ? (editCourse!.heroImage || "") : "";
     if (heroFile) {
       try {
-        const courseId = isEditMode ? editCourse!.id : title.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-");
-        heroImage = await uploadFile("edukids", `courses/${courseId}/hero-${now}-${heroFile.name}`, heroFile);
+        heroImage = await uploadFile("edukids", `courses/${slugId}/hero-${now}-${heroFile.name}`, heroFile);
       } catch (err) {
         console.error("Hero rasm yuklashda xatolik:", err);
       }
@@ -197,12 +254,31 @@ export default function CreateCourseModal({ open, editCourse, onClose, onCreated
       heroImage = "";
     }
 
+    // Hero image (desktop) upload — ixtiyoriy
+    let heroImageDesktop = isEditMode ? (editCourse!.heroImageDesktop || "") : "";
+    if (heroFileDesktop) {
+      try {
+        heroImageDesktop = await uploadFile(
+          "edukids",
+          `courses/${slugId}/hero-desktop-${now}-${heroFileDesktop.name}`,
+          heroFileDesktop
+        );
+      } catch (err) {
+        console.error("Desktop hero rasm yuklashda xatolik:", err);
+      }
+    }
+    if (!heroPreviewDesktop && !heroFileDesktop) {
+      heroImageDesktop = "";
+    }
+
     try {
       if (isEditMode) {
         const updateData: Record<string, any> = {
           title, description, category, isPremium, coverImage,
           coverPosition, coverFit, tags: [category],
+          coverImageDesktop, coverPositionDesktop, coverFitDesktop,
           heroImage, heroImagePosition: heroPosition, heroImageFit: heroFit,
+          heroImageDesktop, heroImagePositionDesktop: heroPositionDesktop, heroImageFitDesktop: heroFitDesktop,
           unlockMode,
         };
         if (isPremium) {
@@ -228,7 +304,9 @@ export default function CreateCourseModal({ open, editCourse, onClose, onCreated
         const course: Course = {
           id, title, description, category, isPremium,
           testAfterEvery: 0, coverImage, coverPosition, coverFit,
+          coverImageDesktop, coverPositionDesktop, coverFitDesktop,
           heroImage, heroImagePosition: heroPosition, heroImageFit: heroFit,
+          heroImageDesktop, heroImagePositionDesktop: heroPositionDesktop, heroImageFitDesktop: heroFitDesktop,
           unlockMode,
           ...(isPremium ? {
             pricingType,
@@ -266,9 +344,15 @@ export default function CreateCourseModal({ open, editCourse, onClose, onCreated
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Muqova rasmi */}
+          {/* Muqova rasmi (mobil) */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Kurs muqovasi</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              📱 Kurs muqovasi — mobil versiya
+            </label>
+            <p className="text-[11px] text-gray-400 mb-2">
+              Telefon va planshetda kurs kartochkasida ko'rinadi. Tavsiya:{" "}
+              <strong>{COURSE_PX.coverMobile.width}×{COURSE_PX.coverMobile.height} px</strong> (16:9)
+            </p>
             {coverPreview ? (
               <div className="space-y-3">
                 {/* Preview + drag */}
@@ -331,7 +415,9 @@ export default function CreateCourseModal({ open, editCourse, onClose, onCreated
               <label className="flex flex-col items-center justify-center h-36 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-primary-400 hover:bg-primary-50/30 transition-colors">
                 <ImageIcon className="w-8 h-8 text-gray-400 mb-2" />
                 <span className="text-sm text-gray-500">Rasm tanlash (ixtiyoriy)</span>
-                <span className="text-xs text-gray-400 mt-1">PNG, JPG — tavsiya: 800×400 px</span>
+                <span className="text-xs text-gray-400 mt-1">
+                  PNG, JPG — tavsiya: {COURSE_PX.coverMobile.width}×{COURSE_PX.coverMobile.height} px
+                </span>
                 <input
                   type="file"
                   accept="image/*"
@@ -349,10 +435,75 @@ export default function CreateCourseModal({ open, editCourse, onClose, onCreated
             )}
           </div>
 
-          {/* Kurs sahifasi headeridagi kichik rasm (hero) */}
+          {/* Muqova rasmi (desktop) */}
+          <DesktopImageUpload
+            label="🖥 Kurs muqovasi — desktop versiya"
+            preview={coverPreviewDesktop}
+            onFileSelect={(f) => {
+              setCoverFileDesktop(f);
+              setCoverPreviewDesktop(URL.createObjectURL(f));
+              setCoverPositionDesktop("50% 50%");
+            }}
+            onClear={() => {
+              setCoverFileDesktop(null);
+              setCoverPreviewDesktop("");
+              setCoverPositionDesktop("50% 50%");
+            }}
+            recommended={COURSE_PX.coverDesktop}
+            mobileRecommended={COURSE_PX.coverMobile}
+            aspectRatio="16 / 9"
+            fit={coverFitDesktop}
+            position={coverPositionDesktop}
+            hint="Desktopda kurs kartochkasi kengligi ~440 px, Retina ekranlarda 2x kerak — shuning uchun 1600×900 px tavsiya etiladi."
+          />
+
+          {coverPreviewDesktop && (
+            <div className="rounded-xl border border-indigo-100 bg-white p-4 grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Desktop muqova o'lchami</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCoverFitDesktop("cover")}
+                    className={`flex-1 px-3 py-2 text-xs rounded-lg border font-medium ${coverFitDesktop === "cover" ? "border-indigo-400 bg-indigo-50 text-indigo-700" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}
+                  >
+                    Cover (to'liq)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCoverFitDesktop("contain")}
+                    className={`flex-1 px-3 py-2 text-xs rounded-lg border font-medium ${coverFitDesktop === "contain" ? "border-indigo-400 bg-indigo-50 text-indigo-700" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}
+                  >
+                    Contain (sig'adi)
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Desktopda qaysi qismi ko'rinsin</label>
+                <div className="grid grid-cols-3 gap-1">
+                  {["0% 0%", "50% 0%", "100% 0%", "0% 50%", "50% 50%", "100% 50%", "0% 100%", "50% 100%", "100% 100%"].map((pos) => (
+                    <button
+                      key={pos}
+                      type="button"
+                      onClick={() => setCoverPositionDesktop(pos)}
+                      className={`h-6 rounded border ${coverPositionDesktop === pos ? "border-indigo-400 bg-indigo-100" : "border-gray-200 bg-gray-50 hover:bg-gray-100"}`}
+                      title={pos}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Kurs sahifasi headeridagi kichik rasm (hero, mobil) */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Kurs sahifasi rasmi (header)</label>
-            <p className="text-[11px] text-gray-400 mb-2">Student ilovada kurs sahifasi tepasida, sarlavha yonida ko'rinadi (kitob muqovasi kabi)</p>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              📱 Kurs sahifasi rasmi (header) — mobil versiya
+            </label>
+            <p className="text-[11px] text-gray-400 mb-2">
+              Student ilovada kurs sahifasi tepasida, sarlavha yonida ko'rinadi (kitob muqovasi kabi). Tavsiya:{" "}
+              <strong>{COURSE_PX.heroMobile.width}×{COURSE_PX.heroMobile.height} px</strong> (3:4)
+            </p>
             {heroPreview ? (
               <div className="space-y-3">
                 {/* Preview — student appdagi o'lcham (tik to'rtburchak) */}
@@ -429,7 +580,9 @@ export default function CreateCourseModal({ open, editCourse, onClose, onCreated
               <label className="flex flex-col items-center justify-center h-28 border-2 border-dashed border-gray-300 rounded-xl cursor-pointer hover:border-primary-400 hover:bg-primary-50/30 transition-colors">
                 <ImageIcon className="w-6 h-6 text-gray-400 mb-1.5" />
                 <span className="text-sm text-gray-500">Rasm tanlash (ixtiyoriy)</span>
-                <span className="text-xs text-gray-400 mt-0.5">PNG, JPG — tavsiya: 300×400 px (3:4 nisbat)</span>
+                <span className="text-xs text-gray-400 mt-0.5">
+                  PNG, JPG — tavsiya: {COURSE_PX.heroMobile.width}×{COURSE_PX.heroMobile.height} px (3:4 nisbat)
+                </span>
                 <input
                   type="file"
                   accept="image/*"
@@ -446,6 +599,66 @@ export default function CreateCourseModal({ open, editCourse, onClose, onCreated
               </label>
             )}
           </div>
+
+          {/* Kurs sahifasi rasmi (hero, desktop) */}
+          <DesktopImageUpload
+            label="🖥 Kurs sahifasi rasmi (header) — desktop versiya"
+            preview={heroPreviewDesktop}
+            onFileSelect={(f) => {
+              setHeroFileDesktop(f);
+              setHeroPreviewDesktop(URL.createObjectURL(f));
+              setHeroPositionDesktop("50% 50%");
+            }}
+            onClear={() => {
+              setHeroFileDesktop(null);
+              setHeroPreviewDesktop("");
+              setHeroPositionDesktop("50% 50%");
+            }}
+            recommended={COURSE_PX.heroDesktop}
+            mobileRecommended={COURSE_PX.heroMobile}
+            aspectRatio="3 / 4"
+            fit={heroFitDesktop}
+            position={heroPositionDesktop}
+            hint="Desktopda kurs sahifasi kengroq bo'lgani uchun bu rasm ham kattaroq ko'rinadi (2x)."
+          />
+
+          {heroPreviewDesktop && (
+            <div className="rounded-xl border border-indigo-100 bg-white p-4 grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Desktop hero o'lchami</label>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setHeroFitDesktop("cover")}
+                    className={`flex-1 px-3 py-2 text-xs rounded-lg border font-medium ${heroFitDesktop === "cover" ? "border-indigo-400 bg-indigo-50 text-indigo-700" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}
+                  >
+                    Cover (to'liq)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHeroFitDesktop("contain")}
+                    className={`flex-1 px-3 py-2 text-xs rounded-lg border font-medium ${heroFitDesktop === "contain" ? "border-indigo-400 bg-indigo-50 text-indigo-700" : "border-gray-200 text-gray-500 hover:bg-gray-50"}`}
+                  >
+                    Contain (sig'adi)
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">Desktopda qaysi qismi ko'rinsin</label>
+                <div className="grid grid-cols-3 gap-1">
+                  {["0% 0%", "50% 0%", "100% 0%", "0% 50%", "50% 50%", "100% 50%", "0% 100%", "50% 100%", "100% 100%"].map((pos) => (
+                    <button
+                      key={pos}
+                      type="button"
+                      onClick={() => setHeroPositionDesktop(pos)}
+                      className={`h-6 rounded border ${heroPositionDesktop === pos ? "border-indigo-400 bg-indigo-100" : "border-gray-200 bg-gray-50 hover:bg-gray-100"}`}
+                      title={pos}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Kurs nomi *</label>
