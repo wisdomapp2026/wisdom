@@ -21,24 +21,47 @@ function addShownId(id: string): void {
   try {
     const ids = getShownIds();
     ids.push(id);
-    // Faqat oxirgi 200 tasini saqlaymiz
     localStorage.setItem(SHOWN_IDS_KEY, JSON.stringify(ids.slice(-200)));
   } catch {
-    // localStorage to'lgan — jim o'tamiz
+    // localStorage to'lgan
   }
 }
 
-/** Bildirishnoma ruxsatini so'rash — native app da ilova ochilganda bir marta */
+/** Bildirishnoma ruxsatini so'rash va click listener'ni ro'yxatga olish */
 export async function requestNotificationPermission(): Promise<boolean> {
   if (!isNativeApp()) return false;
   try {
     const { LocalNotifications } = await import("@capacitor/local-notifications");
     const current = await LocalNotifications.checkPermissions();
-    if (current.display === "granted") return true;
+    if (current.display === "granted") {
+      registerClickListener();
+      return true;
+    }
     const result = await LocalNotifications.requestPermissions();
-    return result.display === "granted";
+    if (result.display === "granted") {
+      registerClickListener();
+      return true;
+    }
+    return false;
   } catch {
     return false;
+  }
+}
+
+/** Bildirishnomaga bosilganda — bildirishnomalar sahifasiga o'tish */
+let listenerRegistered = false;
+async function registerClickListener() {
+  if (listenerRegistered) return;
+  listenerRegistered = true;
+  try {
+    const { LocalNotifications } = await import("@capacitor/local-notifications");
+    await LocalNotifications.addListener("localNotificationActionPerformed", () => {
+      // React Router da bildirishnomalar sahifasiga yo'naltirish
+      window.location.hash = "";
+      window.location.href = "/notifications";
+    });
+  } catch {
+    // Plugin mavjud emas
   }
 }
 

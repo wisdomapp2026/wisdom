@@ -5,12 +5,18 @@ const config: CapacitorConfig = {
   appName: 'tushunGo',
   webDir: 'dist',
   server: {
-    // Production da web URL ishlatmaslik (lokal fayllardan ishlaydi)
     androidScheme: 'https',
+    // OAuth callback URL'ni app ichida ushlash uchun
+    allowNavigation: ['*.tushungo.uz', 'accounts.google.com', '*.google.com'],
   },
   android: {
     backgroundColor: '#ffffff',
     allowMixedContent: true,
+  },
+  plugins: {
+    Browser: {
+      // In-App Browser sozlamalari
+    },
   },
 };
 

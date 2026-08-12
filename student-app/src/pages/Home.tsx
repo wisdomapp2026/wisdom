@@ -108,7 +108,10 @@ export default function Home() {
       homepageCourses.map(async (c) => {
         const [topics, students] = await Promise.all([
           cachedFetch(`topics-${c.id}`, () => getTopicsByCourse(c.id)),
-          cachedFetch(`students-${c.id}`, () => getStudentCountByCourse(c.id)),
+          cachedFetch(`students-${c.id}`, () => getStudentCountByCourse(c.id), (freshCount) => {
+            // Kesh yangilanganda UI da ham yangilanishi uchun
+            setCourses((prev) => prev.map((p) => p.id === c.id ? { ...p, studentCount: freshCount } : p));
+          }),
         ]);
         // Progress ni haqiqiy mavzular asosida hisoblash
         const userProgress = progressMap[c.id];

@@ -2,7 +2,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useState } from "react";
 import { supabase } from "@shared/supabase";
 import { getSafeReturnTo } from "../utils/authRedirect";
-import { getAuthRedirectBase } from "../utils/platform";
+import { getAuthRedirectBase, isNativeApp } from "../utils/platform";
 import TelegramLoginButton from "../components/TelegramLoginButton";
 import LegalModal from "../components/LegalModal";
 
@@ -19,14 +19,63 @@ export default function Login() {
     setError("");
     setLoading(true);
     try {
-      const { error: gErr } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          // Native app da localhost emas, haqiqiy web domen ishlatiladi
-          redirectTo: getAuthRedirectBase() + returnTo,
-        },
-      });
-      if (gErr) throw gErr;
+      if (isNativeApp()) {
+        // Native app: In-App Browser ochib, OAuth token'ni URL'dan ushlab olamiz
+        const { Browser } = await import("@capacitor/browser");
+        const redirectUrl = getAuthRedirectBase() + "/auth/callback";
+
+        // Supabase OAuth URL ni olish (brauzer ochmasdan)
+        const { data, error: gErr } = await supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: {
+            redirectTo: redirectUrl,
+            skipBrowserRedirect: true,
+          },
+        });
+        if (gErr) throw gErr;
+        if (!data?.url) throw new Error("OAuth URL olinmadi");
+
+        // In-App Browser da ochish
+        await Browser.open({ url: data.url, windowName: "_self" });
+
+        // URL o'zgarishini kuzatish — token kelganda session o'rnatish
+        Browser.addListener("browserFinished", () => {
+          // Brauzer yopilganda session tekshirish
+          supabase.auth.getSession().then(({ data: { session } }) => {
+            if (session) {
+              navigate(returnTo, { replace: true });
+            }
+          });
+          setLoading(false);
+        });
+
+        // App URL listener — deep link orqali qaytsa
+        const { App: CapApp } = await import("@capacitor/app");
+        CapApp.addListener("appUrlOpen", async ({ url }) => {
+          if (url.includes("access_token") || url.includes("#")) {
+            const hashPart = url.split("#")[1];
+            if (hashPart) {
+              const params = new URLSearchParams(hashPart);
+              const accessToken = params.get("access_token");
+              const refreshToken = params.get("refresh_token");
+              if (accessToken && refreshToken) {
+                await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+                await Browser.close();
+                navigate(returnTo, { replace: true });
+              }
+            }
+          }
+        });
+      } else {
+        // Web: oddiy redirect
+        const { error: gErr } = await supabase.auth.signInWithOAuth({
+          provider: "google",
+          options: {
+            redirectTo: getAuthRedirectBase() + returnTo,
+          },
+        });
+        if (gErr) throw gErr;
+      }
     } catch (err: any) {
       setError(err.message || "Google bilan kirishda xatolik");
       setLoading(false);

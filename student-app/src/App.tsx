@@ -86,6 +86,29 @@ export default function App() {
     };
   }, [location.pathname, navigate]);
 
+  // Deep link handler — OAuth callback (Google login APK da qaytganda)
+  useEffect(() => {
+    const urlListener = CapApp.addListener("appUrlOpen", async ({ url }) => {
+      // OAuth redirect URL'dan token'ni ajratib olish
+      if (url.includes("access_token") || url.includes("/auth/callback")) {
+        const hashPart = url.split("#")[1];
+        if (hashPart) {
+          const params = new URLSearchParams(hashPart);
+          const accessToken = params.get("access_token");
+          const refreshToken = params.get("refresh_token");
+          if (accessToken && refreshToken) {
+            await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+            navigate("/", { replace: true });
+          }
+        }
+      }
+    });
+
+    return () => {
+      urlListener.then((l) => l.remove());
+    };
+  }, [navigate]);
+
   useEffect(() => {
     if (!user) {
       setUserData(null);

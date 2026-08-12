@@ -64,6 +64,8 @@ export default function TelegramLoginButton({ onSuccess, onError, disabled }: Te
           refresh_token: data.refresh_token,
         });
         if (sessionErr) throw sessionErr;
+        // useAuth hook'ga session propagatsiya qilishi uchun biroz kutish
+        await new Promise((r) => setTimeout(r, 300));
         onSuccess?.();
       } else {
         throw new Error("Sessiya yaratib bo'lmadi");
