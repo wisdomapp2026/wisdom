@@ -84,15 +84,29 @@ export interface Course {
   title: string; // "Boshlang'ich Matematika"
   description: string;
   category: string; // "Matematika", "Ona tili", "Ingliz tili"
-  coverImage?: string; // Storage URL
+  coverImage?: string; // Storage URL — MOBIL versiya (tavsiya: 800×450 px)
   coverPosition?: string; // "50% 50%" — CSS object-position (drag orqali tanlanadi)
   coverFit?: "cover" | "contain"; // CSS object-fit
-  /** Kurs sahifasi headeridagi kichik rasm (kitob muqovasi) — Storage URL */
+  /** Muqova rasmi — DESKTOP versiya (tavsiya: 1600×900 px, 16:9).
+   *  Bo'sh bo'lsa desktopda `coverImage` ishlatiladi. */
+  coverImageDesktop?: string;
+  /** Desktop muqova pozitsiyasi (CSS object-position) */
+  coverPositionDesktop?: string;
+  /** Desktop muqova o'lchami (CSS object-fit) */
+  coverFitDesktop?: "cover" | "contain";
+  /** Kurs sahifasi headeridagi kichik rasm (kitob muqovasi) — Storage URL (tavsiya: 300×400 px) */
   heroImage?: string;
   /** Hero rasm pozitsiyasi (CSS object-position) */
   heroImagePosition?: string;
   /** Hero rasm o'lchami (CSS object-fit) */
   heroImageFit?: "cover" | "contain";
+  /** Kurs sahifasi hero rasmi — DESKTOP versiya (tavsiya: 600×800 px, 3:4).
+   *  Bo'sh bo'lsa desktopda `heroImage` ishlatiladi. */
+  heroImageDesktop?: string;
+  /** Desktop hero rasm pozitsiyasi */
+  heroImagePositionDesktop?: string;
+  /** Desktop hero rasm o'lchami */
+  heroImageFitDesktop?: "cover" | "contain";
   isPremium: boolean;
   isHidden?: boolean; // Admin yashirgan — studentda ko'rinmaydi
   /** Bosh sahifada ko'rsatilsinmi (admin belgilaydi). Default: true (belgilanmagan bo'lsa ko'rinadi).
@@ -311,6 +325,14 @@ export interface AnswerRecord {
   questionId: string;
   selectedAnswer: string;
   isCorrect: boolean;
+  /**
+   * Agar test uchun "variantlar aralash" (shuffleOptions) yoqilgan bo'lsa —
+   * shu savol uchun student ko'rgan variantlarning ASL label'lari (masalan
+   * ["C","A","D","B"]) ushbu tartibda saqlanadi. Natija sahifasida variantlar
+   * xuddi test jarayonida ko'rsatilgan tartibda (bir xil A/B/C/D pozitsiyalarda)
+   * qayta chiqarilishi uchun ishlatiladi.
+   */
+  optionsOrder?: string[];
 }
 
 // ============================================================
@@ -417,7 +439,10 @@ export interface NewsItem {
   title: string;
   body?: string; // To'liq matn (batafsil)
   type: NewsItemType;
-  imageUrl?: string; // Rasm (thumbnail yoki asosiy rasm)
+  imageUrl?: string; // Rasm (thumbnail yoki asosiy rasm) — MOBIL (tavsiya: 320×440 px)
+  /** Yangilik rasmi — DESKTOP versiya (tavsiya: 640×880 px, 8:11).
+   *  Bo'sh bo'lsa desktopda `imageUrl` ishlatiladi. */
+  imageUrlDesktop?: string;
   videoUrl?: string; // YouTube yoki upload video
   videoType?: "youtube" | "upload";
   duration?: string; // "03:45" kabi
@@ -440,7 +465,7 @@ export interface HomeBanner {
   courseId?: string; // tugma bosilganda qaysi kursga o'tadi
   linkUrl?: string; // yoki to'g'ridan-to'g'ri URL
   bgColor: string; // fon rangi (hex yoki tailwind) masalan: "#3b82f6"
-  imageUrl?: string; // banner rasmi (ixtiyoriy)
+  imageUrl?: string; // banner rasmi — MOBIL versiya (tavsiya: 800×450 px)
   /** Rasm pozitsiyasi (CSS object-position): "center", "top", "left center" kabi */
   imagePosition?: string;
   /** Rasm o'lchami (CSS object-fit): "cover" | "contain" */
@@ -449,6 +474,15 @@ export interface HomeBanner {
   imageFullWidth?: boolean;
   /** Rasm shaffofligi (0-100, 100 = to'liq ko'rinadigan, 0 = butunlay shaffof) */
   imageOpacity?: number;
+  /** Banner rasmi — DESKTOP versiya (tavsiya: 2400×800 px, 3:1).
+   *  Bo'sh bo'lsa desktopda `imageUrl` ishlatiladi. */
+  imageUrlDesktop?: string;
+  /** Desktop banner rasmi pozitsiyasi (CSS object-position) */
+  imagePositionDesktop?: string;
+  /** Desktop banner rasmi o'lchami (CSS object-fit) */
+  imageFitDesktop?: "cover" | "contain";
+  /** Desktop banner rasmi shaffofligi (0-100). Belgilanmasa mobil qiymati ishlatiladi. */
+  imageOpacityDesktop?: number;
   /** Rasm qirqish: nechta foiz ko'rsatiladi (0-100, yuqoridan qirqish) */
   imageCropTop?: number;
   imageCropBottom?: number;

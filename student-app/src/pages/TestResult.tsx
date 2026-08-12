@@ -9,6 +9,7 @@ import LatexText from "../components/LatexText";
 import VideoModal from "../components/VideoModal";
 
 const LOCAL_TEST_RESULTS_KEY = "edukids_local_test_results";
+const OPTION_LABELS = ["A", "B", "C", "D", "E", "F", "G", "H"];
 
 export default function TestResult() {
   const { user } = useAuth();
@@ -195,6 +196,43 @@ export default function TestResult() {
   const questions = testData?.questions || [];
   const answers = resultData?.answers || [];
 
+  /**
+   * MUHIM: `answers` massivi test JARAYONIDAGI savol tartibida saqlangan
+   * (agar shuffleQuestions yoqilgan bo'lsa — aralashtirilgan tartibda),
+   * lekin `questions` (testData.questions) HAR DOIM bazadagi ASL tartibda
+   * keladi. Shu sababli index bo'yicha bog'lash (`answers[i]` <-> `questions[i]`)
+   * noto'g'ri savolni ko'rsatishi mumkin edi. questionId orqali bog'laymiz.
+   */
+  function getAnswerForQuestion(questionId: string) {
+    return answers.find((a) => a.questionId === questionId);
+  }
+
+  /**
+   * Savol uchun ko'rsatiladigan variantlar — agar student attempt paytida
+   * ko'rgan tartib (optionsOrder) saqlangan bo'lsa, xuddi shu tartibda va
+   * shu A/B/C/D pozitsiyalarda qaytariladi. Bo'lmasa — asl tartib ishlatiladi.
+   *
+   * MUHIM: har bir variantga `displayLabel` biriktiriladi — bu test jarayonida
+   * o'sha pozitsiyada ko'rsatilgan harf (A/B/C/D). `opt.label` esa bazadagi
+   * ASL label bo'lib, faqat to'g'ri javob/tanlangan javobni solishtirish uchun
+   * ishlatiladi — u ekranda ko'rsatilmaydi (aks holda variantlar aralashganda
+   * noto'g'ri harf ko'rinib, "B javob A bo'lib qolyapti" kabi chalkashlik keladi).
+   */
+  function getDisplayOptions(question: Question): (NonNullable<Question["options"]>[number] & { displayLabel: string })[] {
+    const opts = question.options || [];
+    const ans = getAnswerForQuestion(question.id);
+    const order = ans?.optionsOrder;
+    if (order && order.length === opts.length) {
+      const byLabel = new Map(opts.map((o) => [o.label, o] as const));
+      const reordered = order.map((label) => byLabel.get(label)).filter((o): o is NonNullable<typeof o> => !!o);
+      if (reordered.length === opts.length) {
+        return reordered.map((o, idx) => ({ ...o, displayLabel: OPTION_LABELS[idx] || o.label }));
+      }
+    }
+    // optionsOrder yo'q (eski natija) — asl tartib va asl label ko'rsatiladi
+    return opts.map((o) => ({ ...o, displayLabel: o.label }));
+  }
+
   return (
     <div className="page-content pb-24">
       <header className="px-5 pt-4 flex justify-between items-center">
@@ -253,18 +291,22 @@ export default function TestResult() {
         </div>
         <p className="text-xs text-gray-500 mb-3">Savol raqamini bosing — batafsil ko'rish uchun</p>
         <div className="flex flex-wrap gap-2">
-          {answers.length > 0 ? (
-            answers.map((ans, i) => (
-              <button
-                key={i}
-                onClick={() => setSelectedQuestion(selectedQuestion === i ? null : i)}
-                className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
-                  ans.isCorrect ? "bg-primary-500 text-white" : "bg-red-500 text-white"
-                } ${selectedQuestion === i ? "ring-2 ring-offset-2 ring-gray-400 scale-110" : "active:scale-95"}`}
-              >
-                {i + 1}
-              </button>
-            ))
+          {answers.length > 0 && questions.length > 0 ? (
+            questions.map((qq, i) => {
+              const ans = getAnswerForQuestion(qq.id);
+              if (!ans) return null;
+              return (
+                <button
+                  key={qq.id}
+                  onClick={() => setSelectedQuestion(selectedQuestion === i ? null : i)}
+                  className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                    ans.isCorrect ? "bg-primary-500 text-white" : "bg-red-500 text-white"
+                  } ${selectedQuestion === i ? "ring-2 ring-offset-2 ring-gray-400 scale-110" : "active:scale-95"}`}
+                >
+                  {i + 1}
+                </button>
+              );
+            })
           ) : (
             Array.from({ length: total }, (_, i) => (
               <button
@@ -294,10 +336,11 @@ export default function TestResult() {
             <LatexText text={questions[selectedQuestion].content} />
           </p>
 
-          {/* Variantlar */}
+          {/* Variantlar — student ko'rgan tartibda ko'rsatiladi */}
           <div className="space-y-2">
-            {questions[selectedQuestion].options?.map((opt) => {
-              const userAnswer = answers[selectedQuestion]?.selectedAnswer;
+            {getDisplayOptions(questions[selectedQuestion]).map((opt) => {
+              const currentAns = getAnswerForQuestion(questions[selectedQuestion].id);
+              const userAnswer = currentAns?.selectedAnswer;
               const correctAnswer = questions[selectedQuestion].correctAnswer;
               const isSelected = opt.label === userAnswer;
               const isCorrectOption = opt.label === correctAnswer;
@@ -325,7 +368,7 @@ export default function TestResult() {
                   <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
                     isCorrectOption ? "bg-green-500 text-white" : isSelected ? "bg-red-500 text-white" : "bg-gray-100 text-gray-600"
                   }`}>
-                    {opt.label}
+                    {opt.displayLabel}
                   </span>
                   <span className="text-sm text-gray-800 flex-1"><LatexText text={opt.text} /></span>
                   {icon}
@@ -336,13 +379,17 @@ export default function TestResult() {
 
           {/* Natija xabari */}
           <div className={`mt-4 px-3 py-2.5 rounded-xl text-xs font-medium ${
-            answers[selectedQuestion]?.isCorrect
+            getAnswerForQuestion(questions[selectedQuestion].id)?.isCorrect
               ? "bg-green-50 text-green-700 border border-green-200"
               : "bg-red-50 text-red-700 border border-red-200"
           }`}>
-            {answers[selectedQuestion]?.isCorrect
+            {getAnswerForQuestion(questions[selectedQuestion].id)?.isCorrect
               ? "✅ To'g'ri javob berdingiz!"
-              : `❌ Xato. To'g'ri javob: ${questions[selectedQuestion].correctAnswer}`
+              : `❌ Xato. To'g'ri javob: ${
+                  getDisplayOptions(questions[selectedQuestion]).find(
+                    (o) => o.label === questions[selectedQuestion].correctAnswer
+                  )?.displayLabel || questions[selectedQuestion].correctAnswer
+                }`
             }
           </div>
 
@@ -369,7 +416,7 @@ export default function TestResult() {
                 <div className="flex-1 min-w-0 text-left">
                   <p className="text-sm font-semibold text-purple-800">Video yechimni ko'rish</p>
                   <p className="text-xs text-purple-600 mt-0.5">
-                    {answers[selectedQuestion]?.isCorrect ? "Yechimingizni solishtiring" : "Bu savolning batafsil yechimi"}
+                    {getAnswerForQuestion(questions[selectedQuestion].id)?.isCorrect ? "Yechimingizni solishtiring" : "Bu savolning batafsil yechimi"}
                   </p>
                 </div>
               </button>
@@ -431,10 +478,10 @@ export default function TestResult() {
 
       {/* Pastda umumiy video yechimlar — barcha savollar uchun (to'g'ri + xato) */}
       {(() => {
-        const withVideo = answers
-          .map((ans, i) => ({ ans, question: questions[i], index: i }))
-          .filter(({ question }) => {
-            if (!question) return false;
+        const withVideo = questions
+          .map((question, i) => ({ ans: getAnswerForQuestion(question.id), question, index: i }))
+          .filter(({ question, ans }) => {
+            if (!question || !ans) return false;
             return !!findVideoForQuestion(question);
           });
 

@@ -55,29 +55,20 @@ export default function TestScreen() {
 
   async function findAndLoadTest(tId: string) {
     try {
-      // Avval kurslarni olish, keyin ulardan faqat to'g'ri kurs testini yuklash
+      // Kurslar ro'yxati keshdan olinishi mumkin (natijaga ta'sir qilmaydi),
+      // LEKIN testning o'zi (savollar, to'g'ri javoblar, shuffle sozlamalari) HAR DOIM
+      // bazadan yangi (keshsiz) yuklanishi SHART — aks holda admin saqlagan
+      // shuffleQuestions/shuffleOptions (va hatto to'g'ri javoblar) eski keshdan
+      // ko'rinib, test noto'g'ri baholanishi mumkin.
       const courses = await cachedFetch("all-courses", getAllCourses);
-      // Parallel — barcha kurslardan testlarni yuklash
       const results = await Promise.all(
         courses.map(async (course) => {
-          const tests = await cachedFetch(`tests-${course.id}`, () => getTestsByCourse(course.id));
+          const tests = await getTestsByCourse(course.id);
           const found = tests.find((t) => t.id === tId);
           return found ? { test: found, courseId: course.id } : null;
         })
       );
-      let match = results.find((r) => r !== null);
-
-      // Keshda topilmasa — keshsiz qayta qidirish (yangi yaratilgan test bo'lishi mumkin)
-      if (!match) {
-        const freshResults = await Promise.all(
-          courses.map(async (course) => {
-            const tests = await getTestsByCourse(course.id);
-            const found = tests.find((t) => t.id === tId);
-            return found ? { test: found, courseId: course.id } : null;
-          })
-        );
-        match = freshResults.find((r) => r !== null);
-      }
+      const match = results.find((r) => r !== null);
 
       if (match) {
         // Savollar shuffle — admin yoqqan bo'lsa
@@ -250,6 +241,8 @@ export default function TestScreen() {
         questionId: qq.id,
         selectedAnswer: answers[qq.id] || "",
         isCorrect: answers[qq.id] === qq.correctAnswer,
+        // Student ko'rgan variantlar tartibi — natija sahifasida xuddi shunday ko'rsatish uchun
+        optionsOrder: (shuffledOptionsMap[qq.id] || []).map((o) => o.originalLabel),
       })),
       completedAt: Date.now(),
     };
