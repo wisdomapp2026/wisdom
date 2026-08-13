@@ -57,12 +57,33 @@ export async function createCourse(course: Course): Promise<void> {
 
 export async function updateCourse(courseId: string, data: Partial<Course>): Promise<void> {
   const snakeData = toSnake(data);
+  // Supabase unknown ustunlarni qabul qilmaydi — shu sababli xatolik bo'lsa
+  // desktop ustunlarsiz qayta urinish
   const { error } = await supabase
     .from("courses")
     .update({ ...snakeData, updated_at: Date.now() })
     .eq("id", courseId);
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    // Agar xato "column does not exist" bo'lsa — desktop maydonlarni olib tashlab qayta urinamiz
+    if (error.message?.includes("column") || error.code === "42703") {
+      const fallback = { ...snakeData, updated_at: Date.now() };
+      // Desktop ustunlarni olib tashlash
+      delete fallback.cover_image_desktop;
+      delete fallback.cover_position_desktop;
+      delete fallback.cover_fit_desktop;
+      delete fallback.hero_image_desktop;
+      delete fallback.hero_image_position_desktop;
+      delete fallback.hero_image_fit_desktop;
+      const { error: err2 } = await supabase
+        .from("courses")
+        .update(fallback)
+        .eq("id", courseId);
+      if (err2) throw new Error(err2.message);
+      return;
+    }
+    throw new Error(error.message);
+  }
 }
 
 export async function enrollUserInCourse(userId: string, courseId: string): Promise<void> {

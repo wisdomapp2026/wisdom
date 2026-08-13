@@ -18,14 +18,12 @@ import {
   PanelLeftOpen,
   Moon,
   Sun,
-  Smartphone,
   LogOut,
   Newspaper,
 } from "lucide-react";
 import { supabase } from "@shared/supabase";
 import { useAuth } from "../../hooks/useAuth";
 import { useDarkMode } from "../../hooks/useDarkMode";
-import { setForceMobile } from "../hooks/useIsDesktop";
 import { useNotificationCount } from "../../hooks/useNotificationCount";
 
 const MAIN_NAV = [
@@ -210,12 +208,6 @@ export default function DesktopSidebar({ onLegalOpen, onAuthorOpen }: Props) {
           label="Kurslar muallifi"
           collapsed={collapsed}
           onClick={onAuthorOpen}
-        />
-        <SideAction
-          icon={<Smartphone size={18} />}
-          label="Mobil ko'rinish"
-          collapsed={collapsed}
-          onClick={() => setForceMobile(true)}
         />
         {!collapsed && (
           <div className="flex items-center gap-3 px-3 pt-2 pb-1">

@@ -324,8 +324,9 @@ export default function CreateCourseModal({ open, editCourse, onClose, onCreated
       }
       onCreated();
       onClose();
-    } catch (err) {
+    } catch (err: any) {
       console.error(isEditMode ? "Kurs yangilashda xatolik:" : "Kurs yaratishda xatolik:", err);
+      alert("Saqlashda xatolik: " + (err?.message || "Noma'lum xato"));
     } finally {
       setLoading(false);
     }

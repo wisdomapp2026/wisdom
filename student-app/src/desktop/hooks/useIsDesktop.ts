@@ -28,10 +28,7 @@ function readForceMobile(): boolean {
 function computeIsDesktop(): boolean {
   if (IS_NATIVE) return false;
   if (typeof window === "undefined") return false;
-  if (readForceMobile()) return false;
-  // Touch-only qurilmalarni (planshet) chetlab o'tmaymiz — faqat ekran kengligiga qaraymiz,
-  // chunki katta planshetda ham desktop layout yaxshi ko'rinadi (foydalanuvchi
-  // xohlasa mobil ko'rinishga qo'lda o'tishi mumkin).
+  // Faqat ekran kengligiga qaraymiz — toggle tugmasi olib tashlangan
   return window.innerWidth >= DESKTOP_BREAKPOINT;
 }
 
@@ -47,19 +44,21 @@ export function useIsDesktop(): boolean {
   useEffect(() => {
     if (IS_NATIVE) return;
 
+    // Agar oldin "Mobil ko'rinish" tugmasi bosilgan edi — tozalash
+    // (tugma olib tashlangan, faqat ekran kengligiga qarab ishlaydi)
+    try { localStorage.removeItem(FORCE_MOBILE_KEY); } catch {}
+
     const mql = window.matchMedia(`(min-width: ${DESKTOP_BREAKPOINT}px)`);
     const update = () => setIsDesktop(computeIsDesktop());
 
     // matchMedia — resize'dan arzonroq, faqat chegara kesib o'tilganda ishlaydi
     mql.addEventListener("change", update);
-    window.addEventListener("storage", update);
 
     // Boshlang'ich holatni sinxronlash (hydration farqi bo'lsa)
     update();
 
     return () => {
       mql.removeEventListener("change", update);
-      window.removeEventListener("storage", update);
     };
   }, []);
 
