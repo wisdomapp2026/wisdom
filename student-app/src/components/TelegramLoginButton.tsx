@@ -7,8 +7,11 @@ interface TelegramLoginButtonProps {
   disabled?: boolean;
 }
 
-const BOT_USERNAME = "edukids_login_bot";
+import { isNativeApp } from "../utils/platform";
+
+const BOT_USERNAME = import.meta.env.VITE_TELEGRAM_BOT_USERNAME || "edukids_login_bot";
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 
 type Step = "idle" | "waiting" | "code";
 
@@ -27,8 +30,18 @@ export default function TelegramLoginButton({ onSuccess, onError, disabled }: Te
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  function handleOpenBot() {
-    window.open(`https://t.me/${BOT_USERNAME}`, "_blank");
+  async function handleOpenBot() {
+    const botUrl = `https://t.me/${BOT_USERNAME}`;
+    if (isNativeApp()) {
+      try {
+        const { Browser } = await import("@capacitor/browser");
+        await Browser.open({ url: botUrl });
+      } catch {
+        window.open(botUrl, "_blank");
+      }
+    } else {
+      window.open(botUrl, "_blank");
+    }
     setStep("waiting");
   }
 
@@ -46,9 +59,15 @@ export default function TelegramLoginButton({ onSuccess, onError, disabled }: Te
     setError("");
 
     try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (SUPABASE_ANON_KEY) {
+        headers["apikey"] = SUPABASE_ANON_KEY;
+        headers["Authorization"] = `Bearer ${SUPABASE_ANON_KEY}`;
+      }
+
       const res = await fetch(`${SUPABASE_URL}/functions/v1/telegram-verify-code`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ code, phone: phone.trim() }),
       });
 

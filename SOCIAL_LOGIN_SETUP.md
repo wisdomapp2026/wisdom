@@ -115,7 +115,7 @@ Supabase Telegram ni standart provider sifatida qo'llab-quvvatlamaydi. Shuning u
 2. `/newbot` buyrug'ini yuboring
 3. Bot nomini kiriting: `EduKids Login Bot`
 4. Username kiriting: `edukids_login_bot` (yoki boshqa bo'sh nom)
-5. **Bot Token** ni nusxalang (8623503044:AAG2zb2OW3G4rhUgAj6oMr3Fx7k88zWobhc)
+5. **Bot Token** ni nusxalang (masalan: `123456789:AAF...`)
 6. `/setdomain` buyrug'ini yuboring:
    - Bot ni tanlang
    - Domen kiriting: `ybltddehavbczcwvyjrt.supabase.co`

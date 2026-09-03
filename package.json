@@ -18,6 +18,9 @@
     "migrate:finish": "node shared/scripts/migrate-finish.mjs",
     "verify": "node shared/scripts/verify-migration.mjs",
     "check-rls": "node shared/scripts/check-rls.mjs",
-    "reset-passwords": "node shared/scripts/reset-passwords.mjs"
+    "reset-passwords": "node shared/scripts/reset-passwords.mjs",
+    "bot": "node shared/scripts/bot-runner.mjs",
+    "bot:webhook": "node shared/scripts/bot-runner.mjs --set-webhook",
+    "bot:status": "node shared/scripts/bot-runner.mjs --status"
   }
 }

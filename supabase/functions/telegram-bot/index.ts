@@ -24,21 +24,24 @@ serve(async (req) => {
       auth: { persistSession: false, autoRefreshToken: false },
     });
 
+    const text = (update.message?.text || "").trim();
+    const isStart = text === "/start" || text.startsWith("/start ") || text.startsWith("/start@");
+
     // /start buyrug'i
-    if (update.message?.text === "/start") {
+    if (isStart) {
       const chatId = update.message.chat.id;
-      const firstName = update.message.from.first_name || "";
+      const firstName = update.message.from?.first_name || "Foydalanuvchi";
 
       await sendMessage(chatId, 
         `Salom, ${firstName}! 👋\n\n` +
         `EduKids platformasiga kirish uchun telefon raqamingizni yuboring.\n\n` +
         `📱 Pastdagi "Telefon raqamni ulashish" tugmasini bosing:`,
         {
-          reply_markup: JSON.stringify({
+          reply_markup: {
             keyboard: [[{ text: "📱 Telefon raqamni ulashish", request_contact: true }]],
             resize_keyboard: true,
             one_time_keyboard: true,
-          }),
+          },
         }
       );
       return new Response("OK");
@@ -52,20 +55,20 @@ serve(async (req) => {
       const phone = contact.phone_number.startsWith("+") 
         ? contact.phone_number 
         : `+${contact.phone_number}`;
-      const firstName = contact.first_name || update.message.from.first_name || "";
-      const lastName = contact.last_name || update.message.from.last_name || "";
-      const username = update.message.from.username || "";
+      const firstName = contact.first_name || update.message.from?.first_name || "";
+      const lastName = contact.last_name || update.message.from?.last_name || "";
+      const username = update.message.from?.username || "";
 
       // Telegram profil rasmini olish
       let photoUrl = "";
       try {
         const photosRes = await fetch(`${TELEGRAM_API}/getUserProfilePhotos?user_id=${telegramId}&limit=1`);
         const photosData = await photosRes.json();
-        if (photosData.ok && photosData.result.total_count > 0) {
+        if (photosData.ok && photosData.result?.total_count > 0) {
           const fileId = photosData.result.photos[0][photosData.result.photos[0].length - 1].file_id;
           const fileRes = await fetch(`${TELEGRAM_API}/getFile?file_id=${fileId}`);
           const fileData = await fileRes.json();
-          if (fileData.ok) {
+          if (fileData.ok && fileData.result?.file_path) {
             photoUrl = `https://api.telegram.org/file/bot${BOT_TOKEN}/${fileData.result.file_path}`;
           }
         }
@@ -109,7 +112,7 @@ serve(async (req) => {
         `⏱ Kod 5 daqiqa amal qiladi.\n\n` +
         `👉 Brauzeringizga qaytib, shu kodni kiriting.`,
         {
-          reply_markup: JSON.stringify({ remove_keyboard: true }),
+          reply_markup: { remove_keyboard: true },
         }
       );
 
@@ -117,10 +120,17 @@ serve(async (req) => {
     }
 
     // Boshqa xabarlar
-    if (update.message?.text && update.message.text !== "/start") {
+    if (text && !isStart) {
       const chatId = update.message.chat.id;
       await sendMessage(chatId,
-        `EduKids platformasiga kirish uchun /start buyrug'ini bosing.`
+        `EduKids platformasiga kirish uchun pastdagi "Telefon raqamni ulashish" tugmasini bosing yoki /start ni bosing.`,
+        {
+          reply_markup: {
+            keyboard: [[{ text: "📱 Telefon raqamni ulashish", request_contact: true }]],
+            resize_keyboard: true,
+            one_time_keyboard: true,
+          },
+        }
       );
       return new Response("OK");
     }
@@ -133,14 +143,23 @@ serve(async (req) => {
 });
 
 async function sendMessage(chatId: number | string, text: string, extra?: Record<string, any>) {
-  await fetch(`${TELEGRAM_API}/sendMessage`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text,
-      parse_mode: "HTML",
-      ...extra,
-    }),
-  });
+  try {
+    const res = await fetch(`${TELEGRAM_API}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        parse_mode: "HTML",
+        ...extra,
+      }),
+    });
+    if (!res.ok) {
+      const errBody = await res.text();
+      console.error(`Telegram sendMessage failed (${res.status}):`, errBody);
+    }
+  } catch (e) {
+    console.error("Telegram sendMessage error:", e);
+  }
 }
+
