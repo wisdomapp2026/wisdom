@@ -1,5 +1,6 @@
 {
-  "buildCommand": "",
+  "installCommand": "cd .. && npm install",
+  "buildCommand": "cd .. && npm run student:build",
   "outputDirectory": "dist",
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
