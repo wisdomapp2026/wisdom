@@ -311,19 +311,97 @@ export default function RichTextEditor({
       }
     }
 
-    // 2. HTML paste (Word yoki ChatGPT dan copy-paste qilinganda)
+    // 2. HTML paste (Word yoki ChatGPT dan copy-paste qilinganda, ayniqsa jadvallar)
     const pastedHtml = e.clipboardData?.getData("text/html");
     if (pastedHtml) {
       e.preventDefault();
-      // Word proprietary keraksiz izohlarini tozalash, lekin stillar va teglarni saqlash
-      let cleaned = pastedHtml
-        .replace(/<!--[\s\S]*?-->/g, "")
-        .replace(/<style[\s\S]*?<\/style>/gi, "")
-        .replace(/<o:p>[\s\S]*?<\/o:p>/gi, "")
-        .replace(/mso-[^;"]*;?/gi, ""); // remove mso attributes
 
-      execCmd("insertHTML", cleaned);
-      return;
+      // Word va ChatGPT HTML-ini tozalash va jadvallarga aniq stillar berish
+      try {
+        const parser = new DOMParser();
+        let preCleaned = pastedHtml
+          .replace(/<!--\[if[\s\S]*?<!\[endif\]-->/gi, "")
+          .replace(/<!--[\s\S]*?-->/g, "")
+          .replace(/<style[\s\S]*?<\/style>/gi, "")
+          .replace(/<o:p>[\s\S]*?<\/o:p>/gi, "")
+          .replace(/<\/?w:[^>]*>/gi, "")
+          .replace(/<\/?m:[^>]*>/gi, "")
+          .replace(/mso-[^;"]*;?/gi, "");
+
+        const doc = parser.parseFromString(preCleaned, "text/html");
+
+        // Word jadvallarini aniq border va padding bilan boyitish
+        const tables = doc.querySelectorAll("table");
+        tables.forEach((tbl) => {
+          tbl.classList.add("rich-table");
+          tbl.setAttribute("border", "1");
+          tbl.style.width = "100%";
+          tbl.style.borderCollapse = "collapse";
+          tbl.style.margin = "16px 0";
+          tbl.style.border = "1px solid #cbd5e1";
+
+          const cells = tbl.querySelectorAll("th, td");
+          cells.forEach((cell) => {
+            (cell as HTMLElement).style.border = "1px solid #cbd5e1";
+            (cell as HTMLElement).style.padding = "8px 12px";
+            (cell as HTMLElement).style.verticalAlign = "top";
+          });
+
+          // Birinchi qatorga sarlavha ko'rinishi
+          const firstRow = tbl.querySelector("tr");
+          if (firstRow) {
+            firstRow.querySelectorAll("td, th").forEach((th) => {
+              (th as HTMLElement).style.backgroundColor = "#f8fafc";
+              (th as HTMLElement).style.fontWeight = "600";
+            });
+          }
+        });
+
+        // Ortiqcha Mso klasslarni tozalash
+        doc.querySelectorAll("[class*='Mso']").forEach((el) => {
+          el.removeAttribute("class");
+        });
+
+        const finalHtml = doc.body.innerHTML;
+        if (finalHtml && finalHtml.trim()) {
+          execCmd("insertHTML", finalHtml);
+          return;
+        }
+      } catch (err) {
+        console.warn("HTML tozalashda xatolik:", err);
+      }
+    }
+
+    // 3. Tab-separated matn (Word yoki Excel jadvali matn sifatida nusxalanganda)
+    const plainText = e.clipboardData?.getData("text/plain");
+    if (plainText && plainText.includes("\t")) {
+      const rows = plainText.trim().split(/\r?\n/);
+      if (rows.length > 1 && rows.some((r) => r.includes("\t"))) {
+        e.preventDefault();
+        const tableHtml = `
+          <table style="width: 100%; border-collapse: collapse; margin: 16px 0; border: 1px solid #cbd5e1;">
+            <tbody>
+              ${rows
+                .map((row, rIdx) => {
+                  const cols = row.split("\t");
+                  const tag = rIdx === 0 ? "th" : "td";
+                  const bg = rIdx === 0 ? "background-color: #f8fafc; font-weight: 600;" : "";
+                  return `<tr>${cols
+                    .map(
+                      (c) =>
+                        `<${tag} style="border: 1px solid #cbd5e1; padding: 8px 12px; ${bg}">${
+                          c.trim() || "&nbsp;"
+                        }</${tag}>`
+                    )
+                    .join("")}</tr>`;
+                })
+                .join("")}
+            </tbody>
+          </table><p><br/></p>
+        `;
+        execCmd("insertHTML", tableHtml);
+        return;
+      }
     }
   }
 
