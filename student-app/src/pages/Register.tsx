@@ -42,7 +42,7 @@ export default function Register() {
           onClick={async () => {
             setLoading(true);
             if (isNativeApp()) {
-              const redirectUrl = "uz.edukids.app://auth/callback";
+              const redirectUrl = "uz.wisdom.app://auth/callback";
               const { data, error: gErr } = await supabase.auth.signInWithOAuth({
                 provider: "google",
                 options: { redirectTo: redirectUrl, skipBrowserRedirect: true },

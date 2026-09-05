@@ -8,23 +8,28 @@ Bu qo'llanma Supabase Auth bilan Google, Apple va Telegram login ni ketma-ket so
 
 ### 1.1. Google Cloud Console da OAuth yaratish
 
-1. https://console.cloud.google.com ga o'ting
-2. Loyihangizni tanlang (yoki yangi yarating)
+1. Yangi Google hisobingiz bilan https://console.cloud.google.com ga o'ting
+2. Yangi loyiha yarating (masalan: `Wisdom`)
 3. Chap menuda **APIs & Services → Credentials** ni bosing
 4. **+ CREATE CREDENTIALS → OAuth client ID** ni tanlang
 5. Agar birinchi marta bo'lsa — **Configure consent screen** bosing:
    - User Type: **External**
-   - App name: `EduKids`
-   - User support email: o'zingizning email
-   - Developer contact: o'zingizning email
-   - **Save and Continue** (Scopes va Test users ni o'tkazib yuboring)
-   - **Publish App** (test rejimidan chiqish uchun)
+   - App name: `Wisdom`
+   - User support email: o'zingizning yangi Google emailingiz
+   - Developer contact: o'zingizning yangi Google emailingiz
+   - **Save and Continue**
+   - **Publish App** (barcha foydalanuvchilar kira olishi uchun)
 6. Credentials sahifasiga qaytib, **+ CREATE CREDENTIALS → OAuth client ID**:
    - Application type: **Web application**
-   - Name: `EduKids Supabase`
-   - Authorized redirect URIs — quyidagini qo'shing:
+   - Name: `Wisdom Supabase Auth`
+   - Authorized JavaScript origins:
      ```
-     https://ybltddehavbczcwvyjrt.supabase.co/auth/v1/callback
+     https://qplqvhmkhpgrvksboepf.supabase.co
+     http://localhost:3001
+     ```
+   - Authorized redirect URIs — aynan quyidagini qo'shing:
+     ```
+     https://qplqvhmkhpgrvksboepf.supabase.co/auth/v1/callback
      ```
    - **Create** bosing
 7. Ochilgan oynadan **Client ID** va **Client Secret** ni nusxalang
@@ -32,24 +37,23 @@ Bu qo'llanma Supabase Auth bilan Google, Apple va Telegram login ni ketma-ket so
 ### 1.2. Supabase da Google Provider ni yoqish
 
 1. https://supabase.com/dashboard ga kiring
-2. Loyihangizni oching → chap menuda **Authentication → Providers**
+2. Yangi loyihangizni (`qplqvhmkhpgrvksboepf`) oching → chap menuda **Authentication → Providers**
 3. **Google** qatorini toping va yoqing (Enable)
 4. Maydonlarni to'ldiring:
-   - **Client ID:** Google dan olgan Client ID
-   - **Client Secret:** Google dan olgan Secret
-   - **Redirect URL** ni nusxalang (bu yuqoridagi `https://...supabase.co/auth/v1/callback`)
+   - **Client ID:** Google Cloud dan nusxalagan Client ID
+   - **Client Secret:** Google Cloud dan nusxalagan Client Secret
 5. **Save** bosing
 
 ### 1.3. Supabase Dashboard da Redirect URL sozlash
 
-1. **Authentication → URL Configuration** bo'limiga o'ting
-2. **Redirect URLs** ga quyidagilarni qo'shing:
-   ```https://ybltddehavbczcwvyjrt.supabase.co/auth/v1/callback
-   http://localhost:5173/**
-   http://localhost:3001/**
-   https://sizning-domen.netlify.app/**
+1. Supabase Dashboard da **Authentication → URL Configuration** bo'limiga o'ting
+2. **Site URL:** `http://localhost:3001`
+3. **Redirect URLs** ga quyidagilarni qo'shing:
    ```
-   (Bu login bo'lgandan keyin foydalanuvchi qayerga qaytishini belgilaydi)
+   http://localhost:3001/**
+   http://localhost:5173/**
+   ```
+   (Kelgusida saytni hostingga qo'yganingizda, production domenni ham shu yerga qo'shasiz)
 
 ---
 

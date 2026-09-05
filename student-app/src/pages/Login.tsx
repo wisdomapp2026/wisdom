@@ -21,10 +21,10 @@ export default function Login() {
     try {
       if (isNativeApp()) {
         // Native app: Custom URL scheme ga redirect qilamiz.
-        // OAuth tugaganda brauzer uz.edukids.app://auth/callback#access_token=...
+        // OAuth tugaganda brauzer uz.wisdom.app://auth/callback#access_token=...
         // ga yo'naltiradi. Android bu URL ni ushlaydi va app'ni ochadi.
         // App.tsx dagi appUrlOpen handler token'ni oladi va session'ni o'rnatadi.
-        const redirectUrl = "uz.edukids.app://auth/callback";
+        const redirectUrl = "uz.wisdom.app://auth/callback";
 
         const { data, error: gErr } = await supabase.auth.signInWithOAuth({
           provider: "google",

@@ -338,7 +338,9 @@ export async function startUserSession(userId: string, userName: string): Promis
         last_active_at: Date.now()
       })
       .eq("id", id);
-    if (updErr) throw new Error(updErr.message);
+    if (updErr && !updErr.message?.includes("violates foreign key constraint")) {
+      throw new Error(updErr.message);
+    }
   } else {
     const activity: UserActivity = {
       id,
@@ -352,7 +354,9 @@ export async function startUserSession(userId: string, userName: string): Promis
     const { error: insErr } = await supabase
       .from("user_activity")
       .insert(toSnake(activity));
-    if (insErr) throw new Error(insErr.message);
+    if (insErr && !insErr.message?.includes("violates foreign key constraint")) {
+      throw new Error(insErr.message);
+    }
   }
 }
 

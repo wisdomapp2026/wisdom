@@ -252,7 +252,7 @@ CREATE TABLE IF NOT EXISTS favorites (
 -- 15. Foydalanuvchi faolligi (user_activity)
 CREATE TABLE IF NOT EXISTS user_activity (
     id TEXT PRIMARY KEY,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL,
     user_name TEXT NOT NULL,
     "date" TEXT NOT NULL,
     total_minutes BIGINT DEFAULT 0,
@@ -263,13 +263,14 @@ CREATE TABLE IF NOT EXISTS user_activity (
 -- 16. Foydalanuvchi qurilmalari (user_devices)
 CREATE TABLE IF NOT EXISTS user_devices (
     id TEXT PRIMARY KEY,
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     device_id TEXT NOT NULL,
+    user_id UUID NOT NULL,
     device_name TEXT NOT NULL,
-    browser TEXT NOT NULL,
-    os TEXT NOT NULL,
-    last_active_at BIGINT NOT NULL,
-    created_at BIGINT NOT NULL
+    browser TEXT,
+    os TEXT,
+    last_seen BIGINT NOT NULL DEFAULT (extract(epoch from now()) * 1000)::bigint,
+    created_at BIGINT NOT NULL DEFAULT (extract(epoch from now()) * 1000)::bigint,
+    is_active BOOLEAN DEFAULT true
 );
 
 -- 17. Sozlamalar (settings)
