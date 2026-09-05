@@ -318,7 +318,7 @@ export default function CreateCourseModal({ open, editCourse, onClose, onCreated
             text: description || "Bu kursda nimalar o'rganiladi va kurs qanday tuzilgan haqida qisqacha ma'lumot.",
             videoUrl: "", videoType: "youtube", thumbnailUrl: "",
           },
-          createdAt: now, updatedAt: now, createdBy: "admin",
+          createdAt: now, updatedAt: now,
         };
         await createCourse(course);
       }

@@ -90,10 +90,32 @@ export function stringToUUID(str: string): string {
   return `${hash.substring(0, 8)}-${hash.substring(8, 12)}-${hash.substring(12, 16)}-${hash.substring(16, 20)}-${hash.substring(20, 32)}`;
 }
 
+export function sanitizeStoragePath(path: string): string {
+  const parts = path.split("/");
+  const fileName = parts.pop() || "file";
+  const lastDot = fileName.lastIndexOf(".");
+  const ext = lastDot !== -1 ? fileName.slice(lastDot).toLowerCase() : "";
+  const base = lastDot !== -1 ? fileName.slice(0, lastDot) : fileName;
+  
+  const safeBase = base
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\w-]/g, "_")
+    .replace(/_+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+  const safeFileName = `${safeBase || "upload"}${ext}`;
+  const safeParts = parts.map(p => p.replace(/[^\w-]/g, "_"));
+  return [...safeParts, safeFileName].join("/");
+}
+
 export async function uploadFile(bucket: string, path: string, file: File | Blob): Promise<string> {
-  const { error } = await supabase.storage.from(bucket).upload(path, file);
+  const safePath = sanitizeStoragePath(path);
+  const { error } = await supabase.storage.from(bucket).upload(safePath, file, {
+    upsert: true
+  });
   if (error) throw error;
-  return supabase.storage.from(bucket).getPublicUrl(path).data.publicUrl;
+  return supabase.storage.from(bucket).getPublicUrl(safePath).data.publicUrl;
 }
 
 export default supabase;

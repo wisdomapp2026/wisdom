@@ -44,12 +44,8 @@ export async function getCourseById(courseId: string): Promise<Course | null> {
 
 export async function createCourse(course: Course): Promise<void> {
   const snakeCourse = toSnake(course);
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    snakeCourse.created_by = user?.id || null;
-  } catch {
-    snakeCourse.created_by = null;
-  }
+  // Foreign key xatosi bermasligi uchun created_by ni null qilamiz
+  snakeCourse.created_by = null;
 
   const { error } = await supabase
     .from("courses")
