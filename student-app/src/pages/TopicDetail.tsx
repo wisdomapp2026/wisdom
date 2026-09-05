@@ -34,6 +34,27 @@ import { useAuth } from "../hooks/useAuth";
 import { useCourseAccess } from "../hooks/useCourseAccess";
 import { useBackHandler } from "../services/backActionManager";
 
+// O'zbekcha matndagi keng tarqalgan so'zlar ro'yxati (ular bosilganda modal ochilmasligi uchun)
+const UZBEK_STOPWORDS = new Set([
+  "va", "bu", "u", "shu", "o'sha", "uchun", "bilan", "haqida", "kabi", "ham",
+  "esa", "lekin", "ammo", "chunki", "agar", "har", "barcha", "hamma", "hech",
+  "bir", "ikki", "uch", "to'rt", "besh", "olti", "yetti", "sakkiz", "to'qqiz", "o'n",
+  "dars", "mavzu", "qoida", "qoidalar", "misol", "misollar", "tarjima", "tarjimasi",
+  "so'z", "so'zlar", "gap", "gaplar", "matn", "yozish", "o'qish", "tinglash", "talaffuz",
+  "mashq", "savol", "javob", "kerak", "lozim", "mumkin", "emas", "bor", "yo'q",
+  "bo'lsa", "bo'lgan", "bo'lib", "bo'ladi", "qilish", "qiladi", "qiling", "qilingan",
+  "etish", "etiladi", "o'rganamiz", "o'rganish", "quyidagi", "quyidagicha",
+  "shaklda", "jadval", "qator", "ustun", "belgi", "qism", "bo'lim", "shuningdek",
+  "yoki", "ya'ni", "bunda", "shunda", "undan", "bunga", "shunga", "ular", "biz",
+  "siz", "men", "sen", "ularning", "bizning", "sizning", "mening", "sening",
+  "tushunish", "ma'nosi", "ma'no", "yodlang", "yodlash", "eslab", "qoling",
+  "diqqat", "e'tibor", "bering", "vazifa", "topshiriq", "izoh", "eslatma",
+  "fe'l", "ot", "sifat", "zamon", "otlar", "fe'llar", "sifatlar", "qoidasi",
+  "darsda", "darslik", "darsimizda", "ustiga", "bosing", "bosganda", "tinglang",
+  "ko'ring", "ko'rishingiz", "berilgan", "yordamida", "orqali", "ushbu", "qaysi",
+  "qanday", "nega", "nima", "qayerda", "qachon", "qancha", "kim", "kimlar", "natijada"
+]);
+
 export default function TopicDetail() {
   const { courseId, topicId } = useParams<{ courseId: string; topicId: string }>();
   const navigate = useNavigate();
@@ -175,21 +196,15 @@ export default function TopicDetail() {
     }
 
     const cleanWord = word.replace(/^[^\w]+|[^\w]+$/g, "");
-    if (!cleanWord || !/^[a-zA-Z'’-\s]+$/.test(cleanWord) || cleanWord.length < 2) {
+    if (!cleanWord || !/^[a-zA-Z'’-\s]+$/.test(cleanWord) || cleanWord.length < 2 || cleanWord.length > 35) {
       return;
     }
 
-    // Oynani ochish va darhol ovoz chiqarish (bepul Web Speech API)
-    setSelectedWordData({
-      word: cleanWord,
-      translation: "",
-      loadingTranslation: true,
-    });
-    playSpeech(cleanWord);
+    const lowerWord = cleanWord.toLowerCase();
 
-    // 1-bosqich: Dars lug'atlaridan qidirish (eng aniq)
+    // 1-bosqich: Dars lug'atlaridan qidirish (agar ro'yxatda bo'lsa, aniq inglizcha so'z)
     const localMatch = vocabularies.find(
-      (v) => v.word.toLowerCase() === cleanWord.toLowerCase()
+      (v) => v.word.toLowerCase() === lowerWord
     );
     if (localMatch && localMatch.translation) {
       setSelectedWordData({
@@ -198,56 +213,80 @@ export default function TopicDetail() {
         loadingTranslation: false,
         phonetic: localMatch.phonetic,
       });
+      playSpeech(cleanWord);
       return;
     }
 
-    // 2-bosqich: Bepul Google Translate API (GTX)
+    // 2-bosqich: O'zbekcha so'zlarni filtrlab to'xtatish (o', g', o‘, g‘ va o'zbek so'zlari / qo'shimchalari)
+    if (
+      /[oOgG]['’ʻ‘`]/.test(cleanWord) ||
+      UZBEK_STOPWORDS.has(lowerWord) ||
+      /(larning|lardan|larga|larni|larda|larimiz|laringiz|moqda|yapti|yotgan|maslik|sizlar|imizda|ingizda)$/i.test(lowerWord)
+    ) {
+      return; // O'zbekcha so'z, modal ochilmaydi
+    }
+
+    // 3-bosqich: Bepul Google Translate orqali tilni aniqlash (sl=auto)
+    // FAQAT ingliz tili (detected = "en") bo'lsagina modal ochiladi!
     try {
       const res = await fetch(
-        `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=uz&dt=t&q=${encodeURIComponent(
+        `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=uz&dt=t&q=${encodeURIComponent(
           cleanWord
         )}`
       );
       if (res.ok) {
         const data = await res.json();
-        if (data && data[0] && data[0][0] && data[0][0][0]) {
-          const trans = data[0][0][0];
-          setSelectedWordData((prev) =>
-            prev && prev.word.toLowerCase() === cleanWord.toLowerCase()
-              ? { ...prev, translation: trans, loadingTranslation: false }
-              : prev
-          );
+        const detectedLang = data?.[2];
+        const trans = data?.[0]?.[0]?.[0]?.trim();
+
+        // Faqat Inglizcha so'z bo'lsa va tarjimasi o'zidan farq qilsa ochilsin
+        if (
+          detectedLang === "en" &&
+          trans &&
+          trans.toLowerCase() !== lowerWord
+        ) {
+          setSelectedWordData({
+            word: cleanWord,
+            translation: trans,
+            loadingTranslation: false,
+          });
+          playSpeech(cleanWord);
+          return;
+        } else {
+          // O'zbekcha yoki boshqa tildagi so'z — modal ochilmaydi
           return;
         }
       }
     } catch (err) {
-      console.warn("Google Translate xatosi, zaxira MyMemory ishlatiladi:", err);
+      console.warn("Google Translate tekshiruv xatosi:", err);
     }
 
-    // 3-bosqich: Bepul MyMemory API zaxira
+    // 4-bosqich: Bepul MyMemory API zaxira (faqat agar Google Translate javob bermasa)
     try {
       const res = await fetch(
         `https://api.mymemory.translated.net/get?q=${encodeURIComponent(cleanWord)}&langpair=en|uz`
       );
       if (res.ok) {
         const data = await res.json();
-        if (data?.responseData?.translatedText) {
-          const trans = data.responseData.translatedText;
-          setSelectedWordData((prev) =>
-            prev && prev.word.toLowerCase() === cleanWord.toLowerCase()
-              ? { ...prev, translation: trans, loadingTranslation: false }
-              : prev
-          );
+        const trans = data?.responseData?.translatedText?.trim();
+        const matchQuality = data?.responseData?.match;
+        if (
+          trans &&
+          trans.toLowerCase() !== lowerWord &&
+          (matchQuality === undefined || matchQuality > 0.4)
+        ) {
+          setSelectedWordData({
+            word: cleanWord,
+            translation: trans,
+            loadingTranslation: false,
+          });
+          playSpeech(cleanWord);
           return;
         }
       }
     } catch (err) {
       console.warn("MyMemory xatosi:", err);
     }
-
-    setSelectedWordData((prev) =>
-      prev ? { ...prev, translation: "Tarjima topilmadi", loadingTranslation: false } : null
-    );
   }
 
   // Quiz operatsiyalari
@@ -1131,11 +1170,11 @@ export default function TopicDetail() {
       {/* So'z ustiga bosilgandagi Tinglash va Tarjima modali */}
       {selectedWordData && (
         <div
-          className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-end sm:items-center justify-center p-4 transition-all"
+          className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 transition-all animate-fadeIn"
           onClick={() => setSelectedWordData(null)}
         >
           <div
-            className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-gray-100 space-y-4 animate-in slide-in-from-bottom sm:zoom-in-95"
+            className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-gray-100 space-y-4 animate-in zoom-in-95 max-h-[85vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Sarlavha qismi */}
