@@ -416,9 +416,14 @@ CREATE TABLE IF NOT EXISTS promo_codes (
 CREATE TABLE IF NOT EXISTS advices (
     id TEXT PRIMARY KEY,
     course_id TEXT REFERENCES courses(id) ON DELETE CASCADE,
+    folder_id TEXT REFERENCES folders(id) ON DELETE CASCADE,
+    title TEXT,
     text TEXT NOT NULL,
+    icon TEXT,
+    after_topic_order BIGINT NOT NULL DEFAULT 0,
     "order" BIGINT NOT NULL DEFAULT 0,
-    created_at BIGINT NOT NULL DEFAULT (extract(epoch from now()) * 1000)::bigint
+    created_at BIGINT NOT NULL DEFAULT (extract(epoch from now()) * 1000)::bigint,
+    updated_at BIGINT NOT NULL DEFAULT (extract(epoch from now()) * 1000)::bigint
 );
 
 -- ============================================================
