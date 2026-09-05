@@ -44,8 +44,11 @@ export async function getCourseById(courseId: string): Promise<Course | null> {
 
 export async function createCourse(course: Course): Promise<void> {
   const snakeCourse = toSnake(course);
-  if (snakeCourse.created_by) {
-    snakeCourse.created_by = stringToUUID(snakeCourse.created_by);
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    snakeCourse.created_by = user?.id || null;
+  } catch {
+    snakeCourse.created_by = null;
   }
 
   const { error } = await supabase
