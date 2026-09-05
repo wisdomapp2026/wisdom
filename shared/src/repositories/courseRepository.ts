@@ -772,14 +772,25 @@ export async function organizeGeneralTestLibrary(): Promise<{ movedCount: number
 // ============ ADVICE (Maslahat bloklari) ============
 
 export async function getAdviceByCourse(courseId: string): Promise<Advice[]> {
-  const { data, error } = await supabase
-    .from("advices")
-    .select("*")
-    .eq("course_id", courseId)
-    .order("after_topic_order", { ascending: true });
+  try {
+    const { data, error } = await supabase
+      .from("advices")
+      .select("*")
+      .eq("course_id", courseId)
+      .order("after_topic_order", { ascending: true });
 
-  if (error || !data) return [];
-  return toCamel<Advice[]>(data);
+    if (error) {
+      // Agar after_topic_order ustuni bo'lmasa, saralashsiz olamiz
+      const { data: fallbackData } = await supabase
+        .from("advices")
+        .select("*")
+        .eq("course_id", courseId);
+      return toCamel<Advice[]>(fallbackData || []);
+    }
+    return toCamel<Advice[]>(data || []);
+  } catch {
+    return [];
+  }
 }
 
 export async function createAdvice(courseId: string, advice: Advice): Promise<void> {
