@@ -7,6 +7,7 @@ import {
   HelpCircle,
   Gamepad2,
   Volume2,
+  Turtle,
   Maximize2,
   X,
   CheckCircle2,
@@ -119,12 +120,13 @@ export default function TopicDetail() {
   }
 
   // Audio talaffuz (SpeechSynthesis)
-  function playSpeech(word: string) {
+  // slow: true bo'lsa 0.55x (toshbaqa tezligi), aks holda 0.9x
+  function playSpeech(word: string, slow = false) {
     if (!("speechSynthesis" in window)) return;
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(word);
     utterance.lang = "en-US";
-    utterance.rate = 0.85;
+    utterance.rate = slow ? 0.55 : 0.9;
     window.speechSynthesis.speak(utterance);
   }
 
@@ -589,13 +591,22 @@ export default function TopicDetail() {
                           <p className="text-xs font-mono text-gray-400 mt-0.5">{v.phonetic}</p>
                         )}
                       </div>
-                      <button
-                        onClick={() => playSpeech(v.word)}
-                        className="p-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl transition-colors shadow-sm"
-                        title="Talaffuzni tinglash"
-                      >
-                        <Volume2 className="w-5 h-5" />
-                      </button>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          onClick={() => playSpeech(v.word, false)}
+                          className="p-2.5 bg-indigo-50 hover:bg-indigo-100 active:scale-95 text-indigo-600 rounded-xl transition-all shadow-sm flex items-center justify-center"
+                          title="Oddiy tezlikda tinglash"
+                        >
+                          <Volume2 className="w-5 h-5" />
+                        </button>
+                        <button
+                          onClick={() => playSpeech(v.word, true)}
+                          className="p-2.5 bg-amber-50 hover:bg-amber-100 active:scale-95 text-amber-700 rounded-xl transition-all shadow-sm flex items-center justify-center border border-amber-200/60"
+                          title="Sekinlashtirilgan talaffuz (Toshbaqa rejimi: 0.55x)"
+                        >
+                          <Turtle className="w-5 h-5" />
+                        </button>
+                      </div>
                     </div>
 
                     <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100/60">
@@ -861,15 +872,28 @@ export default function TopicDetail() {
                               {vocabularies[flashcardIndex].phonetic}
                             </p>
                           )}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              playSpeech(vocabularies[flashcardIndex].word);
-                            }}
-                            className="inline-flex items-center gap-1.5 px-3 py-1 bg-white border border-gray-200 rounded-full text-xs font-semibold text-indigo-600 shadow-sm mt-2"
-                          >
-                            <Volume2 className="w-3.5 h-3.5" /> Tinglash
-                          </button>
+                          <div className="flex items-center justify-center gap-2 mt-2">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                playSpeech(vocabularies[flashcardIndex].word, false);
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1 bg-white border border-gray-200 rounded-full text-xs font-semibold text-indigo-600 shadow-sm hover:bg-indigo-50 transition-colors"
+                              title="Oddiy tezlikda tinglash"
+                            >
+                              <Volume2 className="w-3.5 h-3.5" /> Tinglash
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                playSpeech(vocabularies[flashcardIndex].word, true);
+                              }}
+                              className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-50 border border-amber-200 rounded-full text-xs font-semibold text-amber-700 shadow-sm hover:bg-amber-100 transition-colors"
+                              title="Sekinlashtirilgan talaffuz (Toshbaqa: 0.55x)"
+                            >
+                              <Turtle className="w-3.5 h-3.5 text-amber-600" /> Sekin
+                            </button>
+                          </div>
                         </div>
                       ) : (
                         <div className="space-y-3">
@@ -982,11 +1006,29 @@ export default function TopicDetail() {
 
                 {vocabularies[scrambleIndex] && (
                   <div className="space-y-6">
-                    <div className="p-4 bg-indigo-50/60 rounded-2xl border border-indigo-100 max-w-sm mx-auto">
-                      <p className="text-xs text-indigo-600 font-semibold uppercase">Tarjima</p>
-                      <h4 className="text-xl font-extrabold text-indigo-950 mt-1">
-                        {vocabularies[scrambleIndex].translation}
-                      </h4>
+                    <div className="p-4 bg-indigo-50/60 rounded-2xl border border-indigo-100 max-w-sm mx-auto flex items-center justify-between">
+                      <div>
+                        <p className="text-xs text-indigo-600 font-semibold uppercase">Tarjima</p>
+                        <h4 className="text-xl font-extrabold text-indigo-950 mt-1">
+                          {vocabularies[scrambleIndex].translation}
+                        </h4>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          onClick={() => playSpeech(vocabularies[scrambleIndex].word, false)}
+                          className="p-2 bg-white hover:bg-indigo-50 text-indigo-600 rounded-xl transition-colors shadow-sm"
+                          title="Oddiy tezlikda tinglash"
+                        >
+                          <Volume2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => playSpeech(vocabularies[scrambleIndex].word, true)}
+                          className="p-2 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl transition-colors border border-amber-200/60 shadow-sm"
+                          title="Sekin tinglash (Toshbaqa: 0.55x)"
+                        >
+                          <Turtle className="w-4 h-4 text-amber-600" />
+                        </button>
+                      </div>
                     </div>
 
                     {/* Assembled Letters Box */}
@@ -1139,15 +1181,24 @@ export default function TopicDetail() {
             {/* Boshqaruv tugmalari */}
             <div className="flex gap-2 pt-1">
               <button
-                onClick={() => playSpeech(selectedWordData.word)}
-                className="flex-1 inline-flex items-center justify-center gap-2 py-3 px-4 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-2xl font-bold text-sm shadow-md shadow-indigo-600/20 transition-all"
+                onClick={() => playSpeech(selectedWordData.word, false)}
+                className="flex-1 inline-flex items-center justify-center gap-1.5 py-3 px-3 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-2xl font-bold text-xs shadow-md shadow-indigo-600/20 transition-all"
+                title="Oddiy tezlikda tinglash"
               >
-                <Volume2 className="w-5 h-5" />
-                <span>Qayta tinglash</span>
+                <Volume2 className="w-4 h-4" />
+                <span>Tinglash</span>
+              </button>
+              <button
+                onClick={() => playSpeech(selectedWordData.word, true)}
+                className="inline-flex items-center justify-center gap-1.5 py-3 px-3.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 active:scale-95 text-amber-800 rounded-2xl font-bold text-xs transition-all shadow-sm"
+                title="Sekinlashtirilgan talaffuz (Toshbaqa: 0.55x)"
+              >
+                <Turtle className="w-4 h-4 text-amber-600" />
+                <span>Sekin (0.55x)</span>
               </button>
               <button
                 onClick={() => setSelectedWordData(null)}
-                className="px-5 py-3 border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-2xl font-semibold text-sm transition-colors"
+                className="px-4 py-3 border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-2xl font-semibold text-xs transition-colors"
               >
                 Yopish
               </button>
