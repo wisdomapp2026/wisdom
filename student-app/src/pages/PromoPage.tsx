@@ -64,7 +64,7 @@ export default function PromoPage() {
             <input
               value={code}
               onChange={(e) => setCode(e.target.value.toUpperCase())}
-              placeholder="Kodni kiriting: EDUKIDS50"
+              placeholder="Kodni kiriting: WISDOM50"
               className="flex-1 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-primary-500"
               onKeyDown={(e) => { if (e.key === "Enter") handleCheck(); }}
             />

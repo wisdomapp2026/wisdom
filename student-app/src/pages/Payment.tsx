@@ -15,7 +15,7 @@ export default function Payment() {
   const baseAmount = Number(params.get("amount")) || 50000;
 
   const [cardNumber, setCardNumber] = useState("8600 1234 5678 9012");
-  const [cardHolder, setCardHolder] = useState("EDUKIDS ADMIN");
+  const [cardHolder, setCardHolder] = useState("WISDOM ADMIN");
   const [copied, setCopied] = useState(false);
   const [promo, setPromo] = useState("");
   const [discount, setDiscount] = useState(0);
@@ -212,7 +212,7 @@ export default function Payment() {
             <input
               value={promo}
               onChange={(e) => { setPromo(e.target.value.toUpperCase()); setPromoError(""); }}
-              placeholder="EDUKIDS50"
+              placeholder="WISDOM50"
               disabled={promoApplied}
               className="flex-1 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono uppercase focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-50"
             />

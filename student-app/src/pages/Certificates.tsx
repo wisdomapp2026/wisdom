@@ -119,12 +119,13 @@ export default function Certificates() {
     ctx.fillText(t.subtitle, 600, 220);
 
     // Name
+    const displayName = cert.userName?.trim() || "O'quvchi";
     ctx.fillStyle = "#111827";
     ctx.font = "bold 42px Arial, sans-serif";
-    ctx.fillText(cert.userName, 600, 310);
+    ctx.fillText(displayName, 600, 310);
 
     // Underline for name
-    const nameWidth = ctx.measureText(cert.userName).width;
+    const nameWidth = ctx.measureText(displayName).width;
     ctx.strokeStyle = "#2196F3";
     ctx.lineWidth = 2;
     ctx.beginPath();

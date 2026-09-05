@@ -327,19 +327,22 @@ export async function startUserSession(userId: string, userName: string): Promis
     durationMinutes: 0,
   };
 
-  if (getErr) throw new Error(getErr.message);
+  if (getErr) {
+    console.warn("[startUserSession] get activity warning:", getErr.message);
+    return;
+  }
 
   if (existing) {
     const activity = toCamel<UserActivity>(existing);
     const { error: updErr } = await supabase
       .from("user_activity")
       .update({
-        sessions: [...activity.sessions, session],
+        sessions: [...(activity.sessions || []), session],
         last_active_at: Date.now()
       })
       .eq("id", id);
-    if (updErr && !updErr.message?.includes("violates foreign key constraint")) {
-      throw new Error(updErr.message);
+    if (updErr) {
+      console.warn("[startUserSession] update warning:", updErr.message);
     }
   } else {
     const activity: UserActivity = {
@@ -354,81 +357,93 @@ export async function startUserSession(userId: string, userName: string): Promis
     const { error: insErr } = await supabase
       .from("user_activity")
       .insert(toSnake(activity));
-    if (insErr && !insErr.message?.includes("violates foreign key constraint")) {
-      throw new Error(insErr.message);
+    if (insErr) {
+      console.warn("[startUserSession] insert warning:", insErr.message);
     }
   }
 }
 
 export async function updateSessionTime(userId: string): Promise<void> {
-  const userUuid = stringToUUID(userId);
-  const dateStr = getTodayDateStr();
-  const id = `${userUuid}_${dateStr}`;
+  try {
+    const userUuid = stringToUUID(userId);
+    const dateStr = getTodayDateStr();
+    const id = `${userUuid}_${dateStr}`;
 
-  // Read current activity
-  const { data, error } = await supabase
-    .from("user_activity")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
+    // Read current activity
+    const { data, error } = await supabase
+      .from("user_activity")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
 
-  if (error || !data) return;
-  const activity = toCamel<UserActivity>(data);
-  if (activity.sessions.length === 0) return;
+    if (error || !data) return;
+    const activity = toCamel<UserActivity>(data);
+    if (!activity.sessions || activity.sessions.length === 0) return;
 
-  const sessions = [...activity.sessions];
-  const lastSession = { ...sessions[sessions.length - 1] };
-  const elapsed = (Date.now() - lastSession.startedAt) / 60000;
-  lastSession.durationMinutes = Math.round(elapsed);
-  sessions[sessions.length - 1] = lastSession;
+    const sessions = [...activity.sessions];
+    const lastSession = { ...sessions[sessions.length - 1] };
+    const elapsed = (Date.now() - lastSession.startedAt) / 60000;
+    lastSession.durationMinutes = Math.round(elapsed);
+    sessions[sessions.length - 1] = lastSession;
 
-  const totalMinutes = sessions.reduce((sum, s) => sum + s.durationMinutes, 0);
+    const totalMinutes = sessions.reduce((sum, s) => sum + s.durationMinutes, 0);
 
-  const { error: updErr } = await supabase
-    .from("user_activity")
-    .update({
-      sessions,
-      total_minutes: totalMinutes,
-      last_active_at: Date.now()
-    })
-    .eq("id", id);
+    const { error: updErr } = await supabase
+      .from("user_activity")
+      .update({
+        sessions,
+        total_minutes: totalMinutes,
+        last_active_at: Date.now()
+      })
+      .eq("id", id);
 
-  if (updErr) throw new Error(updErr.message);
+    if (updErr) {
+      console.warn("[updateSessionTime] warning:", updErr.message);
+    }
+  } catch (err: any) {
+    console.warn("[updateSessionTime] error:", err?.message || err);
+  }
 }
 
 export async function endUserSession(userId: string): Promise<void> {
-  const userUuid = stringToUUID(userId);
-  const dateStr = getTodayDateStr();
-  const id = `${userUuid}_${dateStr}`;
+  try {
+    const userUuid = stringToUUID(userId);
+    const dateStr = getTodayDateStr();
+    const id = `${userUuid}_${dateStr}`;
 
-  const { data, error } = await supabase
-    .from("user_activity")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
+    const { data, error } = await supabase
+      .from("user_activity")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
 
-  if (error || !data) return;
-  const activity = toCamel<UserActivity>(data);
-  if (activity.sessions.length === 0) return;
+    if (error || !data) return;
+    const activity = toCamel<UserActivity>(data);
+    if (!activity.sessions || activity.sessions.length === 0) return;
 
-  const sessions = [...activity.sessions];
-  const lastSession = { ...sessions[sessions.length - 1] };
-  lastSession.endedAt = Date.now();
-  lastSession.durationMinutes = Math.round((Date.now() - lastSession.startedAt) / 60000);
-  sessions[sessions.length - 1] = lastSession;
+    const sessions = [...activity.sessions];
+    const lastSession = { ...sessions[sessions.length - 1] };
+    lastSession.endedAt = Date.now();
+    lastSession.durationMinutes = Math.round((Date.now() - lastSession.startedAt) / 60000);
+    sessions[sessions.length - 1] = lastSession;
 
-  const totalMinutes = sessions.reduce((sum, s) => sum + s.durationMinutes, 0);
+    const totalMinutes = sessions.reduce((sum, s) => sum + s.durationMinutes, 0);
 
-  const { error: updErr } = await supabase
-    .from("user_activity")
-    .update({
-      sessions,
-      total_minutes: totalMinutes,
-      last_active_at: Date.now()
-    })
-    .eq("id", id);
+    const { error: updErr } = await supabase
+      .from("user_activity")
+      .update({
+        sessions,
+        total_minutes: totalMinutes,
+        last_active_at: Date.now()
+      })
+      .eq("id", id);
 
-  if (updErr) throw new Error(updErr.message);
+    if (updErr) {
+      console.warn("[endUserSession] warning:", updErr.message);
+    }
+  } catch (err: any) {
+    console.warn("[endUserSession] error:", err?.message || err);
+  }
 }
 
 export async function getAllStudentActivities(daysBack = 7): Promise<UserActivity[]> {
