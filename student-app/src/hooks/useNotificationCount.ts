@@ -62,7 +62,7 @@ export function useNotificationCount() {
 
       // Native app da o'qilmagan yangi bildirishnomalarni status barda ko'rsatish
       showNewNotifications(
-        unreadItems.map((n) => ({ id: String(n.id), title: n.title || "tushunGo", body: n.message || n.body || "" }))
+        unreadItems.map((n) => ({ id: String(n.id), title: n.title || "Wisdom", body: n.message || n.body || "" }))
       );
     } catch {
       // jim

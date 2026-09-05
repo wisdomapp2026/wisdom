@@ -14,7 +14,7 @@ const IS_NATIVE = Capacitor.isNativePlatform();
 /**
  * localStorage kaliti — foydalanuvchi "Mobil ko'rinishga o'tish" tugmasini bosgan bo'lsa.
  */
-const FORCE_MOBILE_KEY = "tushungo-force-mobile";
+const FORCE_MOBILE_KEY = "wisdom-force-mobile";
 
 function readForceMobile(): boolean {
   try {

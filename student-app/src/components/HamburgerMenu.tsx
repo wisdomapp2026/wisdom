@@ -15,7 +15,7 @@ export default function HamburgerMenu() {
   const { isLoggedIn } = useAuth();
   const { isDark, toggle: toggleDark } = useDarkMode();
   const [logoUrl, setLogoUrl] = useState("");
-  const [appName, setAppName] = useState("tushunGo");
+  const [appName, setAppName] = useState("Wisdom");
   const [apkUrl, setApkUrl] = useState("");
 
   // Menyu ochiq bo'lganda smartfon orqaga (back) tugmasi bosilsa menyuni yopish

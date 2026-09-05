@@ -19,7 +19,7 @@ import CourseListRow from "../components/CourseListRow";
 import { EmptyState, SectionHeading } from "../components/ui";
 
 const PAGE_SIZE = 24;
-const VIEW_KEY = "tushungo-dk-courses-view";
+const VIEW_KEY = "wisdom-dk-courses-view";
 
 type SortKey = "default" | "progress" | "students" | "title";
 

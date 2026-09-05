@@ -84,7 +84,7 @@ function DesktopFooter() {
         style={{ maxWidth: "var(--dk-content-max)" }}
       >
         <p className="text-[12px] text-gray-400">
-          © {new Date().getFullYear()} tushunGo — bilim olish endi yanada qulay.
+          © {new Date().getFullYear()} Wisdom — ingliz tili ta'lim platformasi.
         </p>
         <p className="text-[11px] text-gray-400">
           So'nggi yangilanish:{" "}

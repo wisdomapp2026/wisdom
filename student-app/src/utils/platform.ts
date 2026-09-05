@@ -24,7 +24,7 @@ export function isNativeApp(): boolean {
 }
 
 /** Production web sayt manzili — native app OAuth uchun shu domenga qaytadi */
-export const WEB_APP_ORIGIN = "https://www.tushungo.uz";
+export const WEB_APP_ORIGIN = "https://www.wisdomapp.uz";
 
 /**
  * OAuth `redirectTo` uchun to'g'ri asosiy manzil.

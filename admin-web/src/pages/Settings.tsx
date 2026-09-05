@@ -71,7 +71,7 @@ const DEFAULT_SETTINGS: PlatformSettings = {
     "Sertifikat olish imkoniyati",
     "Reklama va cheklovlarsiz",
   ],
-  platformName: "tushunGo",
+  platformName: "Wisdom",
   logoUrl: "",
   supportPhone: "+998 90 123 45 67",
   supportEmail: "support@edukids.uz",
@@ -261,7 +261,7 @@ export default function Settings() {
                           if (!file) return;
                           if (file.size > 200 * 1024 * 1024) { alert("Maksimal 200MB!"); return; }
                           try {
-                            const filePath = `apk/tushungo-${Date.now()}.apk`;
+                            const filePath = `apk/wisdom-${Date.now()}.apk`;
                             const { error: uploadErr } = await supabase.storage.from("edukids").upload(filePath, file);
                             if (uploadErr) throw uploadErr;
                             const url = supabase.storage.from("edukids").getPublicUrl(filePath).data.publicUrl;
@@ -452,7 +452,7 @@ export default function Settings() {
           <Server size={18} className="text-gray-400" />
           <div>
             <p className="text-sm font-medium text-gray-700">Tizim ma'lumotlari</p>
-            <p className="text-xs text-gray-500 mt-0.5">tushunGo Admin Panel v2.5.0 · Supabase · Vite + React</p>
+            <p className="text-xs text-gray-500 mt-0.5">Wisdom Admin Panel v2.5.0 · Supabase · Vite + React</p>
           </div>
         </div>
       </div>
@@ -560,7 +560,7 @@ function ThemeEditor({ theme, onChange, onReset }: {
                   <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ backgroundColor: theme.primaryColor }}>
                     <span className="text-xs" style={{ color: theme.buttonTextColor }}>⚡</span>
                   </div>
-                  <span className="text-sm font-bold" style={{ color: theme.primaryColor }}>tushunGo</span>
+                  <span className="text-sm font-bold" style={{ color: theme.primaryColor }}>Wisdom</span>
                 </div>
                 <div className="flex gap-2">
                   <div className="w-6 h-6 rounded-full" style={{ backgroundColor: theme.bgColor }} />
@@ -1088,7 +1088,7 @@ function LegalEditor() {
 // ===== Huquqiy hujjatlar — standart namuna matnlar =====
 const DEFAULT_TERMS_TEXT = `1. UMUMIY QOIDALAR
 
-1.1. Ushbu foydalanish shartlari (keyingi o'rinlarda – "Shartlar") tushunGo mobil ilovasi (keyingi o'rinlarda – "Ilova") va uning xizmatlaridan foydalanish qoidalarini belgilaydi.
+1.1. Ushbu foydalanish shartlari (keyingi o'rinlarda – "Shartlar") Wisdom ta'lim platformasi (keyingi o'rinlarda – "Ilova") va uning xizmatlaridan foydalanish qoidalarini belgilaydi.
 
 1.2. Ilovadan foydalanish orqali siz ushbu Shartlarga rozilik bildirasiz. Agar siz Shartlarga rozi bo'lmasangiz, iltimos, Ilovadan foydalanmang.
 
@@ -1138,7 +1138,7 @@ const DEFAULT_TERMS_TEXT = `1. UMUMIY QOIDALAR
 
 6. INTELLEKTUAL MULK
 
-6.1. Ilovadagi barcha materiallar (darslar, testlar, rasmlar, videolar) tushunGo mulki hisoblanadi.
+6.1. Ilovadagi barcha materiallar (darslar, testlar, rasmlar, videolar) Wisdom mulki hisoblanadi.
 
 6.2. Materiallarni ruxsatsiz nusxalash, tarqatish yoki qayta nashr etish taqiqlanadi.
 
@@ -1160,13 +1160,13 @@ const DEFAULT_TERMS_TEXT = `1. UMUMIY QOIDALAR
 
 9. ALOQA
 
-Savollar yoki shikoyatlar uchun: support@tushungo.uz
+Savollar yoki shikoyatlar uchun: support@wisdomapp.uz
 
-© tushunGo. Barcha huquqlar himoyalangan.`;
+© Wisdom. Barcha huquqlar himoyalangan.`;
 
 const DEFAULT_PRIVACY_TEXT = `1. KIRISH
 
-1.1. Ushbu maxfiylik siyosati tushunGo mobil ilovasi foydalanuvchilarining shaxsiy ma'lumotlarini qanday yig'ish, saqlash va ishlatishimiz haqida ma'lumot beradi.
+1.1. Ushbu maxfiylik siyosati Wisdom mobil ilovasi foydalanuvchilarining shaxsiy ma'lumotlarini qanday yig'ish, saqlash va ishlatishimiz haqida ma'lumot beradi.
 
 1.2. Ilovadan foydalanish orqali siz ushbu siyosatga rozilik bildirasiz.
 
@@ -1215,7 +1215,7 @@ const DEFAULT_PRIVACY_TEXT = `1. KIRISH
 - Hisobni o'chirish va ma'lumotlarni olib tashlash so'rovi
 - Marketing xabarlaridan voz kechish
 
-5.2. Huquqlaringizdan foydalanish uchun support@tushungo.uz ga murojaat qiling.
+5.2. Huquqlaringizdan foydalanish uchun support@wisdomapp.uz ga murojaat qiling.
 
 6. BOLALAR MAXFIYLIGI
 
@@ -1247,6 +1247,6 @@ const DEFAULT_PRIVACY_TEXT = `1. KIRISH
 
 10. ALOQA
 
-Maxfiylik masalalari bo'yicha: support@tushungo.uz
+Maxfiylik masalalari bo'yicha: support@wisdomapp.uz
 
-© tushunGo. Barcha huquqlar himoyalangan.`;
+© Wisdom. Barcha huquqlar himoyalangan.`;

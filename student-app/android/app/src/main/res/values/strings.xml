@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">tushunGo</string>
-    <string name="title_activity_main">tushunGo</string>
-    <string name="package_name">uz.edukids.app</string>
-    <string name="custom_url_scheme">uz.edukids.app</string>
+    <string name="app_name">Wisdom</string>
+    <string name="title_activity_main">Wisdom</string>
+    <string name="package_name">uz.wisdom.app</string>
+    <string name="custom_url_scheme">uz.wisdom.app</string>
 </resources>

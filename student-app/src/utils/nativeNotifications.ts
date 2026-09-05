@@ -88,7 +88,7 @@ export async function showNewNotifications(
       notifications: fresh.map((n, idx) => ({
         // Capacitor id raqam bo'lishi kerak — vaqt asosida unikal qiymat
         id: Number(String(Date.now()).slice(-6)) + idx,
-        title: n.title || "tushunGo",
+        title: n.title || "Wisdom",
         body: n.body || "",
         smallIcon: "ic_launcher",
       })),

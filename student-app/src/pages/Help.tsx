@@ -11,7 +11,7 @@ export default function Help() {
 
       <div className="px-5 mt-5">
         <p className="text-sm text-gray-600 leading-relaxed mb-6">
-          tushunGo ilovasidan foydalanish bo'yicha yo'riqnoma. Quyidagi bo'limlarni o'qib, dastur bilan ishlashni o'rganing.
+          Wisdom ilovasidan foydalanish bo'yicha yo'riqnoma. Quyidagi bo'limlarni o'qib, dastur bilan ishlashni o'rganing.
         </p>
 
         <div className="space-y-4">

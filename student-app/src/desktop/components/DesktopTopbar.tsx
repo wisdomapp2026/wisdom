@@ -46,7 +46,7 @@ const ROUTE_TITLES: Array<[RegExp, string]> = [
 
 function routeTitle(pathname: string): string {
   for (const [re, title] of ROUTE_TITLES) if (re.test(pathname)) return title;
-  return "tushunGo";
+  return "Wisdom";
 }
 
 export default function DesktopTopbar() {
@@ -90,7 +90,7 @@ export default function DesktopTopbar() {
       >
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-[13px] text-gray-400 hidden xl:inline">tushunGo</span>
+          <span className="text-[13px] text-gray-400 hidden xl:inline">Wisdom</span>
           <ChevronRight size={14} className="text-gray-300 hidden xl:inline" />
           <h1 className="text-[15px] font-bold text-gray-900 truncate">{routeTitle(location.pathname)}</h1>
         </div>

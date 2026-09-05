@@ -47,7 +47,7 @@ const SUPPORT_NAV = [
   { to: "/profile/help", label: "Yordam", icon: HelpCircle },
 ];
 
-const COLLAPSE_KEY = "tushungo-dk-sidebar-collapsed";
+const COLLAPSE_KEY = "wisdom-dk-sidebar-collapsed";
 
 interface Props {
   onLegalOpen: (type: "terms" | "privacy") => void;
@@ -68,7 +68,7 @@ export default function DesktopSidebar({ onLegalOpen, onAuthorOpen }: Props) {
     }
   });
   const [logoUrl, setLogoUrl] = useState("");
-  const [appName, setAppName] = useState("tushunGo");
+  const [appName, setAppName] = useState("Wisdom");
 
   useEffect(() => {
     try {

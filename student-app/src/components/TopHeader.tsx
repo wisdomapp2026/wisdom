@@ -15,7 +15,7 @@ export default function TopHeader() {
   const [authorModalOpen, setAuthorModalOpen] = useState(false);
   const [userData, setUserData] = useState<{ name?: string; avatar?: string } | null>(null);
   const [logoUrl, setLogoUrl] = useState("");
-  const [appName, setAppName] = useState("tushunGo");
+  const [appName, setAppName] = useState("Wisdom");
 
   useEffect(() => {
     if (user) {
