@@ -209,6 +209,7 @@ export interface Vocabulary {
   audioUrl?: string; // Talaffuz audiosi
   imageUrl?: string; // So'z rasmi
   level?: "A1" | "A2" | "B1" | "B2" | "C1" | "C2" | "IELTS" | string;
+  folder?: string; // Papka / to'plam nomi (masalan: "Unit 1 Family", "Irregular Verbs")
   tags?: string[];
   createdAt: number;
   updatedAt: number;

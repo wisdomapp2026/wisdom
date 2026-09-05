@@ -14,6 +14,9 @@ import {
   X,
   RefreshCw,
   Layers,
+  Folder,
+  FolderPlus,
+  Edit3,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import {
@@ -22,6 +25,9 @@ import {
   bulkCreateVocabularies,
   updateVocabulary,
   deleteVocabulary,
+  getAllFolders,
+  renameVocabularyFolder,
+  deleteVocabularyFolder,
 } from "@shared/repositories";
 import type { Vocabulary } from "@shared/types";
 
@@ -33,6 +39,8 @@ export default function Vocabularies() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedLevel, setSelectedLevel] = useState("All");
+  const [selectedFolder, setSelectedFolder] = useState("All");
+  const [folders, setFolders] = useState<string[]>(["Umumiy"]);
 
   // Create / Edit modal
   const [showModal, setShowModal] = useState(false);
@@ -46,30 +54,46 @@ export default function Vocabularies() {
     exampleSentence: "",
     exampleTranslation: "",
     level: "A1",
+    folder: "Umumiy",
   });
   const [saving, setSaving] = useState(false);
 
   // Import modal
   const [showImportModal, setShowImportModal] = useState(false);
   const [importData, setImportData] = useState<Partial<Vocabulary>[]>([]);
+  const [importFolderName, setImportFolderName] = useState("");
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState("");
+
+  // Folder rename modal
+  const [showRenameModal, setShowRenameModal] = useState(false);
+  const [renamingFolder, setRenamingFolder] = useState("");
+  const [newFolderName, setNewFolderName] = useState("");
+  const [savingFolder, setSavingFolder] = useState(false);
+
+  // New folder modal
+  const [showNewFolderModal, setShowNewFolderModal] = useState(false);
+  const [createdFolderName, setCreatedFolderName] = useState("");
 
   // Delete confirm
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     loadVocabularies();
-  }, [selectedLevel]);
+  }, [selectedLevel, selectedFolder]);
 
   async function loadVocabularies() {
     setLoading(true);
     try {
       const data = await getVocabularies({
         level: selectedLevel === "All" ? undefined : selectedLevel,
+        folder: selectedFolder === "All" ? undefined : selectedFolder,
         search: searchTerm,
       });
       setVocabularies(data);
+
+      const fList = await getAllFolders();
+      setFolders(fList);
     } catch (err) {
       console.error("Lug'atlarni yuklashda xatolik:", err);
     } finally {
@@ -93,13 +117,17 @@ export default function Vocabularies() {
       exampleSentence: "",
       exampleTranslation: "",
       level: "A1",
+      folder: selectedFolder !== "All" ? selectedFolder : "Umumiy",
     });
     setShowModal(true);
   }
 
   function openEditModal(v: Vocabulary) {
     setEditingItem(v);
-    setFormData({ ...v });
+    setFormData({
+      ...v,
+      folder: v.folder || "Umumiy",
+    });
     setShowModal(true);
   }
 
@@ -158,6 +186,13 @@ export default function Vocabularies() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Fayl nomidan avtomatik papka nomini hosil qilish
+    const cleanFileName = file.name
+      .replace(/\.[^/.]+$/, "")
+      .replace(/[_-]/g, " ")
+      .trim();
+    setImportFolderName(cleanFileName || "Yangi to'plam");
+
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
@@ -174,7 +209,6 @@ export default function Vocabularies() {
 
         // Qatorlarni xaritalash
         const parsed: Partial<Vocabulary>[] = rows.map((r) => {
-          // Turli ustun nomlarini qabul qilish
           const word = r.word || r.Word || r["So'z"] || r.soz || "";
           const translation = r.translation || r.Translation || r["Tarjima"] || r.tarjima || "";
           const phonetic = r.phonetic || r.Phonetic || r["Transkripsiya"] || "";
@@ -183,6 +217,7 @@ export default function Vocabularies() {
           const exampleSentence = r.exampleSentence || r.example || r["Misol"] || "";
           const exampleTranslation = r.exampleTranslation || r["Misol tarjimasi"] || "";
           const level = r.level || r.Level || r["Daraja"] || "A1";
+          const folder = r.folder || r.Folder || r["Papka"] || r["To'plam"] || cleanFileName || "Umumiy";
 
           return {
             word: String(word).trim(),
@@ -193,6 +228,7 @@ export default function Vocabularies() {
             exampleSentence: String(exampleSentence).trim(),
             exampleTranslation: String(exampleTranslation).trim(),
             level: String(level).toUpperCase().trim(),
+            folder: String(folder).trim(),
           };
         }).filter((it) => it.word && it.translation);
 
@@ -213,16 +249,69 @@ export default function Vocabularies() {
     if (importData.length === 0) return;
     setImporting(true);
     try {
-      const count = await bulkCreateVocabularies(importData);
-      alert(`Muvaffaqiyatli ${count} ta so'z import qilindi!`);
+      const targetFolder = importFolderName.trim() || "Umumiy";
+      const withFolder = importData.map((d) => ({
+        ...d,
+        folder: targetFolder,
+      }));
+
+      const count = await bulkCreateVocabularies(withFolder, targetFolder);
+      alert(`Muvaffaqiyatli ${count} ta so'z "${targetFolder}" papkasiga import qilindi!`);
       setShowImportModal(false);
       setImportData([]);
+      setSelectedFolder(targetFolder);
       await loadVocabularies();
     } catch (err: any) {
       alert("Import qilishda xatolik: " + err.message);
     } finally {
       setImporting(false);
     }
+  }
+
+  async function handleRenameFolder(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newFolderName.trim() || newFolderName.trim() === renamingFolder) {
+      setShowRenameModal(false);
+      return;
+    }
+    setSavingFolder(true);
+    try {
+      await renameVocabularyFolder(renamingFolder, newFolderName.trim());
+      if (selectedFolder === renamingFolder) {
+        setSelectedFolder(newFolderName.trim());
+      }
+      setShowRenameModal(false);
+      await loadVocabularies();
+    } catch (err: any) {
+      alert("Papkani qayta nomlashda xatolik: " + err.message);
+    } finally {
+      setSavingFolder(false);
+    }
+  }
+
+  async function handleDeleteFolder(fName: string) {
+    if (!confirm(`"${fName}" papkasini o'chirmoqchimisiz?\nPapkadagi so'zlar "Umumiy" papkaga o'tkaziladi.`)) return;
+    try {
+      await deleteVocabularyFolder(fName, false);
+      if (selectedFolder === fName) {
+        setSelectedFolder("All");
+      }
+      await loadVocabularies();
+    } catch (err: any) {
+      alert("Papkani o'chirishda xatolik: " + err.message);
+    }
+  }
+
+  function handleCreateEmptyFolder(e: React.FormEvent) {
+    e.preventDefault();
+    const name = createdFolderName.trim();
+    if (!name) return;
+    if (!folders.includes(name)) {
+      setFolders([...folders, name]);
+    }
+    setSelectedFolder(name);
+    setShowNewFolderModal(false);
+    setCreatedFolderName("");
   }
 
   // Namuna shablon yuklab olish
@@ -237,6 +326,7 @@ export default function Vocabularies() {
         exampleSentence: "She worked hard to achieve her goals.",
         exampleTranslation: "U o'z maqsadlariga erishish uchun qattiq ishladi.",
         level: "B1",
+        folder: "General Verbs",
       },
       {
         word: "knowledge",
@@ -247,12 +337,14 @@ export default function Vocabularies() {
         exampleSentence: "Knowledge is power.",
         exampleTranslation: "Bilim — bu kuch.",
         level: "A2",
+        folder: "Education",
       },
     ];
+
     const ws = XLSX.utils.json_to_sheet(templateData);
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Lug'at Namuna");
-    XLSX.writeFile(wb, "wisdom_lugat_shablon.xlsx");
+    XLSX.utils.book_append_sheet(wb, ws, "Lugatlar");
+    XLSX.writeFile(wb, "lugat_namuna.xlsx");
   }
 
   return (
@@ -265,7 +357,7 @@ export default function Vocabularies() {
             Lug'atlar Bazasi (Vocabulary Bank)
           </h1>
           <p className="text-sm text-gray-500 mt-1">
-            Ingliz tili so'zlarini boshqaring, yangi so'zlar qo'shing yoki Excel orqali ommaviy yuklang.
+            Ingliz tili so'zlarini papkalar (to'plamlar) bo'yicha boshqaring, yangi so'zlar qo'shing yoki Excel orqali ommaviy yuklang.
           </p>
         </div>
 
@@ -284,6 +376,88 @@ export default function Vocabularies() {
             <Plus className="w-4 h-4" />
             Yangi So'z
           </button>
+        </div>
+      </div>
+
+      {/* Papkalar (Folders) Navigatsiya Paneli */}
+      <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Folder className="w-4 h-4 text-indigo-600" />
+            <h4 className="text-xs font-bold text-gray-700 uppercase tracking-wider">
+              Lug'at Papkalari (To'plamlar)
+            </h4>
+            <span className="text-xs text-gray-400 font-medium">({folders.length} ta papka)</span>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {selectedFolder !== "All" && selectedFolder !== "Umumiy" && (
+              <>
+                <button
+                  onClick={() => {
+                    setRenamingFolder(selectedFolder);
+                    setNewFolderName(selectedFolder);
+                    setShowRenameModal(true);
+                  }}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors border border-indigo-200"
+                  title="Papkani qayta nomlash"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  Qayta nomlash
+                </button>
+                <button
+                  onClick={() => handleDeleteFolder(selectedFolder)}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-red-200"
+                  title="Papkani o'chirish"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Papkani o'chirish
+                </button>
+              </>
+            )}
+            <button
+              onClick={() => {
+                setCreatedFolderName("");
+                setShowNewFolderModal(true);
+              }}
+              className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg transition-colors"
+            >
+              <FolderPlus className="w-3.5 h-3.5" />
+              + Yangi Papka
+            </button>
+          </div>
+        </div>
+
+        {/* Papkalar ro'yxati (Horizontal scroll tabs) */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+          <button
+            onClick={() => setSelectedFolder("All")}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold shrink-0 transition-all flex items-center gap-1.5 ${
+              selectedFolder === "All"
+                ? "bg-indigo-600 text-white shadow-sm"
+                : "bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200"
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            Barcha so'zlar
+          </button>
+          {folders.map((f) => {
+            const isSelected = selectedFolder === f;
+            return (
+              <button
+                key={f}
+                onClick={() => setSelectedFolder(f)}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold shrink-0 transition-all flex items-center gap-1.5 ${
+                  isSelected
+                    ? "bg-indigo-600 text-white shadow-sm"
+                    : "bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200"
+                }`}
+              >
+                <Folder className={`w-3.5 h-3.5 ${isSelected ? "text-white" : "text-indigo-600"}`} />
+                <span>{f}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -349,6 +523,7 @@ export default function Vocabularies() {
               <thead>
                 <tr className="border-b border-gray-100 bg-gray-50/75 text-xs font-semibold text-gray-500 uppercase tracking-wider">
                   <th className="py-3.5 px-4">So'z (Word)</th>
+                  <th className="py-3.5 px-4">Papka</th>
                   <th className="py-3.5 px-4">Transkripsiya</th>
                   <th className="py-3.5 px-4">O'zbekcha Ma'nosi</th>
                   <th className="py-3.5 px-4">Turkumi</th>
@@ -364,36 +539,49 @@ export default function Vocabularies() {
                       <span>{v.word}</span>
                       <button
                         onClick={() => playAudio(v.word)}
-                        title="Talaffuzni tinglash"
-                        className="p-1 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors"
+                        className="p-1 text-gray-400 hover:text-indigo-600 rounded transition-colors"
+                        title="Talaffuzni eshitish"
                       >
                         <Volume2 className="w-4 h-4" />
                       </button>
                     </td>
-                    <td className="py-3.5 px-4 text-gray-500 font-mono text-xs">
+                    <td className="py-3.5 px-4">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100/60">
+                        <Folder className="w-3 h-3 text-indigo-500" />
+                        {v.folder || "Umumiy"}
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-4 font-mono text-xs text-gray-500">
                       {v.phonetic || "—"}
                     </td>
                     <td className="py-3.5 px-4 font-medium text-indigo-950">
                       {v.translation}
                     </td>
-                    <td className="py-3.5 px-4 text-gray-500 text-xs">
-                      <span className="px-2 py-0.5 bg-gray-100 rounded-md">
+                    <td className="py-3.5 px-4 text-xs text-gray-500">
+                      <span className="px-2 py-0.5 bg-gray-100 rounded text-gray-600">
                         {v.partOfSpeech || "noun"}
                       </span>
                     </td>
                     <td className="py-3.5 px-4">
-                      <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-600 border border-indigo-100">
+                      <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 font-bold rounded text-xs">
                         {v.level || "A1"}
                       </span>
                     </td>
-                    <td className="py-3.5 px-4 max-w-xs truncate text-xs text-gray-500" title={v.exampleSentence}>
-                      {v.exampleSentence || "—"}
+                    <td className="py-3.5 px-4 text-xs text-gray-500 max-w-xs truncate">
+                      {v.exampleSentence ? (
+                        <div>
+                          <p className="font-medium text-gray-700">{v.exampleSentence}</p>
+                          <p className="text-gray-400">{v.exampleTranslation}</p>
+                        </div>
+                      ) : (
+                        "—"
+                      )}
                     </td>
                     <td className="py-3.5 px-4 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <button
                           onClick={() => openEditModal(v)}
-                          className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                          className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                           title="Tahrirlash"
                         >
                           <Edit2 className="w-4 h-4" />
@@ -416,11 +604,11 @@ export default function Vocabularies() {
         )}
       </div>
 
-      {/* Create / Edit Modal */}
+      {/* Create / Edit Word Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white w-full max-w-xl rounded-2xl shadow-xl border border-gray-100 overflow-hidden my-8">
-            <div className="flex items-center justify-between p-5 border-b border-gray-100">
+          <div className="bg-white w-full max-w-xl rounded-2xl shadow-xl border border-gray-100 p-6 space-y-4 my-8">
+            <div className="flex items-center justify-between">
               <h3 className="font-bold text-lg text-gray-900">
                 {editingItem ? "So'zni tahrirlash" : "Yangi so'z qo'shish"}
               </h3>
@@ -432,11 +620,11 @@ export default function Vocabularies() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveWord} className="p-6 space-y-4">
+            <form onSubmit={handleSaveWord} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
-                    So'z (English) *
+                    Inglizcha So'z *
                   </label>
                   <input
                     type="text"
@@ -462,7 +650,25 @@ export default function Vocabularies() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 uppercase mb-1 flex items-center gap-1">
+                    <Folder className="w-3.5 h-3.5 text-indigo-600" /> Papka
+                  </label>
+                  <input
+                    type="text"
+                    list="folder-options"
+                    value={formData.folder || "Umumiy"}
+                    onChange={(e) => setFormData({ ...formData, folder: e.target.value })}
+                    placeholder="Masalan: Unit 1"
+                    className="w-full px-3.5 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 bg-white"
+                  />
+                  <datalist id="folder-options">
+                    {folders.map((f) => (
+                      <option key={f} value={f} />
+                    ))}
+                  </datalist>
+                </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
                     Transkripsiya
@@ -634,6 +840,40 @@ export default function Vocabularies() {
                 />
               </div>
 
+              {/* Papka Nomi Sozlamasi (Fayl nomidan avtomatik olingan) */}
+              <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-2">
+                <label className="block text-xs font-bold text-gray-700 uppercase flex items-center gap-1.5">
+                  <Folder className="w-4 h-4 text-indigo-600" />
+                  Saqlanadigan Papka (To'plam) Nomi *
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={importFolderName}
+                    onChange={(e) => setImportFolderName(e.target.value)}
+                    placeholder="Masalan: Unit 1 Family yoki Colors"
+                    className="flex-1 px-3.5 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                  />
+                  {folders.length > 0 && (
+                    <select
+                      onChange={(e) => {
+                        if (e.target.value) setImportFolderName(e.target.value);
+                      }}
+                      className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-xs font-semibold text-gray-700 cursor-pointer"
+                      defaultValue=""
+                    >
+                      <option value="" disabled>Mavjud papkadan tanlash...</option>
+                      {folders.map((f) => (
+                        <option key={f} value={f}>{f}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                <p className="text-[11px] text-gray-500">
+                  📁 Fayl nomi asosida avtomatik to'ldirildi. Istasangiz qayta nomlashingiz mumkin. Ushbu so'zlar keyinchalik mavzuga biriktirishda shu papka orqali oson tanlanadi!
+                </p>
+              </div>
+
               {/* Preview Table */}
               {importData.length > 0 && (
                 <div className="space-y-2">
@@ -642,7 +882,7 @@ export default function Vocabularies() {
                       Yuklanadigan so'zlar: {importData.length} ta
                     </p>
                     <span className="text-xs text-emerald-600 font-semibold">
-                      Tayyor holatda
+                      Tayyor holatda (Papka: {importFolderName || "Umumiy"})
                     </span>
                   </div>
                   <div className="max-h-56 overflow-y-auto border border-gray-200 rounded-xl">
@@ -700,11 +940,117 @@ export default function Vocabularies() {
                       Yuklanmoqda...
                     </>
                   ) : (
-                    `Barchasini saqlash (${importData.length})`
+                    `"${importFolderName || "Umumiy"}" papkasiga saqlash (${importData.length})`
                   )}
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Papkani Qayta Nomlash Modali */}
+      {showRenameModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-gray-100 p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-base text-gray-900 flex items-center gap-2">
+                <Edit3 className="w-4 h-4 text-indigo-600" />
+                Papkani Qayta Nomlash
+              </h3>
+              <button
+                onClick={() => setShowRenameModal(false)}
+                className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleRenameFolder} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
+                  Eski nom: <span className="text-gray-500 font-normal">{renamingFolder}</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Yangi papka nomini kiriting..."
+                  value={newFolderName}
+                  onChange={(e) => setNewFolderName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowRenameModal(false)}
+                  className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl text-xs font-medium hover:bg-gray-50"
+                >
+                  Bekor qilish
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingFolder || !newFolderName.trim()}
+                  className="px-5 py-2 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {savingFolder ? "Saqlanmoqda..." : "Saqlash"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Yangi Bo'sh Papka Yaratish Modali */}
+      {showNewFolderModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-gray-100 p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-base text-gray-900 flex items-center gap-2">
+                <FolderPlus className="w-4 h-4 text-indigo-600" />
+                Yangi Papka Yaratish
+              </h3>
+              <button
+                onClick={() => setShowNewFolderModal(false)}
+                className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateEmptyFolder} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
+                  Papka Nomi *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Masalan: Unit 3 Jobs"
+                  value={createdFolderName}
+                  onChange={(e) => setCreatedFolderName(e.target.value)}
+                  className="w-full px-3.5 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowNewFolderModal(false)}
+                  className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl text-xs font-medium hover:bg-gray-50"
+                >
+                  Bekor qilish
+                </button>
+                <button
+                  type="submit"
+                  disabled={!createdFolderName.trim()}
+                  className="px-5 py-2 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  Yaratish
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

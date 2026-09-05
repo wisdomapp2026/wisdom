@@ -19,6 +19,7 @@ import {
   ExternalLink,
   Layers,
   Sparkles,
+  Folder,
 } from "lucide-react";
 import {
   getTopicById,
@@ -52,6 +53,8 @@ export default function TopicDetail() {
   const [showVocabModal, setShowVocabModal] = useState(false);
   const [allVocabularies, setAllVocabularies] = useState<Vocabulary[]>([]);
   const [vocabSearch, setVocabSearch] = useState("");
+  const [vocabFolders, setVocabFolders] = useState<string[]>([]);
+  const [selectedVocabFolder, setSelectedVocabFolder] = useState<string>("All");
   const [selectedVocabIds, setSelectedVocabIds] = useState<Set<string>>(new Set());
   const [savingVocabs, setSavingVocabs] = useState(false);
 
@@ -141,10 +144,44 @@ export default function TopicDetail() {
       const all = await getVocabularies();
       setAllVocabularies(all);
       setSelectedVocabIds(new Set(topic?.vocabularyIds || []));
+
+      const fSet = new Set<string>();
+      fSet.add("Umumiy");
+      all.forEach((v) => {
+        if (v.folder && v.folder.trim()) fSet.add(v.folder.trim());
+      });
+      setVocabFolders(Array.from(fSet));
+      setSelectedVocabFolder("All");
       setShowVocabModal(true);
     } catch (err: any) {
       alert("Lug'at bazasini yuklashda xatolik: " + err.message);
     }
+  }
+
+  function handleSelectAllFromFolder(folderName: string) {
+    const targetWords = allVocabularies.filter((v) => {
+      const matchFolder = folderName === "All" ? true : (v.folder || "Umumiy") === folderName;
+      const matchSearch = (v.word + " " + v.translation).toLowerCase().includes(vocabSearch.toLowerCase());
+      return matchFolder && matchSearch;
+    });
+    setSelectedVocabIds((prev) => {
+      const next = new Set(prev);
+      targetWords.forEach((w) => next.add(w.id));
+      return next;
+    });
+  }
+
+  function handleDeselectAllFromFolder(folderName: string) {
+    const targetWords = allVocabularies.filter((v) => {
+      const matchFolder = folderName === "All" ? true : (v.folder || "Umumiy") === folderName;
+      const matchSearch = (v.word + " " + v.translation).toLowerCase().includes(vocabSearch.toLowerCase());
+      return matchFolder && matchSearch;
+    });
+    setSelectedVocabIds((prev) => {
+      const next = new Set(prev);
+      targetWords.forEach((w) => next.delete(w.id));
+      return next;
+    });
   }
 
   function toggleSelectVocab(id: string) {
@@ -483,6 +520,7 @@ export default function TopicDetail() {
                 <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase">
                   <tr>
                     <th className="p-3">So'z</th>
+                    <th className="p-3">Papka</th>
                     <th className="p-3">Transkripsiya</th>
                     <th className="p-3">Tarjima</th>
                     <th className="p-3">Turkumi</th>
@@ -501,6 +539,12 @@ export default function TopicDetail() {
                         >
                           <Volume2 className="w-3.5 h-3.5" />
                         </button>
+                      </td>
+                      <td className="p-3">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-indigo-50 text-indigo-700">
+                          <Folder className="w-3 h-3 text-indigo-500" />
+                          {v.folder || "Umumiy"}
+                        </span>
                       </td>
                       <td className="p-3 font-mono text-xs text-gray-500">{v.phonetic || "—"}</td>
                       <td className="p-3 font-medium text-indigo-950">{v.translation}</td>
@@ -622,11 +666,12 @@ export default function TopicDetail() {
           <div className="bg-white w-full max-w-2xl rounded-2xl shadow-xl border border-gray-100 overflow-hidden my-8">
             <div className="flex items-center justify-between p-5 border-b border-gray-100">
               <div>
-                <h3 className="font-bold text-lg text-gray-900">
+                <h3 className="font-bold text-lg text-gray-900 flex items-center gap-2">
+                  <Folder className="w-5 h-5 text-indigo-600" />
                   Lug'at Bazasidan Tanlash
                 </h3>
-                <p className="text-xs text-gray-500">
-                  Tanlangan so'zlar ushbu darsga avtomatik biriktiriladi.
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Papkalar bo'yicha saralang yoki butun bir papkadagi so'zlarni bitta tugma bilan darsga qo'shing.
                 </p>
               </div>
               <button
@@ -638,6 +683,95 @@ export default function TopicDetail() {
             </div>
 
             <div className="p-5 space-y-4">
+              {/* Papkalar filtri */}
+              <div className="space-y-1.5">
+                <span className="text-xs font-bold text-gray-600 uppercase tracking-wider flex items-center gap-1">
+                  <Folder className="w-3.5 h-3.5 text-indigo-600" /> Papka bo'yicha saralash:
+                </span>
+                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedVocabFolder("All")}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all ${
+                      selectedVocabFolder === "All"
+                        ? "bg-indigo-600 text-white shadow-sm"
+                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    Barcha so'zlar ({allVocabularies.length})
+                  </button>
+                  {vocabFolders.map((f) => {
+                    const count = allVocabularies.filter((v) => (v.folder || "Umumiy") === f).length;
+                    const isSelected = selectedVocabFolder === f;
+                    return (
+                      <button
+                        key={f}
+                        type="button"
+                        onClick={() => setSelectedVocabFolder(f)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-semibold shrink-0 transition-all flex items-center gap-1.5 ${
+                          isSelected
+                            ? "bg-indigo-600 text-white shadow-sm"
+                            : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                        }`}
+                      >
+                        <Folder className={`w-3 h-3 ${isSelected ? "text-white" : "text-indigo-600"}`} />
+                        <span>{f}</span>
+                        <span className={`text-[10px] px-1.5 py-0.2 rounded-full ${isSelected ? "bg-white/20 text-white" : "bg-gray-200 text-gray-600"}`}>
+                          {count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Papka bo'yicha tezkor qo'shish paneli */}
+              {(() => {
+                const currentFolderWords = allVocabularies.filter((v) => {
+                  const matchFolder = selectedVocabFolder === "All" || (v.folder || "Umumiy") === selectedVocabFolder;
+                  const matchSearch = (v.word + " " + v.translation).toLowerCase().includes(vocabSearch.toLowerCase());
+                  return matchFolder && matchSearch;
+                });
+                const allCurrentSelected = currentFolderWords.length > 0 && currentFolderWords.every((v) => selectedVocabIds.has(v.id));
+
+                return (
+                  <div className="bg-indigo-50/80 border border-indigo-100 rounded-xl p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-bold text-indigo-950 flex items-center gap-1.5">
+                        <Folder className="w-3.5 h-3.5 text-indigo-600" />
+                        {selectedVocabFolder === "All" ? "Barcha so'zlar" : `"${selectedVocabFolder}" papkasi`}
+                      </p>
+                      <p className="text-[11px] text-indigo-700 mt-0.5">
+                        Filtr bo'yicha {currentFolderWords.length} ta so'z mavjud.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {allCurrentSelected ? (
+                        <button
+                          type="button"
+                          onClick={() => handleDeselectAllFromFolder(selectedVocabFolder)}
+                          className="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg text-xs font-semibold transition-colors shrink-0"
+                        >
+                          Tanlovni bekor qilish
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleSelectAllFromFolder(selectedVocabFolder)}
+                          disabled={currentFolderWords.length === 0}
+                          className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-colors shrink-0 flex items-center gap-1.5 disabled:opacity-50"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          Ushbu papkadagi barchasini tanlash ({currentFolderWords.length})
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Qidiruv */}
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input
@@ -649,11 +783,14 @@ export default function TopicDetail() {
                 />
               </div>
 
-              <div className="max-h-72 overflow-y-auto divide-y divide-gray-100 border border-gray-200 rounded-xl">
+              {/* So'zlar ro'yxati */}
+              <div className="max-h-64 overflow-y-auto divide-y divide-gray-100 border border-gray-200 rounded-xl">
                 {allVocabularies
-                  .filter((v) =>
-                    (v.word + " " + v.translation).toLowerCase().includes(vocabSearch.toLowerCase())
-                  )
+                  .filter((v) => {
+                    const matchFolder = selectedVocabFolder === "All" || (v.folder || "Umumiy") === selectedVocabFolder;
+                    const matchSearch = (v.word + " " + v.translation).toLowerCase().includes(vocabSearch.toLowerCase());
+                    return matchFolder && matchSearch;
+                  })
                   .map((v) => {
                     const isSelected = selectedVocabIds.has(v.id);
                     return (
@@ -661,24 +798,28 @@ export default function TopicDetail() {
                         key={v.id}
                         onClick={() => toggleSelectVocab(v.id)}
                         className={`p-3 flex items-center justify-between cursor-pointer transition-colors ${
-                          isSelected ? "bg-indigo-50/70" : "hover:bg-gray-50"
+                          isSelected ? "bg-indigo-50/80" : "hover:bg-gray-50"
                         }`}
                       >
                         <div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-bold text-sm text-gray-900">{v.word}</span>
                             <span className="text-xs font-mono text-gray-500">{v.phonetic}</span>
                             <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 bg-gray-100 rounded text-gray-600">
                               {v.level || "A1"}
                             </span>
+                            <span className="text-[10px] font-semibold px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md flex items-center gap-1">
+                              <Folder className="w-2.5 h-2.5 text-indigo-500" />
+                              {v.folder || "Umumiy"}
+                            </span>
                           </div>
                           <p className="text-xs text-gray-600 mt-0.5">{v.translation}</p>
                         </div>
                         <div
-                          className={`w-5 h-5 rounded-md border flex items-center justify-center ${
+                          className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 ${
                             isSelected
                               ? "bg-indigo-600 border-indigo-600 text-white"
-                              : "border-gray-300"
+                              : "border-gray-300 bg-white"
                           }`}
                         >
                           {isSelected && <CheckCircle className="w-3.5 h-3.5" />}
@@ -689,17 +830,19 @@ export default function TopicDetail() {
               </div>
 
               <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                <span className="text-xs text-gray-500">
-                  Tanlandi: <strong>{selectedVocabIds.size} ta</strong> so'z
+                <span className="text-xs text-gray-600">
+                  Jami tanlandi: <strong className="text-indigo-600 font-bold">{selectedVocabIds.size} ta</strong> so'z
                 </span>
                 <div className="flex gap-2">
                   <button
+                    type="button"
                     onClick={() => setShowVocabModal(false)}
-                    className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl text-xs font-medium"
+                    className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl text-xs font-medium hover:bg-gray-50"
                   >
                     Bekor qilish
                   </button>
                   <button
+                    type="button"
                     onClick={handleSaveAttachedVocabs}
                     disabled={savingVocabs}
                     className="px-5 py-2 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50"
