@@ -394,53 +394,6 @@ export default function TopicDetail() {
               )}
             </div>
 
-            {/* Theory Media: Rasmlar va Videolar */}
-            {topic.theoryMedia && topic.theoryMedia.length > 0 && (
-              <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 space-y-4">
-                <h3 className="font-bold text-gray-900 text-sm uppercase tracking-wider">
-                  Mavzuga oid ko'rgazmali materiallar
-                </h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {topic.theoryMedia.map((media, idx) => (
-                    <div
-                      key={idx}
-                      onClick={() => setFullscreenMedia(media)}
-                      className="group relative rounded-2xl overflow-hidden border border-gray-200 cursor-pointer bg-black/5 hover:border-indigo-500 transition-all shadow-sm"
-                    >
-                      {media.type === "image" ? (
-                        <div className="relative h-48 w-full overflow-hidden">
-                          <img
-                            src={media.url}
-                            alt={media.caption || "Theory visual"}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          />
-                          <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors flex items-center justify-center">
-                            <span className="p-2 bg-white/90 rounded-full text-gray-800 shadow-md transform group-hover:scale-110 transition-transform">
-                              <Maximize2 className="w-5 h-5" />
-                            </span>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="h-48 w-full bg-gray-900 flex flex-col items-center justify-center text-white relative">
-                          <div className="w-12 h-12 rounded-full bg-indigo-600 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                            <Play className="w-6 h-6 fill-current translate-x-0.5" />
-                          </div>
-                          <span className="text-xs font-semibold mt-2 text-gray-300">
-                            Videoni to'liq ekranda ko'rish
-                          </span>
-                        </div>
-                      )}
-                      {media.caption && (
-                        <div className="p-3 bg-white text-xs font-medium text-gray-700">
-                          {media.caption}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
             {/* Bottom Next Step Button */}
             <div className="pt-4 flex justify-end">
               <button

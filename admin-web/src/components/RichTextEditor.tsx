@@ -26,6 +26,8 @@ import {
   Palette,
   Highlighter,
   Upload,
+  Video,
+  X,
 } from "lucide-react";
 import { uploadFile } from "@shared/supabase";
 
@@ -96,6 +98,11 @@ export default function RichTextEditor({
   const [showTableModal, setShowTableModal] = useState(false);
   const [tableRows, setTableRows] = useState(3);
   const [tableCols, setTableCols] = useState(3);
+
+  // YouTube Video modal state
+  const [showVideoModal, setShowVideoModal] = useState(false);
+  const [videoUrl, setVideoUrl] = useState("");
+  const savedSelectionRef = useRef<Range | null>(null);
 
   // Word count
   const [stats, setStats] = useState({ words: 0, chars: 0 });
@@ -196,6 +203,52 @@ export default function RichTextEditor({
     const url = prompt("Havola (URL) manzilini kiriting:", "https://");
     if (!url || url === "https://") return;
     execCmd("createLink", url);
+  }
+
+  // Save / Restore Cursor Selection
+  function saveSelection() {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && editorRef.current?.contains(sel.anchorNode)) {
+      savedSelectionRef.current = sel.getRangeAt(0).cloneRange();
+    }
+  }
+
+  function restoreSelection() {
+    if (savedSelectionRef.current) {
+      const sel = window.getSelection();
+      if (sel) {
+        sel.removeAllRanges();
+        sel.addRange(savedSelectionRef.current);
+      }
+    }
+  }
+
+  function extractYouTubeId(url: string): string | null {
+    if (!url) return null;
+    const clean = url.trim();
+    // Handles youtu.be/ID, youtube.com/watch?v=ID, youtube.com/embed/ID, youtube.com/shorts/ID, etc.
+    const regExp = /(?:https?:\/\/)?(?:www\.)?(?:youtube\.com\/(?:[^\/\n\s]+\/\S+\/|(?:v|e(?:mbed)?|shorts)\/|\S*?[?&]v=)|youtu\.be\/)([a-zA-Z0-9_-]{11})/;
+    const match = clean.match(regExp);
+    return match ? match[1] : null;
+  }
+
+  function handleInsertYouTube() {
+    const id = extractYouTubeId(videoUrl);
+    if (!id) {
+      alert("Iltimos, to'g'ri YouTube video havolasini kiriting!\nMasalan:\n- https://www.youtube.com/watch?v=...\n- https://youtu.be/...\n- https://www.youtube.com/shorts/...");
+      return;
+    }
+
+    restoreSelection();
+    const embedHtml = `<div class="video-container" style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:16px;margin:20px 0;background:#000;"><iframe src="https://www.youtube.com/embed/${id}" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;border-radius:16px;"></iframe></div><p><br></p>`;
+
+    if (editorRef.current) {
+      editorRef.current.focus();
+      document.execCommand("insertHTML", false, embedHtml);
+      handleInput();
+    }
+    setVideoUrl("");
+    setShowVideoModal(false);
   }
 
   // Insert Local Image (uploads to Supabase storage)
@@ -598,6 +651,20 @@ export default function RichTextEditor({
             <span>Rasm qo'shish</span>
           </button>
 
+          {/* YouTube Video Button */}
+          <button
+            type="button"
+            onClick={() => {
+              saveSelection();
+              setShowVideoModal(true);
+            }}
+            title="Matn orasiga YouTube video joylash"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-red-50 text-red-700 hover:bg-red-100 rounded-lg text-xs font-semibold border border-red-200 transition-colors"
+          >
+            <Video className="w-4 h-4 text-red-600" />
+            <span>YouTube Video</span>
+          </button>
+
           {/* Table Insert Button */}
           <button
             type="button"
@@ -697,6 +764,76 @@ export default function RichTextEditor({
           >
             Bekor qilish
           </button>
+        </div>
+      )}
+
+      {/* YouTube Video Modal */}
+      {showVideoModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-gray-100 p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-red-50 text-red-600 flex items-center justify-center">
+                  <Video className="w-4 h-4" />
+                </div>
+                <h3 className="font-bold text-base text-gray-900">YouTube Video Qo'shish</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowVideoModal(false);
+                  setVideoUrl("");
+                }}
+                className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-500">
+              YouTube video havolasini kiriting. Video to'g'ridan-to'g'ri dars matnining kursor turgan joyiga joylashtiriladi.
+            </p>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
+                YouTube Video Havolasi (URL)
+              </label>
+              <input
+                type="url"
+                autoFocus
+                placeholder="Masalan: https://www.youtube.com/watch?v=... yoki https://youtu.be/..."
+                value={videoUrl}
+                onChange={(e) => setVideoUrl(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleInsertYouTube();
+                  }
+                }}
+                className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-red-500/20 focus:border-red-500"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowVideoModal(false);
+                  setVideoUrl("");
+                }}
+                className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl text-xs font-medium hover:bg-gray-50"
+              >
+                Bekor qilish
+              </button>
+              <button
+                type="button"
+                onClick={handleInsertYouTube}
+                className="px-5 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-colors"
+              >
+                Videoni Joylash
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

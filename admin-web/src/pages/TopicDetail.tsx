@@ -45,13 +45,6 @@ export default function TopicDetail() {
 
   // Theory State
   const [theoryContent, setTheoryContent] = useState("");
-  const [mediaList, setMediaList] = useState<Array<{ id: string; type: "image" | "video"; url: string; caption?: string }>>([]);
-  const [showMediaModal, setShowMediaModal] = useState(false);
-  const [newMedia, setNewMedia] = useState<{ type: "image" | "video"; url: string; caption: string }>({
-    type: "image",
-    url: "",
-    caption: "",
-  });
   const [savingTheory, setSavingTheory] = useState(false);
 
   // Vocabulary State
@@ -94,7 +87,6 @@ export default function TopicDetail() {
         setTitle(t.title || "");
         setDescription(t.description || "");
         setTheoryContent(t.theoryContent || "");
-        setMediaList((t.theoryMedia as any) || []);
         setQuizQuestions(t.quizQuestions || []);
 
         // Lug'atlarni yuklash
@@ -132,36 +124,15 @@ export default function TopicDetail() {
     try {
       await updateTopic(courseId!, topicId!, {
         theoryContent,
-        theoryMedia: mediaList,
+        theoryMedia: [],
       });
-      setTopic((prev) => (prev ? { ...prev, theoryContent, theoryMedia: mediaList } : null));
+      setTopic((prev) => (prev ? { ...prev, theoryContent, theoryMedia: [] } : null));
       alert("Teoriya muvaffaqiyatli saqlandi!");
     } catch (err: any) {
       alert("Xatolik yuz berdi: " + err.message);
     } finally {
       setSavingTheory(false);
     }
-  }
-
-  // Media qo'shish
-  function handleAddMedia() {
-    if (!newMedia.url.trim()) {
-      alert("Media havolasi (URL) kiritilishi shart!");
-      return;
-    }
-    const item = {
-      id: "m_" + Date.now(),
-      type: newMedia.type,
-      url: newMedia.url.trim(),
-      caption: newMedia.caption.trim(),
-    };
-    setMediaList((prev) => [...prev, item]);
-    setNewMedia({ type: "image", url: "", caption: "" });
-    setShowMediaModal(false);
-  }
-
-  function handleRemoveMedia(id: string) {
-    setMediaList((prev) => prev.filter((m) => m.id !== id));
   }
 
   // Lug'atlar bazasidan modal ochish
@@ -464,73 +435,6 @@ export default function TopicDetail() {
               minHeight="420px"
             />
           </div>
-
-          {/* Media Section */}
-          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-bold text-gray-900">
-                  Teoriya Rasmlari va Videolari
-                </h3>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  O'quvchi ushbu rasmlar va videolarni dars matnida to'liq ekranda ko'ra oladi.
-                </p>
-              </div>
-              <button
-                onClick={() => setShowMediaModal(true)}
-                className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 text-xs font-semibold rounded-xl transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                Media Qo'shish
-              </button>
-            </div>
-
-            {mediaList.length === 0 ? (
-              <p className="text-xs text-gray-400 italic py-4">
-                Hozircha hech qanday rasm yoki video biriktirilmagan.
-              </p>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {mediaList.map((m) => (
-                  <div
-                    key={m.id}
-                    className="border border-gray-200 rounded-xl p-3 relative group overflow-hidden bg-gray-50"
-                  >
-                    <button
-                      onClick={() => handleRemoveMedia(m.id)}
-                      className="absolute top-2 right-2 p-1.5 bg-red-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-sm"
-                      title="O'chirish"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-
-                    {m.type === "image" ? (
-                      <img
-                        src={m.url}
-                        alt={m.caption || "Theory image"}
-                        className="w-full h-40 object-cover rounded-lg mb-2"
-                        onError={(e) => {
-                          (e.target as any).src = "https://placehold.co/600x400?text=Rasm+Topilmadi";
-                        }}
-                      />
-                    ) : (
-                      <div className="w-full h-40 bg-gray-900 rounded-lg flex items-center justify-center mb-2 text-white">
-                        <Video className="w-10 h-10 text-indigo-400" />
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between text-xs text-gray-600">
-                      <span className="font-semibold uppercase tracking-wider text-[10px] bg-white px-2 py-0.5 rounded border border-gray-200">
-                        {m.type}
-                      </span>
-                      <span className="truncate max-w-[180px] font-medium text-gray-800">
-                        {m.caption || m.url}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
         </div>
       )}
 
@@ -709,80 +613,6 @@ export default function TopicDetail() {
               ))}
             </div>
           )}
-        </div>
-      )}
-
-      {/* Media Modal */}
-      {showMediaModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-gray-100 p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-bold text-base text-gray-900">Media Qo'shish</h3>
-              <button
-                onClick={() => setShowMediaModal(false)}
-                className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
-                  Media Turi
-                </label>
-                <select
-                  value={newMedia.type}
-                  onChange={(e) => setNewMedia({ ...newMedia, type: e.target.value as any })}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm"
-                >
-                  <option value="image">Rasm (Image)</option>
-                  <option value="video">Video (YouTube / Direct URL)</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
-                  URL Havolasi *
-                </label>
-                <input
-                  type="url"
-                  placeholder="https://..."
-                  value={newMedia.url}
-                  onChange={(e) => setNewMedia({ ...newMedia, url: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
-                  Sarlavha yoki Izoh (Caption)
-                </label>
-                <input
-                  type="text"
-                  placeholder="Masalan: English Alphabet Chart"
-                  value={newMedia.caption}
-                  onChange={(e) => setNewMedia({ ...newMedia, caption: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                onClick={() => setShowMediaModal(false)}
-                className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl text-xs font-medium"
-              >
-                Bekor qilish
-              </button>
-              <button
-                onClick={handleAddMedia}
-                className="px-5 py-2 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700"
-              >
-                Qo'shish
-              </button>
-            </div>
-          </div>
         </div>
       )}
 
