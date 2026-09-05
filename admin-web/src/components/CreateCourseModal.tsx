@@ -319,6 +319,7 @@ export default function CreateCourseModal({ open, editCourse, onClose, onCreated
             videoUrl: "", videoType: "youtube", thumbnailUrl: "",
           },
           createdAt: now, updatedAt: now,
+          createdBy: "",
         };
         await createCourse(course);
       }

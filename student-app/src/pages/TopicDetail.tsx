@@ -378,15 +378,20 @@ export default function TopicDetail() {
                 </div>
               </div>
 
-              <div className="prose prose-indigo max-w-none text-gray-700 text-sm sm:text-base leading-relaxed whitespace-pre-line">
-                {topic.theoryContent ? (
-                  topic.theoryContent
-                ) : (
-                  <div className="p-8 text-center text-gray-400 italic">
-                    Ushbu dars uchun hozircha nazariy matn kiritilmagan.
-                  </div>
-                )}
-              </div>
+              {topic.theoryContent ? (
+                <div
+                  className="rich-theory-content text-gray-800 text-sm sm:text-base leading-relaxed break-words"
+                  dangerouslySetInnerHTML={{
+                    __html: topic.theoryContent.includes("<")
+                      ? topic.theoryContent
+                      : topic.theoryContent.replace(/\n/g, "<br />"),
+                  }}
+                />
+              ) : (
+                <div className="p-8 text-center text-gray-400 italic">
+                  Ushbu dars uchun hozircha nazariy matn kiritilmagan.
+                </div>
+              )}
             </div>
 
             {/* Theory Media: Rasmlar va Videolar */}

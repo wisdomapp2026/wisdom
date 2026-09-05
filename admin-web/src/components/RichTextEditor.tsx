@@ -1,176 +1,768 @@
-import { useRef, useEffect, useState } from "react";
-import { Bold, Italic, Underline, List, ListOrdered, AlignLeft, AlignCenter, AlignRight, Redo, Undo, Type, Heading1, Heading2 } from "lucide-react";
+import React, { useEffect, useRef, useState } from "react";
+import {
+  Bold,
+  Italic,
+  Underline,
+  Strikethrough,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  AlignJustify,
+  List,
+  ListOrdered,
+  Quote,
+  Code,
+  Minus,
+  Image as ImageIcon,
+  Link as LinkIcon,
+  Table as TableIcon,
+  RotateCcw,
+  RotateCw,
+  RemoveFormatting,
+  Maximize2,
+  Minimize2,
+  CodeXml,
+  Sparkles,
+  Palette,
+  Highlighter,
+  Upload,
+} from "lucide-react";
+import { uploadFile } from "@shared/supabase";
 
-/**
- * Rich Text Editor — matn formatlash, ro'yxatlar va Word dan paste qilish imkoniyati.
- * HTML formatda saqlaydi.
- * Word dan paste qilganda stillar saqlanadi (bold, italic, ro'yxatlar).
- */
-
-interface Props {
+interface RichTextEditorProps {
   value: string;
-  onChange: (html: string) => void;
+  onChange: (value: string) => void;
   placeholder?: string;
+  minHeight?: string;
   label?: string;
   hint?: string;
-  minHeight?: string;
 }
 
-export default function RichTextEditor({ value, onChange, placeholder, label, hint, minHeight = "200px" }: Props) {
+const FONT_FAMILIES = [
+  { name: "Standart (Inter)", value: "Inter, sans-serif" },
+  { name: "Arial", value: "Arial, sans-serif" },
+  { name: "Times New Roman", value: "'Times New Roman', serif" },
+  { name: "Georgia", value: "Georgia, serif" },
+  { name: "Courier New", value: "'Courier New', monospace" },
+  { name: "Comic Sans", value: "'Comic Sans MS', cursive" },
+  { name: "Trebuchet MS", value: "'Trebuchet MS', sans-serif" },
+];
+
+const FONT_SIZES = [
+  { name: "12px - Juda kichik", value: "12px" },
+  { name: "14px - Kichik", value: "14px" },
+  { name: "16px - Asosiy (Normal)", value: "16px" },
+  { name: "18px - O'rtacha katta", value: "18px" },
+  { name: "20px - Katta", value: "20px" },
+  { name: "24px - Sarlavha (Katta)", value: "24px" },
+  { name: "32px - Katta sarlavha", value: "32px" },
+];
+
+const TEXT_COLORS = [
+  "#000000", "#374151", "#6B7280", "#EF4444", "#F97316",
+  "#F59E0B", "#10B981", "#06B6D4", "#3B82F6", "#6366F1",
+  "#8B5CF6", "#EC4899",
+];
+
+const HIGHLIGHT_COLORS = [
+  { name: "Yo'q", value: "transparent" },
+  { name: "Sariq", value: "#FEF08A" },
+  { name: "Yashil", value: "#BBF7D0" },
+  { name: "Moviy", value: "#BAE6FD" },
+  { name: "Pushti", value: "#FBCFE8" },
+  { name: "To'q sariq", value: "#FED7AA" },
+  { name: "Binafsha", value: "#E9D5FF" },
+];
+
+export default function RichTextEditor({
+  value,
+  onChange,
+  placeholder = "Mavzu nazariyasini bu yerga yozing...",
+  minHeight = "400px",
+  label,
+  hint,
+}: RichTextEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
-  const isInternalChange = useRef(false);
-  const [isFocused, setIsFocused] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showHtmlCode, setShowHtmlCode] = useState(false);
+  const [htmlCode, setHtmlCode] = useState(value);
+  const [uploadingImage, setUploadingImage] = useState(false);
+
+  // Dropdown states
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const [showHighlightPicker, setShowHighlightPicker] = useState(false);
+  const [showTableModal, setShowTableModal] = useState(false);
+  const [tableRows, setTableRows] = useState(3);
+  const [tableCols, setTableCols] = useState(3);
+
+  // Word count
+  const [stats, setStats] = useState({ words: 0, chars: 0 });
+
+  // Initial content sync
   useEffect(() => {
-    if (isInternalChange.current) {
-      isInternalChange.current = false;
-      return;
+    if (editorRef.current && !showHtmlCode) {
+      if (editorRef.current.innerHTML !== value) {
+        editorRef.current.innerHTML = value || "";
+        updateStats();
+      }
     }
-    const el = editorRef.current;
-    if (!el) return;
-    if (el.innerHTML !== value) {
-      el.innerHTML = value || "";
-    }
-  }, [value]);
+  }, [value, showHtmlCode]);
 
-  function handleInput() {
-    const el = editorRef.current;
-    if (!el) return;
-    isInternalChange.current = true;
-    onChange(el.innerHTML);
+  function updateStats() {
+    if (!editorRef.current) return;
+    const text = editorRef.current.innerText || "";
+    const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+    const chars = text.length;
+    setStats({ words, chars });
   }
 
-  function execCmd(command: string, val?: string) {
-    document.execCommand(command, false, val);
-    editorRef.current?.focus();
+  function handleInput() {
+    if (!editorRef.current) return;
+    const html = editorRef.current.innerHTML;
+    onChange(html);
+    setHtmlCode(html);
+    updateStats();
+  }
+
+  // Formatting commands
+  function execCmd(command: string, arg: string | undefined = undefined) {
+    if (showHtmlCode) return;
+    document.execCommand(command, false, arg);
+    if (editorRef.current) {
+      editorRef.current.focus();
+    }
     handleInput();
   }
 
-  function handlePaste(e: React.ClipboardEvent) {
-    // Word dan paste qilganda HTML ni qabul qilish
-    const html = e.clipboardData.getData("text/html");
-    if (html) {
+  // Apply Font Family
+  function applyFontFamily(font: string) {
+    execCmd("fontName", font);
+  }
+
+  // Apply Font Size
+  function applyFontSize(size: string) {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+    const range = selection.getRangeAt(0);
+
+    const span = document.createElement("span");
+    span.style.fontSize = size;
+    try {
+      span.appendChild(range.extractContents());
+      range.insertNode(span);
+      selection.removeAllRanges();
+      const newRange = document.createRange();
+      newRange.selectNodeContents(span);
+      selection.addRange(newRange);
+    } catch {
+      execCmd("fontSize", "4");
+    }
+    handleInput();
+  }
+
+  // Apply Headings
+  function applyHeading(tag: string) {
+    if (tag === "p") {
+      execCmd("formatBlock", "<p>");
+    } else {
+      execCmd("formatBlock", `<${tag}>`);
+    }
+  }
+
+  // Insert Table
+  function insertTable() {
+    let html = `<table style="width: 100%; border-collapse: collapse; margin: 16px 0; border: 1px solid #e2e8f0;"><tbody>`;
+    for (let r = 0; r < tableRows; r++) {
+      html += `<tr>`;
+      for (let c = 0; c < tableCols; c++) {
+        if (r === 0) {
+          html += `<th style="border: 1px solid #cbd5e1; padding: 8px 12px; background-color: #f1f5f9; font-weight: 600; text-align: left;">Sarlavha ${c + 1}</th>`;
+        } else {
+          html += `<td style="border: 1px solid #e2e8f0; padding: 8px 12px;">Matn...</td>`;
+        }
+      }
+      html += `</tr>`;
+    }
+    html += `</tbody></table><p><br/></p>`;
+
+    execCmd("insertHTML", html);
+    setShowTableModal(false);
+  }
+
+  // Insert Link
+  function insertLink() {
+    const url = prompt("Havola (URL) manzilini kiriting:", "https://");
+    if (!url || url === "https://") return;
+    execCmd("createLink", url);
+  }
+
+  // Insert Local Image (uploads to Supabase storage)
+  async function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingImage(true);
+    try {
+      const now = Date.now();
+      const safeName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+      const filePath = `theory-images/${now}-${safeName}`;
+      const url = await uploadFile("edukids", filePath, file);
+
+      // Insert image tag at cursor
+      const imgHtml = `
+        <div style="text-align: center; margin: 20px 0;">
+          <img src="${url}" alt="Dars rasmi" style="max-width: 100%; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); display: inline-block;" />
+          <p style="font-size: 12px; color: #64748b; margin-top: 6px; font-style: italic;">Rasm izohi...</p>
+        </div><p><br/></p>
+      `;
+      execCmd("insertHTML", imgHtml);
+    } catch (err: any) {
+      alert("Rasm yuklashda xatolik: " + err.message);
+    } finally {
+      setUploadingImage(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  // Paste handler: handles ChatGPT / Word HTML & direct image pastes
+  async function handlePaste(e: React.ClipboardEvent) {
+    // 1. Agar rasm clipboarddan paste qilingan bo'lsa (Screenshot, Copy image)
+    const items = e.clipboardData?.items;
+    if (items) {
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf("image") !== -1) {
+          e.preventDefault();
+          const blob = items[i].getAsFile();
+          if (blob) {
+            setUploadingImage(true);
+            try {
+              const now = Date.now();
+              const filePath = `theory-images/clipboard-${now}.png`;
+              const url = await uploadFile("edukids", filePath, blob);
+              const imgHtml = `
+                <div style="text-align: center; margin: 20px 0;">
+                  <img src="${url}" alt="Clipboard rasm" style="max-width: 100%; border-radius: 12px; display: inline-block;" />
+                </div><p><br/></p>
+              `;
+              execCmd("insertHTML", imgHtml);
+            } catch (err: any) {
+              console.error("Clipboard rasmini yuklashda xatolik:", err);
+            } finally {
+              setUploadingImage(false);
+            }
+            return;
+          }
+        }
+      }
+    }
+
+    // 2. HTML paste (Word yoki ChatGPT dan copy-paste qilinganda)
+    const pastedHtml = e.clipboardData?.getData("text/html");
+    if (pastedHtml) {
       e.preventDefault();
-      // Word/HTML formatdagi contentni tozalash (keraksiz meta-taglar, xml)
-      const cleaned = cleanWordHtml(html);
-      document.execCommand("insertHTML", false, cleaned);
-      handleInput();
+      // Word proprietary keraksiz izohlarini tozalash, lekin stillar va teglarni saqlash
+      let cleaned = pastedHtml
+        .replace(/<!--[\s\S]*?-->/g, "")
+        .replace(/<style[\s\S]*?<\/style>/gi, "")
+        .replace(/<o:p>[\s\S]*?<\/o:p>/gi, "")
+        .replace(/mso-[^;"]*;?/gi, ""); // remove mso attributes
+
+      execCmd("insertHTML", cleaned);
       return;
     }
-    // Oddiy text paste
-    // Browser o'zi handle qiladi
   }
 
-  /** Word HTML dan keraksiz taglar va atributlarni tozalash, lekin stillarni saqlash */
-  function cleanWordHtml(html: string): string {
-    // <html>, <head>, <body>, <meta> taglarni olib tashlash
-    let clean = html.replace(/<html[^>]*>|<\/html>|<head[^>]*>[\s\S]*?<\/head>|<body[^>]*>|<\/body>|<meta[^>]*>/gi, "");
-    // Word maxsus taglar: <o:p>, <w:...>, xml namespace
-    clean = clean.replace(/<o:[^>]*>[\s\S]*?<\/o:[^>]*>/gi, "");
-    clean = clean.replace(/<w:[^>]*>[\s\S]*?<\/w:[^>]*>/gi, "");
-    clean = clean.replace(/<\/?[a-z]+:[^>]*>/gi, "");
-    // style ichidagi mso- prefixli stillarni olib tashlash, lekin font-weight, font-style, text-decoration saqlash
-    clean = clean.replace(/\s*mso-[^:]+:[^;"]+;?/gi, "");
-    // class atributlarni olib tashlash (Word classlari keraksiz)
-    clean = clean.replace(/\s*class="[^"]*"/gi, "");
-    // Keraksiz span'larni (stilsiz) olib tashlash
-    clean = clean.replace(/<span\s*>([\s\S]*?)<\/span>/gi, "$1");
-    // Bo'sh paragraflarni <br> ga aylantirish
-    clean = clean.replace(/<p[^>]*>\s*(&nbsp;)?\s*<\/p>/gi, "<br>");
-    // data- atributlarni olib tashlash
-    clean = clean.replace(/\s*data-[a-z-]+="[^"]*"/gi, "");
-    return clean.trim();
-  }
-
-  function handleKeyDown(e: React.KeyboardEvent) {
-    // Ctrl+B, Ctrl+I, Ctrl+U
-    if (e.ctrlKey || e.metaKey) {
-      if (e.key === "b") { e.preventDefault(); execCmd("bold"); }
-      if (e.key === "i") { e.preventDefault(); execCmd("italic"); }
-      if (e.key === "u") { e.preventDefault(); execCmd("underline"); }
+  // Switch between WYSIWYG and HTML code
+  function toggleCodeView() {
+    if (showHtmlCode) {
+      // HTML koddan vizualga o'tish
+      onChange(htmlCode);
+      if (editorRef.current) {
+        editorRef.current.innerHTML = htmlCode;
+      }
+      setShowHtmlCode(false);
+    } else {
+      // Vizualdan HTML kodga o'tish
+      if (editorRef.current) {
+        const h = editorRef.current.innerHTML;
+        setHtmlCode(h);
+      }
+      setShowHtmlCode(true);
     }
   }
 
-  const isEmpty = !value || value === "<br>" || value === "<div><br></div>";
+  const editorMarkup = (
+    <div
+      className={`border border-gray-200 rounded-2xl bg-white shadow-sm flex flex-col transition-all overflow-hidden ${
+        isFullscreen
+          ? "fixed inset-0 z-50 rounded-none w-screen h-screen bg-white"
+          : "relative"
+      }`}
+    >
+      {/* Hidden File Input for Image Upload */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleImageUpload}
+      />
 
-  return (
-    <div>
-      {label && <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>}
+      {/* TOP TOOLBAR */}
+      <div className="bg-gray-50 border-b border-gray-200 p-2 flex flex-wrap items-center gap-1 text-gray-700 select-none">
+        {/* Undo / Redo */}
+        <div className="flex items-center bg-white rounded-lg border border-gray-200 p-0.5 mr-1">
+          <button
+            type="button"
+            onClick={() => execCmd("undo")}
+            title="Bekor qilish (Ctrl+Z)"
+            className="p-1.5 hover:bg-gray-100 rounded text-gray-600 hover:text-gray-900"
+          >
+            <RotateCcw className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => execCmd("redo")}
+            title="Qaytarish (Ctrl+Y)"
+            className="p-1.5 hover:bg-gray-100 rounded text-gray-600 hover:text-gray-900"
+          >
+            <RotateCw className="w-4 h-4" />
+          </button>
+        </div>
 
-      {/* Toolbar */}
-      <div className="flex items-center gap-0.5 p-1.5 bg-gray-50 border border-gray-200 rounded-t-lg border-b-0 flex-wrap">
-        <ToolBtn icon={<Undo className="w-4 h-4" />} title="Orqaga (Ctrl+Z)" onClick={() => execCmd("undo")} />
-        <ToolBtn icon={<Redo className="w-4 h-4" />} title="Oldinga (Ctrl+Y)" onClick={() => execCmd("redo")} />
-        <div className="w-px h-5 bg-gray-300 mx-1" />
-        <ToolBtn icon={<Heading1 className="w-4 h-4" />} title="Sarlavha 1" onClick={() => execCmd("formatBlock", "h2")} />
-        <ToolBtn icon={<Heading2 className="w-4 h-4" />} title="Sarlavha 2" onClick={() => execCmd("formatBlock", "h3")} />
-        <ToolBtn icon={<Type className="w-4 h-4" />} title="Oddiy matn" onClick={() => execCmd("formatBlock", "p")} />
-        <div className="w-px h-5 bg-gray-300 mx-1" />
-        <ToolBtn icon={<Bold className="w-4 h-4" />} title="Qalin (Ctrl+B)" onClick={() => execCmd("bold")} />
-        <ToolBtn icon={<Italic className="w-4 h-4" />} title="Qiyshiq (Ctrl+I)" onClick={() => execCmd("italic")} />
-        <ToolBtn icon={<Underline className="w-4 h-4" />} title="Tagiga chizilgan (Ctrl+U)" onClick={() => execCmd("underline")} />
-        <div className="w-px h-5 bg-gray-300 mx-1" />
-        <ToolBtn icon={<List className="w-4 h-4" />} title="Nuqtali ro'yxat" onClick={() => execCmd("insertUnorderedList")} />
-        <ToolBtn icon={<ListOrdered className="w-4 h-4" />} title="Raqamli ro'yxat" onClick={() => execCmd("insertOrderedList")} />
-        <div className="w-px h-5 bg-gray-300 mx-1" />
-        <ToolBtn icon={<AlignLeft className="w-4 h-4" />} title="Chapga" onClick={() => execCmd("justifyLeft")} />
-        <ToolBtn icon={<AlignCenter className="w-4 h-4" />} title="Markazga" onClick={() => execCmd("justifyCenter")} />
-        <ToolBtn icon={<AlignRight className="w-4 h-4" />} title="O'ngga" onClick={() => execCmd("justifyRight")} />
+        {/* Font Family Selector */}
+        <select
+          disabled={showHtmlCode}
+          onChange={(e) => applyFontFamily(e.target.value)}
+          defaultValue="Inter, sans-serif"
+          className="bg-white border border-gray-200 text-xs rounded-lg px-2.5 py-1.5 text-gray-700 hover:border-gray-300 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        >
+          {FONT_FAMILIES.map((f) => (
+            <option key={f.value} value={f.value} style={{ fontFamily: f.value }}>
+              {f.name}
+            </option>
+          ))}
+        </select>
+
+        {/* Font Size Selector */}
+        <select
+          disabled={showHtmlCode}
+          onChange={(e) => applyFontSize(e.target.value)}
+          defaultValue="16px"
+          className="bg-white border border-gray-200 text-xs rounded-lg px-2.5 py-1.5 text-gray-700 hover:border-gray-300 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        >
+          {FONT_SIZES.map((s) => (
+            <option key={s.value} value={s.value}>
+              {s.name}
+            </option>
+          ))}
+        </select>
+
+        {/* Heading Style */}
+        <select
+          disabled={showHtmlCode}
+          onChange={(e) => applyHeading(e.target.value)}
+          defaultValue="p"
+          className="bg-white border border-gray-200 text-xs rounded-lg px-2.5 py-1.5 text-gray-700 hover:border-gray-300 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+        >
+          <option value="p">Oddiy matn (Paragraph)</option>
+          <option value="h1">Katta Sarlavha (H1)</option>
+          <option value="h2">O'rta Sarlavha (H2)</option>
+          <option value="h3">Kichik Sarlavha (H3)</option>
+        </select>
+
+        <div className="h-5 w-px bg-gray-300 mx-1" />
+
+        {/* Basic Text Formatting */}
+        <div className="flex items-center bg-white rounded-lg border border-gray-200 p-0.5">
+          <button
+            type="button"
+            onClick={() => execCmd("bold")}
+            title="Qalin (Bold - Ctrl+B)"
+            className="p-1.5 hover:bg-gray-100 rounded text-gray-700 hover:text-indigo-600 font-bold"
+          >
+            <Bold className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => execCmd("italic")}
+            title="Kursiv (Italic - Ctrl+I)"
+            className="p-1.5 hover:bg-gray-100 rounded text-gray-700 hover:text-indigo-600 italic"
+          >
+            <Italic className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => execCmd("underline")}
+            title="Tagiga chizilgan (Underline - Ctrl+U)"
+            className="p-1.5 hover:bg-gray-100 rounded text-gray-700 hover:text-indigo-600"
+          >
+            <Underline className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => execCmd("strikeThrough")}
+            title="O'chirilgan (Strikethrough)"
+            className="p-1.5 hover:bg-gray-100 rounded text-gray-700 hover:text-indigo-600"
+          >
+            <Strikethrough className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Text Color Picker */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => {
+              setShowColorPicker(!showColorPicker);
+              setShowHighlightPicker(false);
+            }}
+            title="Matn rangi"
+            className="flex items-center gap-1 px-2 py-1.5 bg-white rounded-lg border border-gray-200 hover:bg-gray-100 text-xs font-medium"
+          >
+            <Palette className="w-4 h-4 text-indigo-600" />
+            <span className="hidden sm:inline">Rang</span>
+          </button>
+
+          {showColorPicker && (
+            <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl p-3 z-30 w-52 space-y-2">
+              <p className="text-[11px] font-semibold text-gray-500">Matn rangi:</p>
+              <div className="grid grid-cols-6 gap-1.5">
+                {TEXT_COLORS.map((c) => (
+                  <button
+                    key={c}
+                    type="button"
+                    onClick={() => {
+                      execCmd("foreColor", c);
+                      setShowColorPicker(false);
+                    }}
+                    className="w-6 h-6 rounded-md border border-gray-300 hover:scale-110 transition-transform"
+                    style={{ backgroundColor: c }}
+                  />
+                ))}
+              </div>
+              <div className="pt-2 border-t border-gray-100 flex items-center justify-between text-xs">
+                <span>Boshqa rang:</span>
+                <input
+                  type="color"
+                  onChange={(e) => {
+                    execCmd("foreColor", e.target.value);
+                    setShowColorPicker(false);
+                  }}
+                  className="w-7 h-7 p-0 rounded cursor-pointer border-0"
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Highlight Color Picker */}
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => {
+              setShowHighlightPicker(!showHighlightPicker);
+              setShowColorPicker(false);
+            }}
+            title="Fon / Marker bilan belgilash"
+            className="flex items-center gap-1 px-2 py-1.5 bg-white rounded-lg border border-gray-200 hover:bg-gray-100 text-xs font-medium"
+          >
+            <Highlighter className="w-4 h-4 text-amber-500" />
+            <span className="hidden sm:inline">Marker</span>
+          </button>
+
+          {showHighlightPicker && (
+            <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-xl p-3 z-30 w-52 space-y-2">
+              <p className="text-[11px] font-semibold text-gray-500">Marker rangi:</p>
+              <div className="grid grid-cols-4 gap-2">
+                {HIGHLIGHT_COLORS.map((h) => (
+                  <button
+                    key={h.value}
+                    type="button"
+                    onClick={() => {
+                      execCmd("hiliteColor", h.value);
+                      setShowHighlightPicker(false);
+                    }}
+                    className="text-xs p-1 rounded-md border border-gray-200 hover:scale-105 font-medium text-gray-800 text-center"
+                    style={{ backgroundColor: h.value }}
+                  >
+                    {h.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="h-5 w-px bg-gray-300 mx-1" />
+
+        {/* Alignment */}
+        <div className="flex items-center bg-white rounded-lg border border-gray-200 p-0.5">
+          <button
+            type="button"
+            onClick={() => execCmd("justifyLeft")}
+            title="Chapga tekislash"
+            className="p-1.5 hover:bg-gray-100 rounded text-gray-700"
+          >
+            <AlignLeft className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => execCmd("justifyCenter")}
+            title="O'rtaga tekislash"
+            className="p-1.5 hover:bg-gray-100 rounded text-gray-700"
+          >
+            <AlignCenter className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => execCmd("justifyRight")}
+            title="O'ngga tekislash"
+            className="p-1.5 hover:bg-gray-100 rounded text-gray-700"
+          >
+            <AlignRight className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => execCmd("justifyFull")}
+            title="Kenglik bo'yicha tekislash (Justify)"
+            className="p-1.5 hover:bg-gray-100 rounded text-gray-700"
+          >
+            <AlignJustify className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Lists & Blocks */}
+        <div className="flex items-center bg-white rounded-lg border border-gray-200 p-0.5">
+          <button
+            type="button"
+            onClick={() => execCmd("insertUnorderedList")}
+            title="Nuqtali ro'yxat (Bullets)"
+            className="p-1.5 hover:bg-gray-100 rounded text-gray-700"
+          >
+            <List className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => execCmd("insertOrderedList")}
+            title="Raqamlangan ro'yxat"
+            className="p-1.5 hover:bg-gray-100 rounded text-gray-700"
+          >
+            <ListOrdered className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => execCmd("formatBlock", "<blockquote>")}
+            title="Iqtibos (Blockquote)"
+            className="p-1.5 hover:bg-gray-100 rounded text-gray-700"
+          >
+            <Quote className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => execCmd("formatBlock", "<pre>")}
+            title="Kod bloki (Code block)"
+            className="p-1.5 hover:bg-gray-100 rounded text-gray-700"
+          >
+            <Code className="w-4 h-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => execCmd("insertHorizontalRule")}
+            title="Chiziq qo'yish (Divider)"
+            className="p-1.5 hover:bg-gray-100 rounded text-gray-700"
+          >
+            <Minus className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="h-5 w-px bg-gray-300 mx-1" />
+
+        {/* Media & Advanced Inserts */}
+        <div className="flex items-center gap-1">
+          {/* Image Upload Button */}
+          <button
+            type="button"
+            disabled={uploadingImage}
+            onClick={() => fileInputRef.current?.click()}
+            title="Matn orasiga rasm joylash"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-lg text-xs font-semibold border border-indigo-200 transition-colors"
+          >
+            {uploadingImage ? (
+              <span className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <ImageIcon className="w-4 h-4" />
+            )}
+            <span>Rasm qo'shish</span>
+          </button>
+
+          {/* Table Insert Button */}
+          <button
+            type="button"
+            onClick={() => setShowTableModal(!showTableModal)}
+            title="Jadval kiritish"
+            className="p-1.5 bg-white hover:bg-gray-100 rounded-lg border border-gray-200 text-gray-700"
+          >
+            <TableIcon className="w-4 h-4" />
+          </button>
+
+          {/* Link Button */}
+          <button
+            type="button"
+            onClick={insertLink}
+            title="Havola qo'shish (Link)"
+            className="p-1.5 bg-white hover:bg-gray-100 rounded-lg border border-gray-200 text-gray-700"
+          >
+            <LinkIcon className="w-4 h-4" />
+          </button>
+
+          {/* Clear Format */}
+          <button
+            type="button"
+            onClick={() => execCmd("removeFormat")}
+            title="Formatni tozalash"
+            className="p-1.5 bg-white hover:bg-gray-100 rounded-lg border border-gray-200 text-gray-500 hover:text-red-600"
+          >
+            <RemoveFormatting className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="flex-1" />
+
+        {/* Right tools: HTML Code View & Fullscreen */}
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={toggleCodeView}
+            title={showHtmlCode ? "Vizual tahrirga qaytish" : "HTML kod ko'rinishi"}
+            className={`p-1.5 rounded-lg border text-xs font-medium flex items-center gap-1 ${
+              showHtmlCode
+                ? "bg-indigo-600 text-white border-indigo-600"
+                : "bg-white text-gray-700 border-gray-200 hover:bg-gray-100"
+            }`}
+          >
+            <CodeXml className="w-4 h-4" />
+            <span className="hidden sm:inline">{showHtmlCode ? "Vizual" : "HTML"}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsFullscreen(!isFullscreen)}
+            title={isFullscreen ? "Kichraytirish" : "To'liq ekran (Fullscreen)"}
+            className="p-1.5 bg-white hover:bg-gray-100 rounded-lg border border-gray-200 text-gray-700"
+          >
+            {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+          </button>
+        </div>
       </div>
 
-      {/* Editor */}
-      <div className="relative">
-        <div
-          ref={editorRef}
-          contentEditable
-          suppressContentEditableWarning
-          onInput={handleInput}
-          onPaste={handlePaste}
-          onKeyDown={handleKeyDown}
-          onFocus={() => setIsFocused(true)}
-          onBlur={() => setIsFocused(false)}
-          className={`w-full px-4 py-3 bg-white border rounded-b-lg text-sm overflow-auto rich-text-content ${
-            isFocused ? "border-primary-400 ring-2 ring-primary-200" : "border-gray-200"
-          }`}
-          style={{ minHeight, maxHeight: "500px" }}
-          data-placeholder={placeholder}
-        />
-        {isEmpty && !isFocused && (
-          <div className="absolute left-4 top-3 text-sm text-gray-400 pointer-events-none">
-            {placeholder}
+      {/* TABLE INSERT MODAL */}
+      {showTableModal && (
+        <div className="p-4 bg-indigo-50/70 border-b border-indigo-100 flex items-center gap-4 text-xs">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-gray-700">Qatorlar (Rows):</span>
+            <input
+              type="number"
+              min={1}
+              max={15}
+              value={tableRows}
+              onChange={(e) => setTableRows(Number(e.target.value))}
+              className="w-16 p-1 border border-gray-300 rounded bg-white text-center font-bold"
+            />
           </div>
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-gray-700">Ustunlar (Cols):</span>
+            <input
+              type="number"
+              min={1}
+              max={10}
+              value={tableCols}
+              onChange={(e) => setTableCols(Number(e.target.value))}
+              className="w-16 p-1 border border-gray-300 rounded bg-white text-center font-bold"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={insertTable}
+            className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg font-bold hover:bg-indigo-700"
+          >
+            Jadvalni joylash
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowTableModal(false)}
+            className="text-gray-500 hover:text-gray-800 font-medium"
+          >
+            Bekor qilish
+          </button>
+        </div>
+      )}
+
+      {/* MAIN EDITING CANVAS */}
+      <div className="flex-1 overflow-y-auto bg-gray-50/50 p-4 sm:p-6">
+        {showHtmlCode ? (
+          <textarea
+            value={htmlCode}
+            onChange={(e) => {
+              setHtmlCode(e.target.value);
+              onChange(e.target.value);
+            }}
+            className="w-full h-full font-mono text-xs p-4 bg-gray-900 text-emerald-400 rounded-xl border border-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 leading-relaxed"
+            style={{ minHeight }}
+          />
+        ) : (
+          <div
+            ref={editorRef}
+            contentEditable
+            onInput={handleInput}
+            onPaste={handlePaste}
+            data-placeholder={placeholder}
+            className="rich-editor-canvas bg-white border border-gray-200 rounded-xl p-6 sm:p-8 shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 text-gray-900 leading-relaxed mx-auto max-w-4xl"
+            style={{
+              minHeight,
+              fontFamily: "Inter, sans-serif",
+            }}
+          />
         )}
       </div>
 
-      {hint && <p className="text-xs text-gray-400 mt-1">{hint}</p>}
-
-      {/* Editor stillari */}
-      <style>{`
-        [contenteditable] h2 { font-size: 1.25rem; font-weight: 700; margin: 0.5em 0; }
-        [contenteditable] h3 { font-size: 1.1rem; font-weight: 600; margin: 0.4em 0; }
-        [contenteditable] p { margin: 0.3em 0; }
-        [contenteditable] ul { list-style: disc; padding-left: 1.5em; margin: 0.4em 0; }
-        [contenteditable] ol { list-style: decimal; padding-left: 1.5em; margin: 0.4em 0; }
-        [contenteditable] li { margin: 0.2em 0; }
-        [contenteditable]:empty:before {
-          content: attr(data-placeholder);
-          color: #9ca3af;
-          pointer-events: none;
-        }
-      `}</style>
+      {/* BOTTOM STATUS BAR */}
+      <div className="bg-gray-50 border-t border-gray-200 px-4 py-2 flex items-center justify-between text-[11px] text-gray-500">
+        <div className="flex items-center gap-4">
+          <span>
+            So'zlar soni: <strong className="text-gray-800">{stats.words}</strong>
+          </span>
+          <span>
+            Belgilar: <strong className="text-gray-800">{stats.chars}</strong>
+          </span>
+          <span className="hidden sm:inline text-indigo-600 flex items-center gap-1 font-medium">
+            <Sparkles className="w-3 h-3 inline" /> ChatGPT va Word dan copy-paste to'liq qo'llab-quvvatlanadi
+          </span>
+        </div>
+        <div className="text-gray-400">
+          Wisdom Rich Document Editor
+        </div>
+      </div>
     </div>
   );
-}
 
-function ToolBtn({ icon, title, onClick }: { icon: React.ReactNode; title: string; onClick: () => void }) {
+  if (isFullscreen) {
+    return editorMarkup;
+  }
+
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      className="w-8 h-8 flex items-center justify-center rounded hover:bg-white hover:shadow-sm text-gray-600 hover:text-gray-900 transition-all"
-    >
-      {icon}
-    </button>
+    <div className="w-full space-y-1.5">
+      {label && (
+        <label className="block text-sm font-semibold text-gray-800">
+          {label}
+        </label>
+      )}
+      {editorMarkup}
+      {hint && (
+        <p className="text-xs text-gray-500">{hint}</p>
+      )}
+    </div>
   );
 }

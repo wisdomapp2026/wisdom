@@ -28,6 +28,7 @@ import {
   getVocabulariesByIds,
 } from "@shared/repositories";
 import type { Topic, Vocabulary, TopicQuizQuestion } from "@shared/types";
+import RichTextEditor from "../components/RichTextEditor";
 
 export default function TopicDetail() {
   const { courseId, topicId } = useParams<{ courseId: string; topicId: string }>();
@@ -456,12 +457,11 @@ export default function TopicDetail() {
               </button>
             </div>
 
-            <textarea
-              rows={12}
+            <RichTextEditor
               value={theoryContent}
-              onChange={(e) => setTheoryContent(e.target.value)}
-              placeholder="Mavzu tushuntirishini bu yerga yozing... (Grammatika qoidalari, dars matni, misollar)"
-              className="w-full p-4 border border-gray-200 rounded-xl text-sm font-sans focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 leading-relaxed"
+              onChange={setTheoryContent}
+              placeholder="Mavzu tushuntirishini bu yerga yozing... (Grammatika qoidalari, dars matni, misollar, rasmlar, jadvallar)"
+              minHeight="420px"
             />
           </div>
 

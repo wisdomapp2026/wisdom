@@ -26,13 +26,117 @@
   }
 }
 
-/* Rich text editor content styles */
-.rich-text-content h2 { font-size: 1.25rem; font-weight: 700; margin: 0.5em 0; }
-.rich-text-content h3 { font-size: 1.1rem; font-weight: 600; margin: 0.4em 0; }
-.rich-text-content p { margin: 0.3em 0; }
-.rich-text-content ul { list-style: disc; padding-left: 1.5em; margin: 0.4em 0; }
-.rich-text-content ol { list-style: decimal; padding-left: 1.5em; margin: 0.4em 0; }
-.rich-text-content li { margin: 0.2em 0; }
-.rich-text-content strong, .rich-text-content b { font-weight: 700; }
-.rich-text-content em, .rich-text-content i { font-style: italic; }
-.rich-text-content u { text-decoration: underline; }
+/* Rich text editor and preview styles */
+.rich-text-content,
+.rich-theory-content,
+.rich-editor-canvas {
+  line-height: 1.7;
+}
+
+.rich-text-content h1, .rich-theory-content h1, .rich-editor-canvas h1 {
+  font-size: 1.65rem;
+  font-weight: 700;
+  margin: 0.8em 0 0.4em 0;
+  color: #111827;
+}
+.rich-text-content h2, .rich-theory-content h2, .rich-editor-canvas h2 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin: 0.7em 0 0.35em 0;
+  color: #1f2937;
+}
+.rich-text-content h3, .rich-theory-content h3, .rich-editor-canvas h3 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin: 0.6em 0 0.3em 0;
+  color: #374151;
+}
+.rich-text-content p, .rich-theory-content p, .rich-editor-canvas p {
+  margin: 0.4em 0;
+}
+.rich-text-content ul, .rich-theory-content ul, .rich-editor-canvas ul {
+  list-style: disc;
+  padding-left: 1.75em;
+  margin: 0.5em 0;
+}
+.rich-text-content ol, .rich-theory-content ol, .rich-editor-canvas ol {
+  list-style: decimal;
+  padding-left: 1.75em;
+  margin: 0.5em 0;
+}
+.rich-text-content li, .rich-theory-content li, .rich-editor-canvas li {
+  margin: 0.25em 0;
+}
+.rich-text-content strong, .rich-theory-content strong, .rich-editor-canvas strong,
+.rich-text-content b, .rich-theory-content b, .rich-editor-canvas b {
+  font-weight: 700;
+}
+.rich-text-content em, .rich-theory-content em, .rich-editor-canvas em,
+.rich-text-content i, .rich-theory-content i, .rich-editor-canvas i {
+  font-style: italic;
+}
+.rich-text-content u, .rich-theory-content u, .rich-editor-canvas u {
+  text-decoration: underline;
+}
+.rich-text-content blockquote, .rich-theory-content blockquote, .rich-editor-canvas blockquote {
+  border-left: 4px solid #6366f1;
+  padding: 0.5rem 1rem;
+  margin: 0.75rem 0;
+  background-color: #f5f3ff;
+  border-radius: 0 0.5rem 0.5rem 0;
+  font-style: italic;
+  color: #4b5563;
+}
+.rich-text-content table, .rich-theory-content table, .rich-editor-canvas table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+}
+.rich-text-content th, .rich-theory-content th, .rich-editor-canvas th,
+.rich-text-content td, .rich-theory-content td, .rich-editor-canvas td {
+  border: 1px solid #d1d5db;
+  padding: 8px 12px;
+  text-align: left;
+}
+.rich-text-content th, .rich-theory-content th, .rich-editor-canvas th {
+  background-color: #f9fafb;
+  font-weight: 600;
+}
+.rich-text-content img, .rich-theory-content img, .rich-editor-canvas img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  margin: 0.75rem 0;
+  display: inline-block;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+.rich-text-content pre, .rich-theory-content pre, .rich-editor-canvas pre {
+  background-color: #1e293b;
+  color: #f8fafc;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.875rem;
+  margin: 0.75rem 0;
+}
+.rich-text-content code, .rich-theory-content code, .rich-editor-canvas code {
+  background-color: #f1f5f9;
+  color: #4f46e5;
+  padding: 0.15rem 0.35rem;
+  border-radius: 0.25rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85em;
+}
+.rich-text-content hr, .rich-theory-content hr, .rich-editor-canvas hr {
+  margin: 1.5rem 0;
+  border: 0;
+  border-top: 1px solid #e5e7eb;
+}
+.rich-text-content a, .rich-theory-content a, .rich-editor-canvas a {
+  color: #4f46e5;
+  text-decoration: underline;
+}

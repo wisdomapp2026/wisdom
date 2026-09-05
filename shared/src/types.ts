@@ -142,7 +142,7 @@ export interface Course {
   introduction?: CourseIntroduction;
   createdAt: number;
   updatedAt: number;
-  createdBy: string; // admin userId
+  createdBy?: string; // admin userId
 }
 
 // ============================================================

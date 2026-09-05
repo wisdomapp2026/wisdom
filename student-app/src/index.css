@@ -262,14 +262,132 @@ body { background-color: var(--theme-bg) !important; }
 .text-green-600 { color: var(--theme-accent) !important; }
 .text-green-500 { color: var(--theme-accent) !important; }
 
-/* Rich text content — admin tomondan kiritilgan HTML formatlangan matn */
-.rich-text-content h1 { font-size: 1.5rem; font-weight: 700; margin: 0.5em 0; }
-.rich-text-content h2 { font-size: 1.25rem; font-weight: 700; margin: 0.5em 0; }
-.rich-text-content h3 { font-size: 1.1rem; font-weight: 600; margin: 0.4em 0; }
-.rich-text-content p { margin: 0.3em 0; }
-.rich-text-content ul { list-style: disc; padding-left: 1.5em; margin: 0.4em 0; }
-.rich-text-content ol { list-style: decimal; padding-left: 1.5em; margin: 0.4em 0; }
-.rich-text-content li { margin: 0.2em 0; }
-.rich-text-content strong, .rich-text-content b { font-weight: 700; }
-.rich-text-content em, .rich-text-content i { font-style: italic; }
-.rich-text-content u { text-decoration: underline; }
+/* Rich text content — admin tomondan kiritilgan HTML formatlangan dars nazariyasi matni */
+.rich-text-content,
+.rich-theory-content {
+  line-height: 1.75;
+}
+
+.rich-text-content h1, .rich-theory-content h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0.8em 0 0.4em 0;
+  color: var(--theme-text);
+}
+.rich-text-content h2, .rich-theory-content h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin: 0.7em 0 0.35em 0;
+  color: var(--theme-text);
+}
+.rich-text-content h3, .rich-theory-content h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0.6em 0 0.3em 0;
+  color: var(--theme-text);
+}
+.rich-text-content p, .rich-theory-content p {
+  margin: 0.5em 0;
+}
+.rich-text-content ul, .rich-theory-content ul {
+  list-style: disc;
+  padding-left: 1.5em;
+  margin: 0.5em 0;
+}
+.rich-text-content ol, .rich-theory-content ol {
+  list-style: decimal;
+  padding-left: 1.5em;
+  margin: 0.5em 0;
+}
+.rich-text-content li, .rich-theory-content li {
+  margin: 0.25em 0;
+}
+.rich-text-content strong, .rich-theory-content strong,
+.rich-text-content b, .rich-theory-content b {
+  font-weight: 700;
+}
+.rich-text-content em, .rich-theory-content em,
+.rich-text-content i, .rich-theory-content i {
+  font-style: italic;
+}
+.rich-text-content u, .rich-theory-content u {
+  text-decoration: underline;
+}
+.rich-text-content blockquote, .rich-theory-content blockquote {
+  border-left: 4px solid var(--theme-primary);
+  padding: 0.5rem 1rem;
+  margin: 0.75rem 0;
+  background-color: color-mix(in srgb, var(--theme-primary) 10%, transparent);
+  border-radius: 0 0.5rem 0.5rem 0;
+  font-style: italic;
+}
+.rich-text-content table, .rich-theory-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+}
+.dark .rich-text-content table, .dark .rich-theory-content table {
+  border-color: #334155;
+}
+.rich-text-content th, .rich-theory-content th,
+.rich-text-content td, .rich-theory-content td {
+  border: 1px solid #d1d5db;
+  padding: 8px 12px;
+  text-align: left;
+}
+.dark .rich-text-content th, .dark .rich-theory-content th,
+.dark .rich-text-content td, .dark .rich-theory-content td {
+  border-color: #334155;
+}
+.rich-text-content th, .rich-theory-content th {
+  background-color: #f9fafb;
+  font-weight: 600;
+}
+.dark .rich-text-content th, .dark .rich-theory-content th {
+  background-color: #1e293b;
+}
+.rich-text-content img, .rich-theory-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.75rem;
+  margin: 0.75rem 0;
+  display: inline-block;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+}
+.rich-text-content pre, .rich-theory-content pre {
+  background-color: #1e293b;
+  color: #f8fafc;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  overflow-x: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85rem;
+  margin: 0.75rem 0;
+}
+.rich-text-content code, .rich-theory-content code {
+  background-color: #f1f5f9;
+  color: var(--theme-primary);
+  padding: 0.15rem 0.35rem;
+  border-radius: 0.25rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.85em;
+}
+.dark .rich-text-content code, .dark .rich-theory-content code {
+  background-color: #334155;
+  color: #93c5fd;
+}
+.rich-text-content hr, .rich-theory-content hr {
+  margin: 1.5rem 0;
+  border: 0;
+  border-top: 1px solid #e5e7eb;
+}
+.dark .rich-text-content hr, .dark .rich-theory-content hr {
+  border-top-color: #334155;
+}
+.rich-text-content a, .rich-theory-content a {
+  color: var(--theme-primary);
+  text-decoration: underline;
+}
