@@ -33,7 +33,7 @@ node shared/scripts/bot-runner.mjs --set-webhook
 Supabase bulutidagi Edge Function'lar yangi tokenni bilishi uchun:
 1. https://supabase.com/dashboard/project/ybltddehavbczcwvyjrt/settings/functions sahifasiga kiring.
 2. **Secrets** bo'limida `TELEGRAM_BOT_TOKEN` qiymatini yangi tokenga yangilang:
-   `8623503044:AAH6e9qXkC5EpZMDyo0fyM4d8XkM7wihxDw`
+   `8623503044:AAH6e9qxXc5EpZMDyo0fyM4d8XkM7wihxDw`
 3. **Save** ni bosing.
 
 ### 2.3. Yangilangan Edge Function kodini joylash

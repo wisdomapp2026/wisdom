@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { supabase } from "@shared/supabase";
+import { useBackHandler } from "../services/backActionManager";
 
 interface LegalModalProps {
   open: boolean;
@@ -14,6 +15,9 @@ interface LegalModalProps {
 }
 
 export default function LegalModal({ open, type, onClose, showAccept, onAccept }: LegalModalProps) {
+  // Android back tugmasi bosilganda modalni yopish
+  useBackHandler(onClose, open, 20);
+
   const [content, setContent] = useState("");
   const [updatedAt, setUpdatedAt] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);

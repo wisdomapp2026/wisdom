@@ -3,6 +3,7 @@ import { X, Star, Send } from "lucide-react";
 import { supabase } from "@shared/supabase";
 import { createTestimonial, createAdminNotification } from "@shared/repositories";
 import { useAuth } from "../hooks/useAuth";
+import { useBackHandler } from "../services/backActionManager";
 import type { AuthorInfo, Testimonial, AdminNotification } from "@shared/types";
 
 const PLATFORM_ICONS: Record<string, { svg: string; color: string }> = {
@@ -48,6 +49,9 @@ interface Props {
 export default function AuthorModal({ open, onClose }: Props) {
   const { user } = useAuth();
   const [author, setAuthor] = useState<AuthorInfo | null>(null);
+
+  // Android back tugmasi bosilganda modalni yopish
+  useBackHandler(onClose, open, 20);
   const [loading, setLoading] = useState(true);
   const [rating, setRating] = useState(5);
   const [reviewText, setReviewText] = useState("");

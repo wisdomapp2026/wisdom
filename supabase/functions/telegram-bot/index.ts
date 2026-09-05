@@ -1,9 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN")!;
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const BOT_TOKEN = Deno.env.get("TELEGRAM_BOT_TOKEN") || "8623503044:AAH6e9qxXc5EpZMDyo0fyM4d8XkM7wihxDw";
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "https://qplqvhmkhpgrvksboepf.supabase.co";
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_ANON_KEY") || "";
 
 const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
 
@@ -16,7 +16,7 @@ const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
  * 3. Kod `telegram_codes` jadvalida saqlanadi (5 daqiqa amal qiladi)
  * 4. Client `telegram-verify-code` endpoint ga kodni yuboradi va sessiya oladi
  */
-serve(async (req) => {
+serve(async (req: Request) => {
   try {
     const update = await req.json();
 

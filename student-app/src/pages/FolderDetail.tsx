@@ -20,6 +20,7 @@ import { useCourseAccess } from "../hooks/useCourseAccess";
 import { getLocalCourseProgress, enrollLocalCourse } from "../hooks/useLocalProgress";
 import { CourseDetailLoader } from "../components/PageLoader";
 import JoinCourseModal from "../components/JoinCourseModal";
+import { useBackHandler } from "../services/backActionManager";
 
 type FolderItem =
   | { type: "topic"; data: Topic; order: number }
@@ -58,6 +59,11 @@ export default function FolderDetail() {
   const [topicProblemCounts, setTopicProblemCounts] = useState<Record<string, number>>({});
   const [userProgress, setUserProgress] = useState<UserProgress | null>(null);
   const heartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Smartfon orqaga (back) tugmasi bosilganda kurs sahifasiga qaytish
+  useBackHandler(() => {
+    navigate(`/course/${courseId}`);
+  }, true, 0);
 
   useEffect(() => {
     if (!courseId || !folderId) return;

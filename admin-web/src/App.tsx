@@ -9,6 +9,7 @@ import Dashboard from "./pages/Dashboard";
 import Courses from "./pages/Courses";
 import CourseDetail from "./pages/CourseDetail";
 import TopicDetail from "./pages/TopicDetail";
+import Vocabularies from "./pages/Vocabularies";
 import TestBuilder from "./pages/TestBuilder";
 import TestPreview from "./pages/TestPreview";
 import Tests from "./pages/Tests";
@@ -139,6 +140,7 @@ export default function App() {
           <Route path="courses" element={<Courses />} />
           <Route path="courses/:courseId" element={<CourseDetail />} />
           <Route path="courses/:courseId/topics/:topicId" element={<TopicDetail />} />
+          <Route path="vocabularies" element={<Vocabularies />} />
           <Route path="courses/:courseId/tests/builder" element={<TestBuilder />} />
           <Route path="courses/:courseId/tests/:testId/preview" element={<TestPreview />} />
           <Route path="students" element={<Students />} />

@@ -177,8 +177,65 @@ export interface Topic {
   isHidden?: boolean; // Admin yashirgan — studentda ko'rinmaydi
   /** Modulni tanishtirish bo'limi — kursni tanishtirish blokiga o'xshash (video + matn + rasm) */
   introduction?: CourseIntroduction;
+  /** Dars teoriyasi matni (boy matn / markdown / html) */
+  theoryContent?: string;
+  /** Teoriya uchun qo'shimcha media (rasmlar va videolar) */
+  theoryMedia?: Array<{
+    id?: string;
+    type: "image" | "video";
+    url: string;
+    caption?: string;
+  }>;
+  /** Ushbu mavzuga biriktirilgan lug'at so'zlarining ID lari */
+  vocabularyIds?: string[];
+  /** Mavzuga oid Quiz savollari */
+  quizQuestions?: TopicQuizQuestion[];
   createdAt: number;
   updatedAt: number;
+}
+
+// ============================================================
+// VOCABULARIES (Ingliz tili Lug'atlar bazasi)
+// ============================================================
+export interface Vocabulary {
+  id: string;
+  word: string; // "apple", "abandon"
+  phonetic?: string; // "/ˈæp.əl/"
+  translation: string; // "olma", "tark etmoq"
+  partOfSpeech?: string; // "noun", "verb", "adjective", "adverb", "idiom"
+  definition?: string; // "A round fruit with red or green skin"
+  exampleSentence?: string; // "I eat a fresh apple every morning."
+  exampleTranslation?: string; // "Men har tong yangi olma yeyman."
+  audioUrl?: string; // Talaffuz audiosi
+  imageUrl?: string; // So'z rasmi
+  level?: "A1" | "A2" | "B1" | "B2" | "C1" | "C2" | "IELTS" | string;
+  tags?: string[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+// ============================================================
+// TOPIC QUIZ (Mavzuga oid Quiz savollari)
+// ============================================================
+export interface TopicQuizQuestion {
+  id: string;
+  question: string;
+  options: string[]; // 4 ta variant
+  correctAnswer: number; // 0, 1, 2, 3
+  explanation?: string; // To'g'ri javob izohi
+}
+
+// ============================================================
+// STUDENT WORD STATS (O'quvchi so'z yodlash statistikasi)
+// ============================================================
+export interface StudentWordStat {
+  id: string;
+  userId: string;
+  wordId: string;
+  learned: boolean;
+  correctCount: number;
+  wrongCount: number;
+  lastReviewedAt: number;
 }
 
 // ============================================================

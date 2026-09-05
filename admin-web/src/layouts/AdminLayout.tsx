@@ -19,6 +19,7 @@ import {
   Image,
   MessageSquareQuote,
   HardDrive,
+  BookMarked,
 } from "lucide-react";
 import { supabase } from "@shared/supabase";
 import { getUnreadNotificationCount, getMultiDeviceUsers, getUserById } from "@shared/repositories";
@@ -27,6 +28,7 @@ import clsx from "clsx";
 const sidebarItems = [
   { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { path: "/courses", label: "Kurslar", icon: BookOpen },
+  { path: "/vocabularies", label: "Lug'atlar (Vocabulary)", icon: BookMarked },
   { path: "/tests", label: "Testlar", icon: FileText },
   { path: "/students", label: "O'quvchilar", icon: Users },
   { path: "/motivations", label: "Motivatsion frazalar", icon: Bell },
@@ -131,12 +133,10 @@ export default function AdminLayout() {
         {/* Logo */}
         <div className="h-16 flex items-center justify-between px-6 border-b border-gray-100">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-primary-500 rounded-lg flex items-center justify-center">
-              <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-              </svg>
+            <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center">
+              <BookOpen className="w-5 h-5 text-white" />
             </div>
-            <span className="text-lg font-bold text-primary-500">tushunGo Admin</span>
+            <span className="text-lg font-bold text-indigo-900 tracking-tight">Wisdom Admin</span>
           </div>
           <button onClick={() => setMobileMenuOpen(false)} className="lg:hidden p-1 text-gray-400 hover:text-gray-600">
             <X className="w-5 h-5" />

@@ -1,5 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { getAuthPath } from "../utils/authRedirect";
+import { useBackHandler } from "../services/backActionManager";
 
 interface Props {
   open: boolean;
@@ -9,6 +10,10 @@ interface Props {
 /** Login talab qilinayotganda modal oyna. */
 export default function AuthModal({ open, onClose }: Props) {
   const location = useLocation();
+
+  // Android back tugmasi bosilganda modalni yopish
+  useBackHandler(onClose, open, 20);
+
   if (!open) return null;
 
   const returnTo = `${location.pathname}${location.search}${location.hash}`;

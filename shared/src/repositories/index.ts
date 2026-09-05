@@ -6,3 +6,4 @@ export * from "./messageRepository";
 export * from "./deviceRepository";
 export * from "./testimonialRepository";
 export * from "./contentRepository";
+export * from "./vocabularyRepository";

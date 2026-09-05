@@ -3,6 +3,8 @@ import { createPortal } from "react-dom";
 import { X, Maximize2, Minimize2 } from "lucide-react";
 import { useIsDesktop } from "../desktop/hooks/useIsDesktop";
 
+import { useBackHandler } from "../services/backActionManager";
+
 interface Props {
   open: boolean;
   videoUrl: string;
@@ -18,6 +20,9 @@ export default function VideoModal({ open, videoUrl, onClose }: Props) {
   const [isLandscape, setIsLandscape] = useState(false);
   const isDesktop = useIsDesktop();
 
+  // Android back tugmasi yoki browser orqaga bosilganda modalni yopish
+  useBackHandler(onClose, open);
+
   // Body scroll bloklanishi
   useEffect(() => {
     if (!open) return;
@@ -25,19 +30,6 @@ export default function VideoModal({ open, videoUrl, onClose }: Props) {
     document.body.style.overflow = "hidden";
     return () => { document.body.style.overflow = prev; };
   }, [open]);
-
-  // Back tugmasi (browser) bilan yopish
-  useEffect(() => {
-    if (!open) return;
-    window.history.pushState({ videoOpen: true }, "");
-    let closedByPop = false;
-    function handlePopState() { closedByPop = true; onClose(); }
-    window.addEventListener("popstate", handlePopState);
-    return () => {
-      window.removeEventListener("popstate", handlePopState);
-      if (!closedByPop && window.history.state?.videoOpen) window.history.back();
-    };
-  }, [open, onClose]);
 
   // Landscape rejimda screen orientation lock
   useEffect(() => {

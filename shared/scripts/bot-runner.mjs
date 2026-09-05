@@ -24,7 +24,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 config({ path: resolve(__dirname, "../../.env") });
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || "https://ybltddehavbczcwvyjrt.supabase.co";
+const SUPABASE_URL = process.env.VITE_SUPABASE_URL || "https://qplqvhmkhpgrvksboepf.supabase.co";
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 const WEBHOOK_URL = `${SUPABASE_URL}/functions/v1/telegram-bot`;
 const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;

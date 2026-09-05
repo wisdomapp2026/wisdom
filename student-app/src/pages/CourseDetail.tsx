@@ -12,6 +12,7 @@ import { calculateUserXP } from "../utils/xpCalculator";
 import LatexText from "../components/LatexText";
 import VideoModal from "../components/VideoModal";
 import JoinCourseModal from "../components/JoinCourseModal";
+import { useBackHandler } from "../services/backActionManager";
 
 /** Topic title dan "N-modul:" qismini olib tashlab, "N-mavzu: Nom" formatida qaytaradi */
 function cleanTopicTitle(title: string): string {
@@ -30,6 +31,12 @@ function cleanTopicTitle(title: string): string {
 export default function CourseDetail() {
   const { courseId } = useParams<{ courseId: string }>();
   const navigate = useNavigate();
+
+  // Smartfon orqaga (back) tugmasi bosilganda kurslar ro'yxatiga qaytish
+  useBackHandler(() => {
+    navigate("/courses");
+  }, true, 0);
+
   const { user } = useAuth();
   const { hasAccess: hasSubscription, loading: subLoading } = useCourseAccess(courseId);
   const [course, setCourse] = useState<Course | null>(null);

@@ -1,69 +1,82 @@
 import { Link, useParams, useNavigate } from "react-router-dom";
-import { useState, useEffect, useRef, useCallback } from "react";
-import { getTopicById, getProblemsByTopicPaged, getUserProgress, setUserProgress, getTopicsByCourse, getMotivationPhrases, getMotivationSettings, addFavoriteTopic, removeFavoriteTopic, isFavoriteTopic, getTestsByCourse, markTopicPresence, clearTopicPresence, getTopicPresenceUsers, getUserById } from "@shared/repositories";
-import type { Topic, Problem, UserProgress, Test } from "@shared/types";
-import { ChevronLeft, Star, Play, Lock, CheckCircle, ChevronDown, ChevronUp, FileText, Download } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import {
+  ChevronLeft,
+  BookOpen,
+  Layers,
+  HelpCircle,
+  Gamepad2,
+  Volume2,
+  Maximize2,
+  X,
+  CheckCircle2,
+  XCircle,
+  ArrowRight,
+  RotateCcw,
+  Sparkles,
+  Trophy,
+  Play,
+  Check,
+  Eye,
+  Star,
+  Shuffle,
+} from "lucide-react";
+import {
+  getTopicById,
+  getVocabulariesByIds,
+  getUserProgress,
+  setUserProgress,
+  saveStudentWordStat,
+} from "@shared/repositories";
+import type { Topic, Vocabulary, TopicQuizQuestion } from "@shared/types";
 import { useAuth } from "../hooks/useAuth";
 import { useCourseAccess } from "../hooks/useCourseAccess";
-import { getLocalCourseProgress, setLocalCourseProgress } from "../hooks/useLocalProgress";
-import { calculateUserXP } from "../utils/xpCalculator";
-import { invalidateCache, invalidateCacheByPrefix } from "../hooks/useCache";
-import AuthModal from "../components/AuthModal";
-import VideoModal from "../components/VideoModal";
-
-/** Topic title dan "N-modul:" qismini olib tashlab, "N-mavzu: Nom" formatida qaytaradi */
-function cleanTopicTitle(title: string): string {
-  // "4-modul: 4 - mavzu: Bo'linuvchanlik" → "4-mavzu: Bo'linuvchanlik"
-  const fullMatch = title.match(/^\d+-modul:\s*(\d+)\s*-\s*mavzu:\s*(.*)/i);
-  if (fullMatch) return `${fullMatch[1]}-mavzu: ${fullMatch[2]}`;
-  // "5-mavzu: Matn" — allaqachon to'g'ri format
-  if (/^\d+-mavzu:/i.test(title)) return title;
-  // "5-modul: Matn" (mavzu so'zi yo'q) → "5-mavzu: Matn"
-  const modulMatch = title.match(/^(\d+)-modul:\s*(.*)/i);
-  if (modulMatch) return `${modulMatch[1]}-mavzu: ${modulMatch[2]}`;
-  // Prefikssiz nom
-  return title;
-}
-import LatexText from "../components/LatexText";
-import { TopicDetailLoader } from "../components/PageLoader";
-import { splitSolutionIntoSteps } from "../utils/splitSolution";
-import { checkAndIssueCertificate } from "../hooks/useCertificateCheck";
-
-const diffColors: Record<string, string> = { easy: "bg-green-100 text-green-700", medium: "bg-yellow-100 text-yellow-700", hard: "bg-red-100 text-red-700" };
-const diffLabels: Record<string, string> = { easy: "Easy", medium: "Medium", hard: "Hard" };
+import { useBackHandler } from "../services/backActionManager";
 
 export default function TopicDetail() {
   const { courseId, topicId } = useParams<{ courseId: string; topicId: string }>();
   const navigate = useNavigate();
-  const { user, isLoggedIn, loading: authLoading } = useAuth();
-  const { hasAccess: hasSubscription, loading: accessLoading } = useCourseAccess(courseId);
+  const { user } = useAuth();
+  const { hasAccess } = useCourseAccess(courseId);
+
   const [topic, setTopic] = useState<Topic | null>(null);
-  const [problems, setProblems] = useState<Problem[]>([]);
-  const [topicTests, setTopicTests] = useState<Test[]>([]);
+  const [vocabularies, setVocabularies] = useState<Vocabulary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showAuthModal, setShowAuthModal] = useState(false);
-  const [videoUrl, setVideoUrl] = useState("");
-  const [showVideoModal, setShowVideoModal] = useState(false);
-  const [motivationPhrase, setMotivationPhrase] = useState("");
-  const [isFavorite, setIsFavorite] = useState(false);
-  const [favLoading, setFavLoading] = useState(false);
-  const [viewedCount, setViewedCount] = useState(0);
-  const [showGoToModal, setShowGoToModal] = useState(false);
-  const [goToValue, setGoToValue] = useState("");
-  const viewedRef = useRef(new Set<string>());
-  const [topicOnlineUsers, setTopicOnlineUsers] = useState<Array<{ avatar?: string; name?: string }>>([]);
-  const presenceRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [totalProblemsCount, setTotalProblemsCount] = useState(0);
-  const loadMoreRef = useRef<HTMLDivElement>(null);
-  const loadingMoreRef = useRef(false);
 
-  const PAGE_SIZE = 20;
-  const PREFETCH_THRESHOLD = 15; // 15-ga yetganda keyingi sahifani yuklash
+  // Active step: "theory" | "vocabulary" | "quiz" | "games"
+  const [activeStep, setActiveStep] = useState<"theory" | "vocabulary" | "quiz" | "games">("theory");
 
-  /**
-   * Orqaga qaytish — mavzu modul (papka) ichida bo'lsa modulga, aks holda kursga.
-   * Brauzer tarixida orqa sahifa bo'lsa undan foydalanamiz (back tugmasi bilan bir xil xatti-harakat).
-   */
+  // Fullscreen media modal
+  const [fullscreenMedia, setFullscreenMedia] = useState<{ type: "image" | "video"; url: string; caption?: string } | null>(null);
+
+  // Quiz state
+  const [quizIndex, setQuizIndex] = useState(0);
+  const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
+  const [isAnswerSubmitted, setIsAnswerSubmitted] = useState(false);
+  const [quizScore, setQuizScore] = useState(0);
+  const [quizFinished, setQuizFinished] = useState(false);
+
+  // Games state
+  const [selectedGame, setSelectedGame] = useState<"flashcards" | "match" | "scramble">("flashcards");
+
+  // Flashcards state
+  const [flashcardIndex, setFlashcardIndex] = useState(0);
+  const [isFlipped, setIsFlipped] = useState(false);
+  const [knownWords, setKnownWords] = useState<Set<string>>(new Set());
+
+  // Match Pairs state
+  type MatchCard = { id: string; text: string; wordId: string; type: "en" | "uz"; isMatched: boolean };
+  const [matchCards, setMatchCards] = useState<MatchCard[]>([]);
+  const [selectedMatchFirst, setSelectedMatchFirst] = useState<MatchCard | null>(null);
+  const [matchSuccessCount, setMatchSuccessCount] = useState(0);
+
+  // Word Scramble state
+  const [scrambleIndex, setScrambleIndex] = useState(0);
+  const [scrambledLetters, setScrambledLetters] = useState<Array<{ char: string; id: number; used: boolean }>>([]);
+  const [assembledWord, setAssembledWord] = useState<Array<{ char: string; originalId: number }>>([]);
+  const [scrambleSuccess, setScrambleSuccess] = useState(false);
+
+  // Smartfon back tugmasi
   function handleBack() {
     if (topic?.folderId) {
       navigate(`/course/${courseId}/folder/${topic.folderId}`);
@@ -71,1027 +84,909 @@ export default function TopicDetail() {
       navigate(`/course/${courseId}`);
     }
   }
-
-  // Lazy loading — 15-misol ko'ringanda keyingi 20 tani DB dan yuklash
-  useEffect(() => {
-    if (!loadMoreRef.current) return;
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting && !loadingMoreRef.current && problems.length < totalProblemsCount) {
-          loadingMoreRef.current = true;
-          getProblemsByTopicPaged(courseId!, topicId!, problems.length, PAGE_SIZE)
-            .then(({ problems: more }) => {
-              if (more.length > 0) {
-                setProblems((prev) => {
-                  // Dublikat oldini olish
-                  const existingIds = new Set(prev.map((p) => p.id));
-                  const newOnes = more.filter((p) => !existingIds.has(p.id) && !p.isHidden);
-                  return [...prev, ...newOnes];
-                });
-              }
-            })
-            .catch(console.error)
-            .finally(() => { loadingMoreRef.current = false; });
-        }
-      },
-      { rootMargin: "400px" }
-    );
-    observer.observe(loadMoreRef.current);
-    return () => observer.disconnect();
-  }, [problems.length, totalProblemsCount, courseId, topicId]);
-
-  // Yangi mavzu ochilganda misollarni reset qilish
-  useEffect(() => {
-    setProblems([]);
-    setTotalProblemsCount(0);
-  }, [topicId]);
+  useBackHandler(handleBack, true, 0);
 
   useEffect(() => {
-    if (!courseId || !topicId) return;
-    // Yangi mavzu — o'qilgan misollar hisobini tozalash (keyin saqlangan progress tiklanadi)
-    viewedRef.current = new Set<string>();
-    setViewedCount(0);
-    Promise.all([getTopicById(courseId, topicId), getProblemsByTopicPaged(courseId, topicId, 0, PAGE_SIZE), getTestsByCourse(courseId)])
-      .then(([t, pResult, allTests]) => {
-        if (t?.isPremium && !hasSubscription && !accessLoading) {
-          navigate(`/premium-gate?course=${courseId}`, { replace: true });
-          return;
-        }
+    if (courseId && topicId) {
+      loadData();
+    }
+  }, [courseId, topicId]);
+
+  async function loadData() {
+    setLoading(true);
+    try {
+      const t = await getTopicById(courseId!, topicId!);
+      if (t) {
         setTopic(t);
-        setProblems(pResult.problems.filter(x => !x.isHidden));
-        setTotalProblemsCount(pResult.total);
-        // Faqat shu modulga tegishli (afterTopicOrder === topic.order) va published testlarni ko'rsatish
-        if (t) {
-          setTopicTests(allTests.filter(test => test.status === "published" && test.afterTopicOrder === t.order));
-        }
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
-
-    // Dars ichidagi motivatsion frazani yuklash
-    loadMotivation();
-  }, [courseId, topicId, hasSubscription, accessLoading]);
-
-  /**
-   * Saqlangan progressni tiklash — mavzuga qayta kirganda 0% dan boshlanmasligi uchun.
-   * Avval o'qilgan misollar viewedRef ga qaytariladi.
-   * Mavzu allaqachon tugallangan bo'lsa (completedTopics) — barcha misollar o'qilgan hisoblanadi.
-   */
-  useEffect(() => {
-    if (!courseId || !topicId || problems.length === 0) return;
-
-    let cancelled = false;
-
-    async function restoreProgress() {
-      try {
-        const saved = user
-          ? await getUserProgress(user.uid, courseId!)
-          : getLocalCourseProgress(courseId!);
-        if (cancelled || !saved) return;
-
-        const problemIds = problems.map((p) => p.id);
-        const topicDone = (saved.completedTopics || []).includes(topicId!);
-
-        const restored = topicDone
-          ? problemIds
-          : problemIds.filter((pid) => (saved.completedProblems || []).includes(pid));
-
-        if (restored.length === 0) return;
-
-        // Mavjud (shu sessiyada ko'rilgan) misollar bilan birlashtiramiz
-        for (const pid of restored) viewedRef.current.add(pid);
-        setViewedCount(viewedRef.current.size);
-      } catch (err) {
-        console.error("Progressni tiklashda xatolik:", err);
-      }
-    }
-
-    restoreProgress();
-    return () => { cancelled = true; };
-  }, [courseId, topicId, problems, user?.uid]);
-
-  // Topic presence — hozir shu mavzuni o'qiyotgan userlar
-  useEffect(() => {
-    if (!courseId || !topicId || !user?.uid) return;
-    let cancelled = false;
-
-    async function beat() {
-      try {
-        await markTopicPresence(courseId!, topicId!, user!.uid);
-        const userIds = await getTopicPresenceUsers(courseId!, topicId!);
-        // O'zimni chiqarib tashlash
-        const others = userIds.filter((id) => id !== user!.uid);
-        if (cancelled) return;
-        // Birinchi 3 userning avatarini olish
-        const avatars = await Promise.all(
-          others.slice(0, 3).map(async (uid) => {
-            try {
-              const u = await getUserById(uid);
-              return { avatar: u?.avatar, name: u?.name };
-            } catch { return { avatar: undefined, name: undefined }; }
-          })
-        );
-        if (!cancelled) setTopicOnlineUsers(others.length > 0 ? avatars : []);
-      } catch {}
-    }
-    beat();
-    presenceRef.current = setInterval(beat, 30000);
-
-    return () => {
-      cancelled = true;
-      if (presenceRef.current) clearInterval(presenceRef.current);
-      clearTopicPresence(courseId!, topicId!, user!.uid).catch(() => {});
-    };
-  }, [courseId, topicId, user?.uid]);
-
-  async function loadMotivation() {
-    try {
-      const [phrases, settings] = await Promise.all([
-        getMotivationPhrases("topic"),
-        getMotivationSettings("topic"),
-      ]);
-      const activePhrases = phrases.filter((p) => p.isActive);
-      if (activePhrases.length > 0) {
-        const hours = settings?.rotateHours || 2;
-        const isRandom = settings?.displayOrder === "random";
-        if (isRandom) {
-          const idx = Math.floor(Math.random() * activePhrases.length);
-          setMotivationPhrase(activePhrases[idx].text);
-        } else {
-          const hoursSinceEpoch = Math.floor(Date.now() / (1000 * 60 * 60));
-          const idx = Math.floor(hoursSinceEpoch / hours) % activePhrases.length;
-          setMotivationPhrase(activePhrases[idx].text);
+        if (t.vocabularyIds && t.vocabularyIds.length > 0) {
+          const vList = await getVocabulariesByIds(t.vocabularyIds);
+          setVocabularies(vList);
         }
       }
     } catch (err) {
-      // ixtiyoriy — xatolik bo'lsa o'tkazib yuboramiz
-    }
-  }
-
-  // O'quvchi modulni ochganida progress saqlash
-  useEffect(() => {
-    if (!courseId || !topicId) return;
-    saveProgress();
-  }, [courseId, topicId, user]);
-
-  // Tanlangan modul holatini tekshirish
-  useEffect(() => {
-    if (!user || !topicId) { setIsFavorite(false); return; }
-    isFavoriteTopic(user.uid, topicId).then(setIsFavorite).catch(() => {});
-  }, [user, topicId]);
-
-  async function handleToggleFavorite() {
-    if (authLoading) return; // Auth hali yuklanayotgan bo'lsa, kutish
-    if (!user) { setShowAuthModal(true); return; }
-    if (!courseId || !topicId || !topic) return;
-    setFavLoading(true);
-    const favId = `${user.uid}_${topicId}`;
-    try {
-      if (isFavorite) {
-        await removeFavoriteTopic(favId);
-        setIsFavorite(false);
-      } else {
-        await addFavoriteTopic({
-          id: favId,
-          userId: user.uid,
-          courseId,
-          topicId,
-          topicTitle: topic.title,
-          createdAt: Date.now(),
-        });
-        setIsFavorite(true);
-      }
-    } catch (err) {
-      console.error("Tanlangan modul xatosi:", err);
+      console.error("Mavzu yuklashda xatolik:", err);
     } finally {
-      setFavLoading(false);
+      setLoading(false);
     }
   }
 
-  async function saveProgress() {
-    if (!courseId || !topicId) return;
+  // Audio talaffuz (SpeechSynthesis)
+  function playSpeech(word: string) {
+    if (!("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(word);
+    utterance.lang = "en-US";
+    utterance.rate = 0.85;
+    window.speechSynthesis.speak(utterance);
+  }
 
-    if (user) {
-      const userId = user.uid;
-      const progressId = `${userId}_${courseId}`;
+  // Quiz operatsiyalari
+  const questions = topic?.quizQuestions || [];
 
-      try {
-        const existing = await getUserProgress(userId, courseId);
-        const allTopics = await getTopicsByCourse(courseId);
-        const allTopicIds = allTopics.map((t) => t.id);
+  function handleSelectOption(optIdx: number) {
+    if (isAnswerSubmitted) return;
+    setSelectedAnswer(optIdx);
+    setIsAnswerSubmitted(true);
+    if (optIdx === questions[quizIndex]?.correctAnswer) {
+      setQuizScore((prev) => prev + 1);
+    }
+  }
 
-        if (existing) {
-          // Faqat mavjud modullarni saqlash (o'chirilganlarni tozalash)
-          const validCompleted = existing.completedTopics.filter((id) => allTopicIds.includes(id));
-          const completedTopics = validCompleted.includes(topicId)
-            ? validCompleted
-            : [...validCompleted, topicId];
-
-          const progressPercent = allTopics.length > 0
-            ? Math.min(100, Math.round((completedTopics.length / allTopics.length) * 100))
-            : 0;
-
-          const updatedTotalXP = calculateUserXP({
-            ...existing,
-            completedTopics,
-          });
-
-          await setUserProgress({
-            ...existing,
-            completedTopics,
-            currentTopicId: topicId,
-            progressPercent,
-            totalXP: updatedTotalXP,
-            lastAccessedAt: Date.now(),
-          });
-        } else {
-          const progressPercent = allTopics.length > 0
-            ? Math.min(100, Math.round((1 / allTopics.length) * 100))
-            : 0;
-
-          const updatedTotalXP = calculateUserXP({
-            completedTopics: [topicId],
-            completedProblems: [],
-          });
-
-          await setUserProgress({
-            id: progressId,
-            userId,
-            courseId,
-            completedTopics: [topicId],
-            completedProblems: [],
-            currentTopicId: topicId,
-            progressPercent,
-            totalXP: updatedTotalXP,
-            streak: 1,
-            weeklyMinutes: [0, 0, 0, 0, 0, 0, 0],
-            lastAccessedAt: Date.now(),
-          });
-        }
-      } catch (err) {
-        console.error("Progress saqlashda xatolik:", err);
-      }
-
-      // Sertifikat tekshirish — 85%+ bo'lsa avtomatik beriladi
-      const userName = user.displayName || user.email?.split("@")[0] || "Foydalanuvchi";
-      checkAndIssueCertificate(userId, userName, courseId).catch(() => {});
+  function handleNextQuestion() {
+    setSelectedAnswer(null);
+    setIsAnswerSubmitted(false);
+    if (quizIndex + 1 < questions.length) {
+      setQuizIndex((prev) => prev + 1);
     } else {
-      // Guest — localStorage
-      const allTopics = await getTopicsByCourse(courseId);
-      const allTopicIds = allTopics.map((t) => t.id);
-      const existing = getLocalCourseProgress(courseId);
-
-      if (existing) {
-        const validCompleted = existing.completedTopics.filter((id) => allTopicIds.includes(id));
-        const completedTopics = validCompleted.includes(topicId)
-          ? validCompleted
-          : [...validCompleted, topicId];
-
-        const progressPercent = allTopics.length > 0
-          ? Math.min(100, Math.round((completedTopics.length / allTopics.length) * 100))
-          : 0;
-
-        const updatedTotalXP = calculateUserXP({
-          ...existing,
-          completedTopics,
-        });
-
-        setLocalCourseProgress(courseId, {
-          ...existing,
-          completedTopics,
-          currentTopicId: topicId,
-          progressPercent,
-          totalXP: updatedTotalXP,
-          lastAccessedAt: Date.now(),
-        });
-      } else {
-        const progressPercent = allTopics.length > 0
-          ? Math.min(100, Math.round((1 / allTopics.length) * 100))
-          : 0;
-
-        const updatedTotalXP = calculateUserXP({
-          completedTopics: [topicId],
-          completedProblems: [],
-        });
-
-        setLocalCourseProgress(courseId, {
-          id: `local_${courseId}`,
-          userId: "local",
-          courseId,
-          completedTopics: [topicId],
-          completedProblems: [],
-          currentTopicId: topicId,
-          progressPercent,
-          totalXP: updatedTotalXP,
-          streak: 1,
-          weeklyMinutes: [0, 0, 0, 0, 0, 0, 0],
-          lastAccessedAt: Date.now(),
+      setQuizFinished(true);
+      // O'quvchi progressiga XP qo'shish
+      if (user && courseId) {
+        getUserProgress(user.uid, courseId).then((prog) => {
+          if (prog) {
+            const completedTopics = Array.from(new Set([...(prog.completedTopics || []), topicId!]));
+            setUserProgress({
+              ...prog,
+              completedTopics,
+              totalXP: (prog.totalXP || 0) + 20,
+            });
+          }
         });
       }
     }
-
-    // Cache ni yangilash
-    if (user) {
-      invalidateCache(`progress-${user.uid}`);
-    }
-    invalidateCache(`course-${courseId}`);
   }
 
-  async function handleProblemCompleted(problemId: string) {
-    if (!courseId || !topicId) return;
+  function handleRestartQuiz() {
+    setQuizIndex(0);
+    setSelectedAnswer(null);
+    setIsAnswerSubmitted(false);
+    setQuizScore(0);
+    setQuizFinished(false);
+  }
 
-    if (user) {
-      // Login qilgan — DB ga yozish
-      const userId = user.uid;
-      const progressId = `${userId}_${courseId}`;
+  // O'yinlar: Match Pairs tayyorlash
+  function initMatchGame() {
+    if (vocabularies.length === 0) return;
+    const subset = vocabularies.slice(0, 6);
+    const cards: MatchCard[] = [];
+    subset.forEach((v) => {
+      cards.push({ id: v.id + "_en", text: v.word, wordId: v.id, type: "en", isMatched: false });
+      cards.push({ id: v.id + "_uz", text: v.translation, wordId: v.id, type: "uz", isMatched: false });
+    });
+    // Aralashtirish (shuffle)
+    cards.sort(() => Math.random() - 0.5);
+    setMatchCards(cards);
+    setSelectedMatchFirst(null);
+    setMatchSuccessCount(0);
+  }
 
-      try {
-        const existing = await getUserProgress(userId, courseId);
-        if (existing) {
-          const completedProblems = existing.completedProblems.includes(problemId)
-            ? existing.completedProblems
-            : [...existing.completedProblems, problemId];
+  function handleCardClick(card: MatchCard) {
+    if (card.isMatched) return;
+    if (!selectedMatchFirst) {
+      setSelectedMatchFirst(card);
+      if (card.type === "en") playSpeech(card.text);
+      return;
+    }
 
-          const topicProblems = problems.map((p) => p.id);
-          const allTopicProblemsDone = topicProblems.every((pid) => completedProblems.includes(pid));
+    if (selectedMatchFirst.id === card.id) {
+      setSelectedMatchFirst(null);
+      return;
+    }
 
-          const completedTopics = allTopicProblemsDone && !existing.completedTopics.includes(topicId)
-            ? [...existing.completedTopics, topicId]
-            : existing.completedTopics;
-
-          const allTopics = await getTopicsByCourse(courseId);
-          const progressPercent = allTopics.length > 0
-            ? Math.round((completedTopics.length / allTopics.length) * 100)
-            : 0;
-
-          // Eslatma: bu yerda totalXP OSHIRILMAYDI — yechimni ko'rish shunchaki
-          // ko'rsatish harakati, javob to'g'riligini tekshirmaydi.
-          // Reyting (XP) faqat testlarni to'g'ri ishlashga bog'liq (TestScreen.tsx).
-          await setUserProgress({
-            ...existing,
-            completedTopics,
-            completedProblems,
-            progressPercent,
-            lastAccessedAt: Date.now(),
-          });
-        } else {
-          await setUserProgress({
-            id: progressId,
-            userId,
-            courseId,
-            completedTopics: [],
-            completedProblems: [problemId],
-            currentTopicId: topicId,
-            progressPercent: 0,
-            totalXP: 0,
-            streak: 1,
-            weeklyMinutes: [0, 0, 0, 0, 0, 0, 0],
-            lastAccessedAt: Date.now(),
-          });
-        }
-      } catch (err) {
-        console.error("Misol progress saqlashda xatolik:", err);
-      }
+    // Tekshirish: bir xil so'zmi va har xil tildami?
+    if (selectedMatchFirst.wordId === card.wordId && selectedMatchFirst.type !== card.type) {
+      // To'g'ri juftlik!
+      setMatchCards((prev) =>
+        prev.map((c) =>
+          c.wordId === card.wordId ? { ...c, isMatched: true } : c
+        )
+      );
+      setMatchSuccessCount((prev) => prev + 1);
+      setSelectedMatchFirst(null);
+      // So'z statistikasiga yozish
+      if (user) saveStudentWordStat({ userId: user.uid, wordId: card.wordId, isCorrect: true });
     } else {
-      // Guest — localStorage ga yozish
-      const existing = getLocalCourseProgress(courseId);
-      if (existing) {
-        const completedProblems = existing.completedProblems.includes(problemId)
-          ? existing.completedProblems
-          : [...existing.completedProblems, problemId];
-
-        const topicProblems = problems.map((p) => p.id);
-        const allTopicProblemsDone = topicProblems.every((pid) => completedProblems.includes(pid));
-
-        const completedTopics = allTopicProblemsDone && !existing.completedTopics.includes(topicId)
-          ? [...existing.completedTopics, topicId]
-          : existing.completedTopics;
-
-        const allTopics = await getTopicsByCourse(courseId);
-        const progressPercent = allTopics.length > 0
-          ? Math.round((completedTopics.length / allTopics.length) * 100)
-          : 0;
-
-        setLocalCourseProgress(courseId, {
-          ...existing,
-          completedTopics,
-          completedProblems,
-          progressPercent,
-          lastAccessedAt: Date.now(),
-        });
-      } else {
-        setLocalCourseProgress(courseId, {
-          id: `local_${courseId}`,
-          userId: "local",
-          courseId,
-          completedTopics: [],
-          completedProblems: [problemId],
-          currentTopicId: topicId,
-          progressPercent: 0,
-          totalXP: 0,
-          streak: 1,
-          weeklyMinutes: [0, 0, 0, 0, 0, 0, 0],
-          lastAccessedAt: Date.now(),
-        });
-      }
+      // Noto'g'ri juftlik
+      if (card.type === "en") playSpeech(card.text);
+      setSelectedMatchFirst(card);
     }
   }
 
-  // Misol ekranda ko'ringanda "ko'rilgan" deb belgilash (faqat bepul misollar)
-  const handleProblemVisible = useCallback((problemId: string) => {
-    // Premium misolni o'qilgan deb hisoblamaslik
-    const problem = problems.find((p) => p.id === problemId);
-    if (problem?.isPremium) return;
-    if (!viewedRef.current.has(problemId)) {
-      viewedRef.current.add(problemId);
-      setViewedCount(viewedRef.current.size);
+  // Word Scramble tayyorlash
+  function initScrambleGame(index: number) {
+    if (!vocabularies[index]) return;
+    const wordObj = vocabularies[index];
+    const letters = wordObj.word
+      .toUpperCase()
+      .split("")
+      .map((char, id) => ({ char, id, used: false }))
+      .sort(() => Math.random() - 0.5);
+
+    setScrambledLetters(letters);
+    setAssembledWord([]);
+    setScrambleSuccess(false);
+  }
+
+  function handleLetterPick(letterItem: { char: string; id: number; used: boolean }) {
+    if (letterItem.used) return;
+    setScrambledLetters((prev) =>
+      prev.map((l) => (l.id === letterItem.id ? { ...l, used: true } : l))
+    );
+    const nextAssembled = [...assembledWord, { char: letterItem.char, originalId: letterItem.id }];
+    setAssembledWord(nextAssembled);
+
+    // Tekshirish
+    const currentTarget = vocabularies[scrambleIndex]?.word.toUpperCase();
+    const assembledStr = nextAssembled.map((a) => a.char).join("");
+    if (assembledStr === currentTarget) {
+      setScrambleSuccess(true);
+      playSpeech(vocabularies[scrambleIndex].word);
+      if (user) saveStudentWordStat({ userId: user.uid, wordId: vocabularies[scrambleIndex].id, isCorrect: true });
     }
-  }, [problems]);
+  }
+
+  function handleUndoLetter(index: number) {
+    if (scrambleSuccess) return;
+    const removed = assembledWord[index];
+    const nextAssembled = assembledWord.filter((_, idx) => idx !== index);
+    setAssembledWord(nextAssembled);
+    setScrambledLetters((prev) =>
+      prev.map((l) => (l.id === removed.originalId ? { ...l, used: false } : l))
+    );
+  }
+
+  useEffect(() => {
+    if (activeStep === "games") {
+      if (selectedGame === "match") initMatchGame();
+      if (selectedGame === "scramble") initScrambleGame(scrambleIndex);
+    }
+  }, [activeStep, selectedGame, scrambleIndex, vocabularies]);
 
   if (loading) {
-    return <TopicDetailLoader />;
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="w-10 h-10 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
   }
 
-  const freeProblems = problems.filter((p) => !p.isPremium).length;
-  // Progress = o'qilgan bepul misollar / JAMI misollar soni (totalProblemsCount — DB dagi haqiqiy son)
-  const mastery = totalProblemsCount > 0 ? Math.round((viewedCount / totalProblemsCount) * 100) : 0;
-
-  function handlePremiumClick() {
-    if (!isLoggedIn) {
-      setShowAuthModal(true);
-    } else {
-      navigate(`/premium-gate?course=${courseId}`);
-    }
-  }
-
-  async function handleGoTo() {
-    const num = parseInt(goToValue, 10);
-    if (!num || num < 1 || num > totalProblemsCount) return;
-
-    // Agar misol hali yuklanmagan bo'lsa — yuklab olish
-    if (num > problems.length) {
-      loadingMoreRef.current = true;
-      try {
-        const result = await getProblemsByTopicPaged(courseId!, topicId!, 0, num);
-        const filtered = result.problems.filter((x: any) => !x.isHidden);
-        setProblems(filtered);
-      } catch (err) {
-        console.error(err);
-      } finally {
-        loadingMoreRef.current = false;
-      }
-    }
-
-    setShowGoToModal(false);
-    setGoToValue("");
-
-    // Scroll to misol
-    setTimeout(() => {
-      const el = document.getElementById(`problem-${num - 1}`);
-      if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-    }, 100);
+  if (!topic) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6 text-center">
+        <h2 className="text-xl font-bold text-gray-900">Mavzu topilmadi</h2>
+        <button
+          onClick={handleBack}
+          className="mt-4 px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-semibold shadow"
+        >
+          Orqaga qaytish
+        </button>
+      </div>
+    );
   }
 
   return (
-    <div className="page-content bg-gray-50">
-      {/* Header */}
-      <header className="bg-white px-5 pt-4 pb-4 border-b border-gray-100 flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0 flex-1">
-          <button onClick={handleBack} className="text-gray-500 shrink-0 self-center" aria-label="Orqaga"><ChevronLeft size={22} /></button>
-          <h1 className="text-base font-bold text-gray-900 leading-tight line-clamp-2">{topic ? cleanTopicTitle(topic.title) : "Mavzu"}</h1>
+    <div className="min-h-screen bg-[#f8fafc] pb-24 text-gray-900">
+      {/* Top Bar */}
+      <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-gray-100 px-4 py-3">
+        <div className="max-w-4xl mx-auto flex items-center justify-between">
+          <button
+            onClick={handleBack}
+            className="p-2 -ml-2 text-gray-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-colors"
+          >
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+          <div className="text-center truncate px-2">
+            <h1 className="font-bold text-sm text-gray-900 truncate">{topic.title}</h1>
+            <p className="text-[11px] text-gray-400 font-medium">Wisdom English</p>
+          </div>
+          <div className="w-10 flex justify-end">
+            <span className="w-2.5 h-2.5 bg-emerald-500 rounded-full animate-pulse" />
+          </div>
         </div>
-        <button
-          onClick={handleToggleFavorite}
-          disabled={favLoading}
-          className={`shrink-0 transition-colors ${isFavorite ? "text-yellow-400" : "text-gray-300 hover:text-yellow-400"}`}
-          title={isFavorite ? "Tanlanganlardan o'chirish" : "Tanlanganlarga qo'shish"}
-        >
-          <Star size={22} fill={isFavorite ? "currentColor" : "none"} />
-        </button>
       </header>
 
-      {/* Mehmon ogohlantirish */}
-      {!authLoading && !isLoggedIn && (
-        <div className="mx-5 mt-3 bg-amber-50 border border-amber-200 rounded-xl p-3.5 flex items-start gap-3">
-          <span className="text-xl shrink-0">⚠️</span>
-          <div>
-            <p className="text-xs font-semibold text-amber-800">Siz mehmon sifatida kirgansiz</p>
-            <p className="text-[11px] text-amber-700 mt-0.5 leading-relaxed">Akkauntga kirmasdan darslarni o'rganishingiz mumkin, lekin natijalaringiz saqlanmaydi!</p>
-            <Link to={`/login?returnTo=${encodeURIComponent(window.location.pathname + window.location.search + window.location.hash)}`} className="inline-block mt-2 text-[11px] font-semibold text-primary-600 bg-primary-50 px-3 py-1.5 rounded-lg">Akkauntga kirish</Link>
-          </div>
-        </div>
-      )}
-
-      {/* Mavzuni tanishtirish — kursni tanishtirish blokiga o'xshash (video doim ochiq, izoh akkordion) */}
-      {topic?.introduction && topic.introduction.text && (
-        <TopicIntroCard introduction={topic.introduction} onPlayVideo={(url) => { setVideoUrl(url); setShowVideoModal(true); }} />
-      )}
-
-      {/* Mavzu darajasi */}
-      <div className="mx-5 mt-4 bg-white rounded-xl p-4 border border-gray-100">
-        <div className="flex items-center justify-between">
-          <p className="font-semibold text-gray-900 text-sm">Mavzu darajasi</p>
-          <p className="text-2xl font-bold text-primary-500">{mastery}%</p>
-        </div>
-        <p className="text-xs text-gray-500 mt-1">{viewedCount} / {problems.length} ta misol o'qilgan</p>
-        <div className="h-2 bg-gray-100 rounded-full mt-2">
-          <div className="h-full bg-primary-500 rounded-full transition-all" style={{ width: `${mastery}%` }} />
-        </div>
-        {topicOnlineUsers.length > 0 && (
-          <div className="flex items-center mt-2 gap-2">
-            <div className="flex -space-x-1.5">
-              {topicOnlineUsers.map((u, i) => (
-                <div key={i} className="w-5 h-5 rounded-full border-2 border-white overflow-hidden bg-gradient-to-br from-indigo-300 to-purple-400 flex items-center justify-center">
-                  {u.avatar ? (
-                    <img src={u.avatar} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-[8px] font-bold text-white">{(u.name || "U").charAt(0).toUpperCase()}</span>
-                  )}
-                </div>
-              ))}
-            </div>
-            <p className="text-[11px] text-gray-500">
-              {topicOnlineUsers.length} nafar hozir shu mavzuni o'rganmoqda
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Misollar */}
-      <div className="px-5 mt-6 flex justify-between items-center mb-4">
-        <h3 className="font-bold text-gray-900">Misollar</h3>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-gray-400">{problems.length} / {totalProblemsCount} ta</span>
+      {/* Stepper / Tabs */}
+      <div className="max-w-4xl mx-auto px-4 pt-4">
+        <div className="grid grid-cols-4 bg-gray-100 p-1 rounded-2xl gap-1 text-xs font-semibold text-gray-500">
           <button
-            onClick={() => setShowGoToModal(true)}
-            className="text-xs bg-primary-50 text-primary-600 font-medium px-2.5 py-1.5 rounded-lg active:bg-primary-100"
+            onClick={() => setActiveStep("theory")}
+            className={`py-2 rounded-xl flex items-center justify-center gap-1.5 transition-all ${
+              activeStep === "theory"
+                ? "bg-white text-indigo-600 shadow-sm font-bold"
+                : "hover:text-gray-900"
+            }`}
           >
-            # O'tish
+            <BookOpen className="w-4 h-4" />
+            <span className="hidden sm:inline">1. Teoriya</span>
+            <span className="sm:hidden">Teoriya</span>
+          </button>
+
+          <button
+            onClick={() => setActiveStep("vocabulary")}
+            className={`py-2 rounded-xl flex items-center justify-center gap-1.5 transition-all ${
+              activeStep === "vocabulary"
+                ? "bg-white text-indigo-600 shadow-sm font-bold"
+                : "hover:text-gray-900"
+            }`}
+          >
+            <Layers className="w-4 h-4" />
+            <span className="hidden sm:inline">2. Lug'at</span>
+            <span className="sm:hidden">Lug'at</span>
+          </button>
+
+          <button
+            onClick={() => setActiveStep("quiz")}
+            className={`py-2 rounded-xl flex items-center justify-center gap-1.5 transition-all ${
+              activeStep === "quiz"
+                ? "bg-white text-indigo-600 shadow-sm font-bold"
+                : "hover:text-gray-900"
+            }`}
+          >
+            <HelpCircle className="w-4 h-4" />
+            <span className="hidden sm:inline">3. Quiz</span>
+            <span className="sm:hidden">Quiz</span>
+          </button>
+
+          <button
+            onClick={() => setActiveStep("games")}
+            className={`py-2 rounded-xl flex items-center justify-center gap-1.5 transition-all ${
+              activeStep === "games"
+                ? "bg-white text-indigo-600 shadow-sm font-bold"
+                : "hover:text-gray-900"
+            }`}
+          >
+            <Gamepad2 className="w-4 h-4" />
+            <span className="hidden sm:inline">4. O'yinlar</span>
+            <span className="sm:hidden">O'yinlar</span>
           </button>
         </div>
       </div>
 
-      {/* Go to modal */}
-      {showGoToModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setShowGoToModal(false)} />
-          <div className="relative bg-white rounded-2xl p-6 w-[85%] max-w-xs shadow-xl">
-            <h4 className="font-bold text-gray-900 text-center mb-1">Misolga o'tish</h4>
-            <p className="text-xs text-gray-500 text-center mb-4">1 dan {totalProblemsCount} gacha raqam kiriting</p>
-            <input
-              type="number"
-              min={1}
-              max={totalProblemsCount}
-              value={goToValue}
-              onChange={(e) => setGoToValue(e.target.value)}
-              placeholder="Masalan: 25"
-              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-center text-lg font-bold focus:outline-none focus:ring-2 focus:ring-primary-500"
-              autoFocus
-              onKeyDown={(e) => { if (e.key === "Enter") handleGoTo(); }}
-            />
-            <div className="flex gap-3 mt-4">
-              <button
-                onClick={() => setShowGoToModal(false)}
-                className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm font-medium text-gray-600"
-              >
-                Bekor
-              </button>
-              <button
-                onClick={handleGoTo}
-                className="flex-1 py-2.5 bg-primary-500 text-white rounded-xl text-sm font-semibold"
-              >
-                O'tish →
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="px-5 space-y-4">
-        {(() => {
-          // Testlarni misollar orasiga internalOrder bo'yicha joylashtirish
-          type RenderItem = { type: "problem"; data: typeof problems[0]; order: number } | { type: "test"; data: typeof topicTests[0]; order: number };
-          const combined: RenderItem[] = [];
-
-          problems.forEach((p, i) => {
-            combined.push({ type: "problem", data: p, order: p.order || (i + 1) });
-          });
-
-          // internalOrder bor testlarni misollar orasiga qo'shish
-          topicTests.forEach((t) => {
-            if ((t as any).internalOrder != null) {
-              combined.push({ type: "test", data: t, order: (t as any).internalOrder });
-            }
-          });
-
-          combined.sort((a, b) => a.order - b.order);
-
-          let problemIndex = 0;
-          return combined.map((item, idx) => {
-            if (item.type === "problem") {
-              const p = item.data as typeof problems[0];
-              const isPremium = p.isPremium === true;
-              const currentIdx = problemIndex++;
-              return (
-                <StudentProblemCard
-                  key={p.id}
-                  problem={p}
-                  index={currentIdx}
-                  isPremium={isPremium}
-                  isLoggedIn={isLoggedIn}
-                  onRequireAuth={() => setShowAuthModal(true)}
-                  onPremiumClick={handlePremiumClick}
-                  onPlayVideo={(url) => { setVideoUrl(url); setShowVideoModal(true); }}
-                  onSolutionViewed={handleProblemCompleted}
-                  onVisible={handleProblemVisible}
-                  id={`problem-${currentIdx}`}
-                />
-              );
-            } else {
-              const test = item.data as typeof topicTests[0];
-              const testLocked = test.isPremium && !isLoggedIn;
-              return (
-                <Link
-                  to={testLocked ? "/premium-gate" : `/test/${test.id}`}
-                  key={test.id}
-                  className={`flex items-center border rounded-xl p-4 gap-3 hover:shadow-sm transition-shadow ${testLocked ? "border-yellow-200 bg-yellow-50/30" : "border-orange-100 bg-orange-50/30"}`}
-                >
-                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${testLocked ? "bg-yellow-100" : "bg-orange-100"}`}>
-                    {testLocked ? <Lock size={18} className="text-yellow-500" /> : <FileText size={20} className="text-orange-500" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-900 text-sm truncate">{test.title}</p>
-                    <div className="flex items-center gap-3 mt-1">
-                      <span className="text-[10px] text-gray-500">❓ {test.questions?.length || 0} savol</span>
-                      <span className="text-[10px] text-gray-500">⏱ {test.totalTime} daqiqa</span>
-                      <span className="text-[10px] text-orange-600 font-medium">Test</span>
-                    </div>
-                  </div>
-                  <span className={`text-[11px] font-semibold px-3 py-1.5 rounded-lg shrink-0 ${testLocked ? "bg-yellow-500 text-white" : "bg-primary-500 text-white"}`}>
-                    {testLocked ? "🔒 Sotib olish" : "Boshlash"}
-                  </span>
-                </Link>
-              );
-            }
-          });
-        })()}
-
-        {/* Lazy load sentinel */}
-        {problems.length < totalProblemsCount && (
-          <div ref={loadMoreRef} className="flex items-center justify-center py-6">
-            <div className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
-            <span className="ml-2 text-sm text-gray-400">Yuklanmoqda...</span>
-          </div>
-        )}
-      </div>
-
-      {/* internalOrder yo'q testlar — alohida bo'limda ko'rsatish */}
-      {topicTests.filter(t => (t as any).internalOrder == null).length > 0 && (
-        <div className="px-5 mt-6">
-          <h3 className="font-bold text-gray-900 mb-3">Testlar</h3>
-          <div className="space-y-3">
-            {topicTests.filter(t => (t as any).internalOrder == null).map((test) => {
-              const testLocked = test.isPremium && !isLoggedIn;
-              return (
-                <Link
-                  to={testLocked ? "/premium-gate" : `/test/${test.id}`}
-                  key={test.id}
-                  className={`flex items-center border rounded-xl p-4 gap-3 hover:shadow-sm transition-shadow ${testLocked ? "border-yellow-200 bg-yellow-50/30" : "border-orange-100 bg-orange-50/30"}`}
-                >
-                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${testLocked ? "bg-yellow-100" : "bg-orange-100"}`}>
-                    {testLocked ? <Lock size={18} className="text-yellow-500" /> : <FileText size={20} className="text-orange-500" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-900 text-sm truncate">{test.title}</p>
-                    <div className="flex items-center gap-3 mt-1">
-                      <span className="text-[10px] text-gray-500">❓ {test.questions?.length || 0} savol</span>
-                      <span className="text-[10px] text-gray-500">⏱ {test.totalTime} daqiqa</span>
-                      {testLocked
-                        ? <span className="text-[10px] text-yellow-600 font-medium">🔒 Premium</span>
-                        : <span className="text-[10px] text-orange-600 font-medium">Test</span>
-                      }
-                    </div>
-                  </div>
-                  <span className={`text-[11px] font-semibold px-3 py-1.5 rounded-lg shrink-0 ${testLocked ? "bg-yellow-500 text-white" : "bg-primary-500 text-white"}`}>
-                    {testLocked ? "🔒 Sotib olish" : "Boshlash"}
-                  </span>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Eslatma */}
-      <div className="mx-5 mt-6 bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-start gap-3">
-        <span className="text-primary-500">📖</span>
-        <div>
-          <p className="font-semibold text-gray-900 text-sm">Esdan chiqardingizmi?</p>
-          <p className="text-xs text-gray-600 mt-0.5">Formulalarni tez takrorlash uchun kirish videosini qayta ko'ring.</p>
-        </div>
-      </div>
-
-      {/* Motivatsion fraza */}
-      {motivationPhrase && (
-        <div className="mx-5 mt-4 bg-blue-50 border border-blue-100 rounded-xl p-4 flex items-start gap-3">
-          <span className="text-2xl mt-0.5">💡</span>
-          <p className="text-sm text-gray-700 leading-relaxed italic">"{motivationPhrase}"</p>
-        </div>
-      )}
-
-      {/* Auth Modal */}
-      <AuthModal open={showAuthModal} onClose={() => setShowAuthModal(false)} />
-
-      {/* Video Modal */}
-      <VideoModal open={showVideoModal} videoUrl={videoUrl} onClose={() => setShowVideoModal(false)} />
-    </div>
-  );
-}
-
-
-// ===== Mavzuni tanishtirish kartasi — CourseDetail dagi CourseIntroCard bilan bir xil uslub =====
-function TopicIntroCard({ introduction, onPlayVideo }: { introduction: NonNullable<Topic["introduction"]>; onPlayVideo: (url: string) => void }) {
-  // Videodan keyingi matn (izoh) — akkordion, yopiq holatda boshlanadi
-  const [textExpanded, setTextExpanded] = useState(false);
-
-  function getYouTubeThumbnail(url: string): string {
-    const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&?]+)/);
-    return match ? `https://img.youtube.com/vi/${match[1]}/mqdefault.jpg` : "";
-  }
-
-  const thumbnail = introduction.thumbnailUrl || (introduction.videoType === "youtube" && introduction.videoUrl ? getYouTubeThumbnail(introduction.videoUrl) : "");
-
-  return (
-    <div className="mx-5 mt-4 bg-white border border-gray-100 rounded-xl p-4">
-      {/* Sarlavha */}
-      <div className="flex items-center gap-2 mb-3">
-        <Play className="w-4 h-4 text-primary-500" />
-        <p className="font-semibold text-gray-900 text-sm">Mavzuni tanishtirish</p>
-      </div>
-
-      {/* Qisqa matn */}
-      <p className="text-sm text-gray-700 leading-relaxed mb-3">{introduction.text}</p>
-
-      {introduction.imageUrl && (
-        <div className="mb-3 rounded-lg overflow-hidden">
-          <img src={introduction.imageUrl} alt="Mavzu tanishtirish" className="w-full max-h-48 object-cover rounded-lg" />
-        </div>
-      )}
-
-      {/* Video — bosilganda to'liq ekranda ochiladi */}
-      {introduction.videoUrl && (
-        <button
-          onClick={() => onPlayVideo(introduction.videoUrl!)}
-          className="w-full relative rounded-lg overflow-hidden bg-black aspect-video flex items-center justify-center group"
-        >
-          {thumbnail ? (
-            <img src={thumbnail} alt="" className="w-full h-full object-cover" />
-          ) : (
-            <div className="w-full h-full bg-gray-900" />
-          )}
-          <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-active:bg-black/40 transition-colors">
-            <div className="w-14 h-14 bg-white/95 rounded-full flex items-center justify-center shadow-lg">
-              <Play className="w-6 h-6 text-primary-600 ml-0.5" fill="currentColor" />
-            </div>
-          </div>
-          <span className="absolute bottom-2 left-2 text-white text-xs font-medium bg-black/50 px-2 py-1 rounded">Videoni ko'rish</span>
-        </button>
-      )}
-
-      {/* Batafsil izoh — HTML rich text yoki oddiy matn */}
-      {introduction.afterVideoText && (
-        <div className="mt-3">
-          <button
-            onClick={() => setTextExpanded(!textExpanded)}
-            className="w-full flex items-center justify-between gap-2 py-2.5 border-t border-gray-100"
-          >
-            <span className="text-sm font-medium text-gray-700">Batafsil izoh</span>
-            {textExpanded ? (
-              <ChevronUp className="w-4 h-4 text-primary-500 shrink-0" />
-            ) : (
-              <ChevronDown className="w-4 h-4 text-primary-500 shrink-0" />
-            )}
-          </button>
-          {textExpanded && (
-            <div className="pb-1 overflow-hidden">
-              {/<[a-z][\s\S]*>/i.test(introduction.afterVideoText) ? (
-                <div className="text-sm text-gray-700 leading-relaxed break-words [overflow-wrap:anywhere] rich-text-content">
-                  <LatexText text={introduction.afterVideoText} />
+      {/* Main Content Area */}
+      <main className="max-w-4xl mx-auto px-4 pt-4 space-y-6">
+        {/* ================= STEP 1: THEORY ================= */}
+        {activeStep === "theory" && (
+          <div className="space-y-6">
+            {/* Theory Text Card */}
+            <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-gray-100 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                  <BookOpen className="w-5 h-5" />
                 </div>
-              ) : (
-                <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-                  <LatexText text={introduction.afterVideoText} />
-                </p>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Biriktirilgan fayl — student yuklab olishi mumkin */}
-      {introduction.attachedFileUrl && (
-        <a
-          href={introduction.attachedFileUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          download={introduction.attachedFileName}
-          className="mt-3 flex items-center gap-3 px-4 py-3 bg-orange-50 border border-orange-100 rounded-lg active:bg-orange-100 transition-colors"
-        >
-          <FileText className="w-5 h-5 text-orange-500 shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-gray-900 truncate">{introduction.attachedFileName || "Biriktirilgan fayl"}</p>
-            <p className="text-[11px] text-gray-500">Yuklab olish uchun bosing</p>
-          </div>
-          <Download className="w-4 h-4 text-orange-500 shrink-0" />
-        </a>
-      )}
-    </div>
-  );
-}
-
-
-// ===== StudentProblemCard — flip effekti bilan =====
-function StudentProblemCard({ problem, index, isPremium, isLoggedIn, onRequireAuth, onPremiumClick, onPlayVideo, onSolutionViewed, onVisible, id }: {
-  problem: Problem; index: number; isPremium: boolean; isLoggedIn: boolean;
-  onRequireAuth: () => void;
-  onPremiumClick: () => void; onPlayVideo: (url: string) => void; onSolutionViewed: (problemId: string) => void;
-  onVisible?: (problemId: string) => void;
-  id?: string;
-}) {
-  const [flipped, setFlipped] = useState(false);
-  const [visibleSteps, setVisibleSteps] = useState(1);
-  const cardRef = useRef<HTMLDivElement>(null);
-  const diffColors: Record<string, string> = { easy: "bg-green-100 text-green-700", medium: "bg-yellow-100 text-yellow-700", hard: "bg-red-100 text-red-700" };
-  const diffLabels: Record<string, string> = { easy: "Oson", medium: "O'rta", hard: "Qiyin" };
-
-  // IntersectionObserver — misol ekranda ko'ringanda "o'qilgan" deb belgilash
-  useEffect(() => {
-    if (!onVisible || !cardRef.current) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) onVisible(problem.id); },
-      { threshold: 0.5 }
-    );
-    observer.observe(cardRef.current);
-    return () => observer.disconnect();
-  }, [problem.id, onVisible]);
-
-  return (
-    <div
-      ref={cardRef}
-      id={id}
-      className={`bg-white rounded-xl border transition-all overflow-hidden ${isPremium ? "border-yellow-100" : flipped ? "border-blue-300 ring-1 ring-blue-200" : "border-gray-100"}`}
-    >
-      {/* FRONT — Misol (flipped bo'lganda yashiriladi) */}
-      {!flipped && (
-        <div className="p-5">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] text-gray-500 font-semibold">{index + 1} · MISOL</span>
-                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded ${diffColors[problem.difficulty]}`}>{diffLabels[problem.difficulty]}</span>
-              </div>
-              {isPremium && <Lock size={16} className="text-gray-400" />}
-            </div>
-
-            <p className="text-sm leading-relaxed text-gray-900 break-words overflow-hidden"><LatexText text={problem.content} /></p>
-            {problem.image && <img src={problem.image} alt="" className="mt-2 max-h-40 rounded-lg" />}
-
-            {!isPremium && (
-              <div className="flex items-center gap-3 mt-4 pt-3 border-t border-gray-100">
-                {problem.solution && problem.solution.length > 0 && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (!isLoggedIn) { onRequireAuth(); return; }
-                      setFlipped(true); setVisibleSteps(1); onSolutionViewed(problem.id);
-                    }}
-                    className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-600 text-sm font-medium rounded-lg active:bg-blue-100"
-                  >
-                    📖 Yechimni ko'rish
-                  </button>
-                )}
-                {problem.videoUrl && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (!isLoggedIn) { onRequireAuth(); return; }
-                      onPlayVideo(problem.videoUrl!);
-                    }}
-                    className="flex items-center gap-2 px-3 py-2 bg-purple-50 text-purple-600 text-sm font-medium rounded-lg active:bg-purple-100"
-                  >
-                    <Play size={14} /> Video yechim
-                  </button>
-                )}
-              </div>
-            )}
-
-            {isPremium && (
-              <div className="mt-4 pt-3 border-t border-gray-100">
-                <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-center">
-                  <Lock size={20} className="text-yellow-600 mx-auto mb-2" />
-                  <p className="text-sm font-semibold text-gray-800">Premium misol</p>
-                  <p className="text-xs text-gray-500 mt-1">Bu misolni ko'rish uchun obuna talab etiladi</p>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onPremiumClick(); }}
-                    className="mt-3 w-full bg-yellow-500 text-white font-semibold py-2.5 rounded-lg text-sm active:bg-yellow-600"
-                  >
-                    🔓 Ochish
-                  </button>
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">Dars Nazariyasi</h2>
+                  <p className="text-xs text-gray-500">Mavzuni diqqat bilan o'qib chiqing</p>
                 </div>
               </div>
-            )}
-        </div>
-      )}
 
-      {/* BACK — Yechim (faqat flipped bo'lganda ko'rinadi) */}
-      {flipped && (
-        <div className="p-5 bg-blue-50/50 rounded-xl">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-sm font-bold text-blue-700">📖 Yechim</span>
-              <button onClick={(e) => { e.stopPropagation(); setFlipped(false); setVisibleSteps(1); }} className="text-xs text-gray-500 px-2 py-1 bg-white rounded border border-gray-200 active:bg-gray-50">← Orqaga</button>
+              <div className="prose prose-indigo max-w-none text-gray-700 text-sm sm:text-base leading-relaxed whitespace-pre-line">
+                {topic.theoryContent ? (
+                  topic.theoryContent
+                ) : (
+                  <div className="p-8 text-center text-gray-400 italic">
+                    Ushbu dars uchun hozircha nazariy matn kiritilmagan.
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="bg-white rounded-lg p-4 border border-blue-200 overflow-x-auto">
-              {(() => {
-                // Aqlli qadam ajratish:
-                // 1. Agar solution array da 2+ qadam bo'lsa — ularni ishlatish
-                // 2. Agar 1 ta qadam bo'lsa — avtomatik bo'laklarga ajratish
-                // 3. Solution bo'sh bo'lsa — yechim yo'q
-                const rawSteps = problem.solution || [];
-                let autoSteps: string[];
 
-                if (rawSteps.length > 1) {
-                  // Admin alohida qadamlar yaratgan — ularni ishlatamiz
-                  autoSteps = rawSteps.map((s) => s.text);
-                } else if (rawSteps.length === 1) {
-                  // Bitta uzun matn — avtomatik ajratamiz
-                  autoSteps = splitSolutionIntoSteps(rawSteps[0].text);
-                } else {
-                  autoSteps = [];
-                }
-
-                const totalSteps = autoSteps.length;
-                const shown = autoSteps.slice(0, visibleSteps);
-
-                return (
-                  <>
-                    {shown.map((stepText, idx) => (
-                      <div key={idx} className="text-sm text-gray-800 mb-3 animate-fadeIn overflow-x-auto">
-                        <div className="whitespace-pre-wrap leading-relaxed break-words"><LatexText text={stepText} /></div>
-                      </div>
-                    ))}
-                    {totalSteps > 0 && (
-                      <div className="mt-4 pt-3 border-t border-blue-100 flex items-center justify-between">
-                        <span className="text-xs text-gray-500">{Math.min(visibleSteps, totalSteps)} / {totalSteps} qadam</span>
-                        {visibleSteps < totalSteps ? (
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setVisibleSteps(totalSteps); }}
-                              className="px-3 py-2 bg-blue-50 text-blue-600 text-xs font-medium rounded-lg active:bg-blue-100 flex items-center gap-1"
-                            >
-                              Yechimni to'liq ochish
-                            </button>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setVisibleSteps((v) => v + 1); }}
-                              className="px-4 py-2 bg-blue-500 text-white text-xs font-medium rounded-lg active:bg-blue-600 flex items-center gap-1"
-                            >
-                              Keyingi qadam →
-                            </button>
+            {/* Theory Media: Rasmlar va Videolar */}
+            {topic.theoryMedia && topic.theoryMedia.length > 0 && (
+              <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 space-y-4">
+                <h3 className="font-bold text-gray-900 text-sm uppercase tracking-wider">
+                  Mavzuga oid ko'rgazmali materiallar
+                </h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {topic.theoryMedia.map((media, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => setFullscreenMedia(media)}
+                      className="group relative rounded-2xl overflow-hidden border border-gray-200 cursor-pointer bg-black/5 hover:border-indigo-500 transition-all shadow-sm"
+                    >
+                      {media.type === "image" ? (
+                        <div className="relative h-48 w-full overflow-hidden">
+                          <img
+                            src={media.url}
+                            alt={media.caption || "Theory visual"}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                          <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+                            <span className="p-2 bg-white/90 rounded-full text-gray-800 shadow-md transform group-hover:scale-110 transition-transform">
+                              <Maximize2 className="w-5 h-5" />
+                            </span>
                           </div>
-                        ) : (
-                          totalSteps > 1 && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setVisibleSteps(1); }}
-                              className="px-3 py-2 bg-gray-100 text-gray-600 text-xs font-medium rounded-lg active:bg-gray-200"
-                            >
-                              ↺ Boshidan
-                            </button>
-                          )
+                        </div>
+                      ) : (
+                        <div className="h-48 w-full bg-gray-900 flex flex-col items-center justify-center text-white relative">
+                          <div className="w-12 h-12 rounded-full bg-indigo-600 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                            <Play className="w-6 h-6 fill-current translate-x-0.5" />
+                          </div>
+                          <span className="text-xs font-semibold mt-2 text-gray-300">
+                            Videoni to'liq ekranda ko'rish
+                          </span>
+                        </div>
+                      )}
+                      {media.caption && (
+                        <div className="p-3 bg-white text-xs font-medium text-gray-700">
+                          {media.caption}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Bottom Next Step Button */}
+            <div className="pt-4 flex justify-end">
+              <button
+                onClick={() => setActiveStep("vocabulary")}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold shadow-lg shadow-indigo-600/20 transition-all transform active:scale-98"
+              >
+                <span>Teoriyani o'qib bo'ldim → Lug'atga o'tish</span>
+                <ArrowRight className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ================= STEP 2: VOCABULARY ================= */}
+        {activeStep === "vocabulary" && (
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                  <Layers className="w-6 h-6 text-indigo-600" />
+                  Mavzu Lug'ati ({vocabularies.length} ta so'z)
+                </h2>
+                <p className="text-xs text-gray-500 mt-1">
+                  Har bir so'zning ma'nosini va talaffuzini eslab qoling
+                </p>
+              </div>
+            </div>
+
+            {vocabularies.length === 0 ? (
+              <div className="bg-white rounded-3xl p-12 text-center text-gray-400 space-y-3 border border-gray-100">
+                <Layers className="w-12 h-12 mx-auto text-gray-300" />
+                <p className="text-base font-semibold text-gray-700">Bu mavzuda hali lug'at yo'q</p>
+                <p className="text-xs text-gray-400">Tez orada admin tomonidan so'zlar biriktiriladi.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {vocabularies.map((v) => (
+                  <div
+                    key={v.id}
+                    className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 hover:border-indigo-200 transition-all space-y-3 relative group"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h3 className="text-lg font-extrabold text-gray-900 tracking-tight">
+                            {v.word}
+                          </h3>
+                          {v.level && (
+                            <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 border border-indigo-100">
+                              {v.level}
+                            </span>
+                          )}
+                        </div>
+                        {v.phonetic && (
+                          <p className="text-xs font-mono text-gray-400 mt-0.5">{v.phonetic}</p>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => playSpeech(v.word)}
+                        className="p-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-xl transition-colors shadow-sm"
+                        title="Talaffuzni tinglash"
+                      >
+                        <Volume2 className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100/60">
+                      <p className="text-xs text-gray-400 font-semibold uppercase tracking-wider">
+                        Tarjima
+                      </p>
+                      <p className="text-sm font-bold text-indigo-950 mt-0.5">{v.translation}</p>
+                    </div>
+
+                    {v.exampleSentence && (
+                      <div className="text-xs text-gray-600 space-y-1 pt-1">
+                        <p className="italic text-gray-800">"{v.exampleSentence}"</p>
+                        {v.exampleTranslation && (
+                          <p className="text-gray-500">— {v.exampleTranslation}</p>
                         )}
                       </div>
                     )}
-                    {totalSteps === 0 && (
-                      <p className="text-sm text-gray-400 italic">Yechim qo'shilmagan</p>
-                    )}
-                  </>
-                );
-              })()}
-            </div>
-            {problem.solutionImage && (
-              <img src={problem.solutionImage} alt="" className="mt-3 w-full rounded-lg border border-blue-200" />
+                  </div>
+                ))}
+              </div>
             )}
-            {problem.videoUrl && (
+
+            <div className="pt-4 flex justify-between gap-4">
               <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (!isLoggedIn) { onRequireAuth(); return; }
-                  onPlayVideo(problem.videoUrl!);
-                }}
-                className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 bg-purple-500 text-white text-sm font-medium rounded-lg active:bg-purple-600"
+                onClick={() => setActiveStep("theory")}
+                className="px-6 py-3 border border-gray-200 text-gray-600 rounded-2xl font-semibold hover:bg-gray-100"
               >
-                <Play size={14} fill="white" /> Video yechimni ko'rish
+                ← Teoriya
               </button>
+              <button
+                onClick={() => setActiveStep("quiz")}
+                className="px-8 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold shadow-lg shadow-indigo-600/20 transition-all flex items-center gap-2"
+              >
+                <span>Quizga o'tish (Test)</span>
+                <ArrowRight className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ================= STEP 3: QUIZ ================= */}
+        {activeStep === "quiz" && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-gray-100 space-y-6">
+              {questions.length === 0 ? (
+                <div className="text-center py-12 text-gray-400 space-y-3">
+                  <HelpCircle className="w-12 h-12 mx-auto text-gray-300" />
+                  <p className="text-base font-semibold text-gray-700">Quiz savollari mavjud emas</p>
+                  <p className="text-xs text-gray-400">To'g'ridan-to'g'ri o'yinlarga o'tishingiz mumkin.</p>
+                  <button
+                    onClick={() => setActiveStep("games")}
+                    className="mt-4 px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-semibold text-xs"
+                  >
+                    O'yinlarga o'tish →
+                  </button>
+                </div>
+              ) : quizFinished ? (
+                /* Quiz Finished Card */
+                <div className="text-center py-8 space-y-5">
+                  <div className="w-20 h-20 rounded-3xl bg-amber-50 border border-amber-100 flex items-center justify-center mx-auto text-amber-500 shadow-sm">
+                    <Trophy className="w-10 h-10" />
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-extrabold text-gray-900">Quiz Yakunlandi!</h3>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Siz {questions.length} ta savoldan {quizScore} tasiga to'g'ri javob berdingiz.
+                    </p>
+                  </div>
+
+                  <div className="inline-flex items-center gap-3 px-6 py-3 bg-indigo-50 text-indigo-700 rounded-2xl font-bold text-lg">
+                    <Sparkles className="w-5 h-5" />
+                    +20 XP Qolga kiritildi!
+                  </div>
+
+                  <div className="flex justify-center gap-4 pt-4">
+                    <button
+                      onClick={handleRestartQuiz}
+                      className="px-6 py-3 border border-gray-200 text-gray-700 rounded-2xl font-semibold text-sm hover:bg-gray-50 flex items-center gap-2"
+                    >
+                      <RotateCcw className="w-4 h-4" />
+                      Qayta topshirish
+                    </button>
+                    <button
+                      onClick={() => setActiveStep("games")}
+                      className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-bold text-sm shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 flex items-center gap-2"
+                    >
+                      <span>O'yinlar bilan mustahkamlash</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* Ongoing Quiz */
+                <div className="space-y-6">
+                  {/* Quiz Progress */}
+                  <div className="flex items-center justify-between text-xs font-bold text-gray-500">
+                    <span>
+                      Savol {quizIndex + 1} / {questions.length}
+                    </span>
+                    <span className="text-indigo-600 font-extrabold">Ball: {quizScore}</span>
+                  </div>
+
+                  <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
+                    <div
+                      className="bg-indigo-600 h-full rounded-full transition-all duration-300"
+                      style={{ width: `${((quizIndex + 1) / questions.length) * 100}%` }}
+                    />
+                  </div>
+
+                  {/* Question Text */}
+                  <div className="py-2">
+                    <h3 className="text-lg sm:text-xl font-bold text-gray-900 leading-snug">
+                      {questions[quizIndex]?.question}
+                    </h3>
+                  </div>
+
+                  {/* Options */}
+                  <div className="space-y-3">
+                    {questions[quizIndex]?.options.map((opt, oIdx) => {
+                      const isSelected = selectedAnswer === oIdx;
+                      const isCorrect = questions[quizIndex]?.correctAnswer === oIdx;
+
+                      let btnStyle = "bg-white border-gray-200 text-gray-800 hover:border-indigo-300";
+                      if (isAnswerSubmitted) {
+                        if (isCorrect) {
+                          btnStyle = "bg-emerald-50 border-emerald-500 text-emerald-900 font-bold";
+                        } else if (isSelected && !isCorrect) {
+                          btnStyle = "bg-red-50 border-red-400 text-red-900 font-medium";
+                        } else {
+                          btnStyle = "bg-gray-50 border-gray-100 text-gray-400";
+                        }
+                      } else if (isSelected) {
+                        btnStyle = "bg-indigo-50 border-indigo-600 text-indigo-900 font-bold";
+                      }
+
+                      return (
+                        <button
+                          key={oIdx}
+                          onClick={() => handleSelectOption(oIdx)}
+                          disabled={isAnswerSubmitted}
+                          className={`w-full p-4 rounded-2xl border-2 text-left text-sm sm:text-base flex items-center justify-between transition-all ${btnStyle}`}
+                        >
+                          <span>{opt}</span>
+                          {isAnswerSubmitted && isCorrect && (
+                            <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+                          )}
+                          {isAnswerSubmitted && isSelected && !isCorrect && (
+                            <XCircle className="w-5 h-5 text-red-500 shrink-0" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Explanation after answer */}
+                  {isAnswerSubmitted && (
+                    <div className="p-4 bg-indigo-50/70 border border-indigo-100 rounded-2xl space-y-2">
+                      <p className="text-xs font-bold uppercase tracking-wider text-indigo-900">
+                        {selectedAnswer === questions[quizIndex]?.correctAnswer
+                          ? "🎉 To'g'ri javob!"
+                          : "⚠️ Noto'g'ri javob"}
+                      </p>
+                      {questions[quizIndex]?.explanation && (
+                        <p className="text-xs text-indigo-800/80">
+                          {questions[quizIndex].explanation}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Next Question Button */}
+                  {isAnswerSubmitted && (
+                    <div className="pt-2 flex justify-end">
+                      <button
+                        onClick={handleNextQuestion}
+                        className="w-full sm:w-auto px-8 py-3.5 bg-indigo-600 text-white rounded-2xl font-bold shadow-lg shadow-indigo-600/20 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2"
+                      >
+                        <span>
+                          {quizIndex + 1 === questions.length
+                            ? "Natijalarni ko'rish"
+                            : "Keyingi savol"}
+                        </span>
+                        <ArrowRight className="w-5 h-5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ================= STEP 4: GAMES ================= */}
+        {activeStep === "games" && (
+          <div className="space-y-6">
+            {/* Game Selector Bar */}
+            <div className="grid grid-cols-3 bg-white p-1.5 rounded-2xl border border-gray-100 shadow-sm gap-2">
+              <button
+                onClick={() => setSelectedGame("flashcards")}
+                className={`py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                  selectedGame === "flashcards"
+                    ? "bg-indigo-600 text-white shadow-sm"
+                    : "text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                <Layers className="w-4 h-4" />
+                Flashcards
+              </button>
+              <button
+                onClick={() => setSelectedGame("match")}
+                className={`py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                  selectedGame === "match"
+                    ? "bg-indigo-600 text-white shadow-sm"
+                    : "text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                <Shuffle className="w-4 h-4" />
+                Juftini top
+              </button>
+              <button
+                onClick={() => setSelectedGame("scramble")}
+                className={`py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${
+                  selectedGame === "scramble"
+                    ? "bg-indigo-600 text-white shadow-sm"
+                    : "text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                <Sparkles className="w-4 h-4" />
+                So'z yasash
+              </button>
+            </div>
+
+            {/* 1. FLASHCARDS */}
+            {selectedGame === "flashcards" && (
+              <div className="bg-white rounded-3xl p-6 sm:p-10 shadow-sm border border-gray-100 text-center space-y-6">
+                {vocabularies.length === 0 ? (
+                  <p className="text-gray-400 py-8">Mavzuda so'zlar topilmadi.</p>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between text-xs font-bold text-gray-400">
+                      <span>Xotira Kartasi</span>
+                      <span>
+                        {flashcardIndex + 1} / {vocabularies.length}
+                      </span>
+                    </div>
+
+                    {/* Interactive Flipping Card */}
+                    <div
+                      onClick={() => setIsFlipped(!isFlipped)}
+                      className="w-full max-w-md mx-auto min-h-[220px] rounded-3xl border-2 border-indigo-100 bg-gradient-to-br from-indigo-50/50 to-white p-8 flex flex-col items-center justify-center cursor-pointer shadow-sm hover:border-indigo-300 transition-all transform active:scale-98 relative"
+                    >
+                      <span className="absolute top-4 right-4 text-xs font-semibold text-indigo-400">
+                        Aylantirish uchun bosing 🔄
+                      </span>
+
+                      {!isFlipped ? (
+                        <div className="space-y-2">
+                          <h3 className="text-3xl font-extrabold text-gray-900 tracking-tight">
+                            {vocabularies[flashcardIndex]?.word}
+                          </h3>
+                          {vocabularies[flashcardIndex]?.phonetic && (
+                            <p className="text-sm font-mono text-gray-400">
+                              {vocabularies[flashcardIndex].phonetic}
+                            </p>
+                          )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              playSpeech(vocabularies[flashcardIndex].word);
+                            }}
+                            className="inline-flex items-center gap-1.5 px-3 py-1 bg-white border border-gray-200 rounded-full text-xs font-semibold text-indigo-600 shadow-sm mt-2"
+                          >
+                            <Volume2 className="w-3.5 h-3.5" /> Tinglash
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          <h4 className="text-2xl font-bold text-indigo-900">
+                            {vocabularies[flashcardIndex]?.translation}
+                          </h4>
+                          {vocabularies[flashcardIndex]?.exampleSentence && (
+                            <p className="text-xs text-gray-600 italic max-w-xs">
+                              "{vocabularies[flashcardIndex].exampleSentence}"
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Controls */}
+                    <div className="flex items-center justify-center gap-4 pt-4">
+                      <button
+                        onClick={() => {
+                          setIsFlipped(false);
+                          setFlashcardIndex((prev) => (prev > 0 ? prev - 1 : vocabularies.length - 1));
+                        }}
+                        className="px-5 py-2.5 border border-gray-200 text-gray-700 rounded-xl font-semibold text-xs hover:bg-gray-50"
+                      >
+                        ← Oldingisi
+                      </button>
+                      <button
+                        onClick={() => {
+                          setIsFlipped(false);
+                          setFlashcardIndex((prev) => (prev + 1) % vocabularies.length);
+                        }}
+                        className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-bold text-xs hover:bg-indigo-700 shadow-sm"
+                      >
+                        Keyingisi →
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
             )}
+
+            {/* 2. MATCH PAIRS */}
+            {selectedGame === "match" && (
+              <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 space-y-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-bold text-base text-gray-900">Juftini top (Match Pairs)</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Inglizcha so'z va uning o'zbekcha tarjimasini bir-biriga moslang
+                    </p>
+                  </div>
+                  <button
+                    onClick={initMatchGame}
+                    className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-xl"
+                    title="Qayta boshlash"
+                  >
+                    <RotateCcw className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {matchCards.map((card) => {
+                    const isSelected = selectedMatchFirst?.id === card.id;
+                    return (
+                      <button
+                        key={card.id}
+                        disabled={card.isMatched}
+                        onClick={() => handleCardClick(card)}
+                        className={`p-4 rounded-2xl border-2 text-center text-sm font-bold min-h-[70px] flex items-center justify-center transition-all ${
+                          card.isMatched
+                            ? "bg-emerald-50 border-emerald-200 text-emerald-800 opacity-40 scale-95"
+                            : isSelected
+                            ? "bg-indigo-600 border-indigo-600 text-white shadow-md scale-102"
+                            : "bg-gray-50 border-gray-200/80 text-gray-800 hover:border-indigo-300"
+                        }`}
+                      >
+                        {card.text}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {matchCards.length > 0 && matchCards.every((c) => c.isMatched) && (
+                  <div className="p-6 bg-emerald-50 border border-emerald-200 rounded-2xl text-center space-y-3">
+                    <CheckCircle2 className="w-10 h-10 text-emerald-600 mx-auto" />
+                    <h4 className="font-bold text-lg text-emerald-950">Ajoyib natija!</h4>
+                    <p className="text-xs text-emerald-800">
+                      Barcha so'zlarning juftligini to'g'ri topdingiz!
+                    </p>
+                    <button
+                      onClick={initMatchGame}
+                      className="px-6 py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-xs shadow-sm hover:bg-emerald-700"
+                    >
+                      Yana o'ynash
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 3. WORD SCRAMBLE */}
+            {selectedGame === "scramble" && (
+              <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-gray-100 text-center space-y-6">
+                <div className="flex items-center justify-between text-xs font-bold text-gray-400">
+                  <span>Harflardan so'z yasash</span>
+                  <span>
+                    {scrambleIndex + 1} / {vocabularies.length}
+                  </span>
+                </div>
+
+                {vocabularies[scrambleIndex] && (
+                  <div className="space-y-6">
+                    <div className="p-4 bg-indigo-50/60 rounded-2xl border border-indigo-100 max-w-sm mx-auto">
+                      <p className="text-xs text-indigo-600 font-semibold uppercase">Tarjima</p>
+                      <h4 className="text-xl font-extrabold text-indigo-950 mt-1">
+                        {vocabularies[scrambleIndex].translation}
+                      </h4>
+                    </div>
+
+                    {/* Assembled Letters Box */}
+                    <div className="flex items-center justify-center gap-2 min-h-[56px] border-b-2 border-gray-200 pb-3">
+                      {assembledWord.length === 0 ? (
+                        <span className="text-xs text-gray-400 italic">
+                          Pastdagi harflarni bosib so'zni yig'ing
+                        </span>
+                      ) : (
+                        assembledWord.map((item, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => handleUndoLetter(idx)}
+                            className="w-10 h-12 rounded-xl bg-indigo-600 text-white font-extrabold text-lg flex items-center justify-center shadow-md transform active:scale-95 transition-transform"
+                          >
+                            {item.char}
+                          </button>
+                        ))
+                      )}
+                    </div>
+
+                    {/* Available Scrambled Letters */}
+                    <div className="flex flex-wrap items-center justify-center gap-2 max-w-sm mx-auto">
+                      {scrambledLetters.map((l) => (
+                        <button
+                          key={l.id}
+                          disabled={l.used || scrambleSuccess}
+                          onClick={() => handleLetterPick(l)}
+                          className={`w-11 h-12 rounded-xl font-bold text-lg flex items-center justify-center transition-all ${
+                            l.used
+                              ? "bg-gray-100 text-gray-300 border border-gray-200"
+                              : "bg-white border-2 border-gray-300 text-gray-800 hover:border-indigo-500 shadow-sm active:scale-90"
+                          }`}
+                        >
+                          {l.char}
+                        </button>
+                      ))}
+                    </div>
+
+                    {scrambleSuccess && (
+                      <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl space-y-3">
+                        <p className="font-bold text-emerald-800 text-sm">
+                          🎉 Barakalla! So'z to'g'ri yig'ildi!
+                        </p>
+                        <button
+                          onClick={() => {
+                            setScrambleIndex((prev) => (prev + 1) % vocabularies.length);
+                          }}
+                          className="px-6 py-2.5 bg-emerald-600 text-white rounded-xl font-bold text-xs hover:bg-emerald-700 shadow"
+                        >
+                          Keyingi so'zga o'tish →
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </main>
+
+      {/* Fullscreen Media Modal */}
+      {fullscreenMedia && (
+        <div className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-center p-4">
+          <button
+            onClick={() => setFullscreenMedia(null)}
+            className="absolute top-4 right-4 p-3 text-white/80 hover:text-white bg-white/10 rounded-full backdrop-blur-md"
+          >
+            <X className="w-6 h-6" />
+          </button>
+
+          <div className="max-w-4xl max-h-[85vh] w-full flex flex-col items-center justify-center">
+            {fullscreenMedia.type === "image" ? (
+              <img
+                src={fullscreenMedia.url}
+                alt={fullscreenMedia.caption || "Fullscreen"}
+                className="max-w-full max-h-[80vh] object-contain rounded-2xl shadow-2xl"
+              />
+            ) : (
+              <div className="w-full aspect-video rounded-2xl overflow-hidden bg-black shadow-2xl">
+                <iframe
+                  src={fullscreenMedia.url.replace("watch?v=", "embed/")}
+                  title="Video player"
+                  className="w-full h-full"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowFullScreen
+                />
+              </div>
+            )}
+            {fullscreenMedia.caption && (
+              <p className="text-white/90 text-sm font-medium mt-4 text-center">
+                {fullscreenMedia.caption}
+              </p>
+            )}
+          </div>
         </div>
       )}
     </div>

@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
 import { getAllCourses, getMotivationPhrases, getMotivationSettings, getStudentCountByCourse, getUserProgress, getTopicsByCourse, getAllCategories, getAllProgressByUser } from "@shared/repositories";
 import type { Course, Category } from "@shared/types";
@@ -6,6 +6,7 @@ import { useAuth } from "../hooks/useAuth";
 import { CoursesLoader } from "../components/PageLoader";
 import { cachedFetch } from "../hooks/useCache";
 import { getLocalProgress } from "../hooks/useLocalProgress";
+import { useBackHandler } from "../services/backActionManager";
 
 const DEFAULT_CATEGORIES = ["Barchasi", "Jarayonda"];
 // Lazy load: bir vaqtda nechta kurs ko'rsatilishi (30 tadan keyin, ro'yxat oxiriga yetganda keyingi 30 tasi yuklanadi)
@@ -17,6 +18,13 @@ interface CourseWithRealStats extends Course {
 }
 
 export default function Courses() {
+  const navigate = useNavigate();
+
+  // Smartfon orqaga (back) tugmasi bosilganda asosiy (Home) sahifaga qaytish
+  useBackHandler(() => {
+    navigate("/");
+  }, true, 0);
+
   const { user, loading: authLoading } = useAuth();
   const [activeCategory, setActiveCategory] = useState("Barchasi");
   // Barcha (yashirilmagan) kurslar — statistikasiz, filterlash/qidiruv shu ro'yxat ustida ishlaydi

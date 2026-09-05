@@ -4,6 +4,7 @@ import { ChevronLeft, CreditCard, Check, Clock, X, ChevronRight, Receipt } from 
 import { getPaymentsByUser } from "@shared/repositories";
 import type { Payment } from "@shared/types";
 import { useAuth } from "../hooks/useAuth";
+import { useBackHandler } from "../services/backActionManager";
 
 const statusConfig: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
   success: { label: "Tasdiqlangan", color: "text-green-600 bg-green-50 border-green-200", icon: <Check size={14} /> },
@@ -106,6 +107,9 @@ export default function PaymentHistory() {
 
 // ===== To'lov tafsilotlari modali =====
 function PaymentDetailModal({ payment, onClose }: { payment: Payment; onClose: () => void }) {
+  // Android back tugmasi bosilganda to'lov modalini yopish
+  useBackHandler(onClose, true, 20);
+
   const status = statusConfig[payment.status] || statusConfig.pending;
   const date = new Date(payment.createdAt);
 

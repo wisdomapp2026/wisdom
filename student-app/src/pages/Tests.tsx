@@ -18,6 +18,7 @@ import { Lock, Play, RotateCcw, Eye, Trophy, Search, ChevronDown, ChevronUp, Che
 import { useAuth } from "../hooks/useAuth";
 import { TestsLoader } from "../components/PageLoader";
 import { cachedFetch } from "../hooks/useCache";
+import { useBackHandler } from "../services/backActionManager";
 
 /** Test + manba ma'lumotlari va qulf holati */
 interface TestNode {
@@ -68,6 +69,11 @@ function cleanTopicTitle(title: string): string {
 export default function Tests() {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+
+  // Smartfon orqaga (back) tugmasi bosilganda asosiy (Home) sahifaga qaytish
+  useBackHandler(() => {
+    navigate("/");
+  }, true, 0);
 
   const [groups, setGroups] = useState<CourseGroup[]>([]);
   const [results, setResults] = useState<TestResult[]>([]);

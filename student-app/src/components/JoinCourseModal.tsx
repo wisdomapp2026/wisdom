@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { X, UserPlus, BookOpen } from "lucide-react";
+import { useBackHandler } from "../services/backActionManager";
 
 interface Props {
   open: boolean;
@@ -10,6 +11,9 @@ interface Props {
 
 export default function JoinCourseModal({ open, courseTitle, onConfirm, onClose }: Props) {
   const [loading, setLoading] = useState(false);
+
+  // Android back tugmasi bosilganda modalni yopish
+  useBackHandler(onClose, open, 20);
 
   if (!open) return null;
 

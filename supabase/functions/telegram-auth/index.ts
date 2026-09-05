@@ -12,7 +12,7 @@ const TG_PASSWORD_PREFIX = "tg_edukids_secret_2024_";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, apikey, x-client-info, X-Client-Info",
 };
 
 /**
@@ -41,9 +41,14 @@ function verifyTelegramData(data: Record<string, string>): boolean {
 }
 
 serve(async (req) => {
-  // CORS preflight
   if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
+    const requestedHeaders = req.headers.get("access-control-request-headers");
+    return new Response("ok", {
+      headers: {
+        ...corsHeaders,
+        ...(requestedHeaders ? { "Access-Control-Allow-Headers": requestedHeaders } : {}),
+      },
+    });
   }
 
   try {

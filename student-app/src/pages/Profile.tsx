@@ -7,6 +7,7 @@ import {
 import { useAuth } from "../hooks/useAuth";
 import { ProfileLoader } from "../components/PageLoader";
 import { isForceMobile, setForceMobile } from "../desktop/hooks/useIsDesktop";
+import { useBackHandler } from "../services/backActionManager";
 import {
   getUserById, getAllProgressByUser, getTestResultsByUser, getAllUserSubscriptions,
   getTopicsByCourse, getTopicById, getCourseById, getTestsByCourse,
@@ -44,6 +45,16 @@ export default function Profile() {
   const [subscriptions, setSubscriptions] = useState<SubWithCourse[]>([]);
   const [allSubscriptions, setAllSubscriptions] = useState<SubWithCourse[]>([]);
   const [selectedSub, setSelectedSub] = useState<SubWithCourse | null>(null);
+
+  // Android back tugmasi bosilganda obuna modali ochiq bo'lsa uni yopish
+  useBackHandler(() => {
+    setSelectedSub(null);
+  }, !!selectedSub, 20);
+
+  // Smartfon orqaga (back) tugmasi bosilganda asosiy (Home) sahifaga qaytish
+  useBackHandler(() => {
+    navigate("/");
+  }, true, 0);
   const [showAllHistory, setShowAllHistory] = useState(false);
   const [testResults, setTestResults] = useState<Array<TestResult & { testTitle?: string; courseName?: string }>>([]);
   const [loading, setLoading] = useState(true);

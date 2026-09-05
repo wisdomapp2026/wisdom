@@ -1,525 +1,981 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { ChevronRight, Plus, Edit, Trash2, Play, Loader2, Lock, Unlock, Eye, EyeOff, Video, FileText, GripVertical, Save } from "lucide-react";
-import { getTopicById, getProblemsByTopic, updateTopic, deleteTopic, deleteProblem, updateProblem, getTestsByCourse, updateTest, deleteTest } from "@shared/repositories";
-import type { Topic, Problem, Test } from "@shared/types";
-
-/** Topic title dan "N-modul:" qismini olib tashlab, "N-mavzu: Nom" formatida qaytaradi */
-function cleanTopicTitle(title: string): string {
-  const fullMatch = title.match(/^\d+-modul:\s*(\d+)\s*-\s*mavzu:\s*(.*)/i);
-  if (fullMatch) return `${fullMatch[1]}-mavzu: ${fullMatch[2]}`;
-  if (/^\d+-mavzu:/i.test(title)) return title;
-  const modulMatch = title.match(/^(\d+)-modul:\s*(.*)/i);
-  if (modulMatch) return `${modulMatch[1]}-mavzu: ${modulMatch[2]}`;
-  return title;
-}
-import CreateProblemModal from "../components/CreateProblemModal";
-import ImportTestModal from "../components/ImportTestModal";
-import LoadingButton from "../components/LoadingButton";
-import LatexText from "../components/LatexText";
-import TopicIntroSection from "../components/TopicIntroSection";
-
-const difficultyColors: Record<string, string> = {
-  easy: "bg-green-100 text-green-700",
-  medium: "bg-yellow-100 text-yellow-700",
-  hard: "bg-red-100 text-red-700",
-};
-
-const difficultyLabels: Record<string, string> = {
-  easy: "Oson",
-  medium: "O'rta",
-  hard: "Qiyin",
-};
+import {
+  ChevronRight,
+  Plus,
+  Edit,
+  Trash2,
+  Save,
+  BookOpen,
+  FileText,
+  HelpCircle,
+  Video,
+  Image as ImageIcon,
+  CheckCircle,
+  X,
+  Search,
+  Volume2,
+  ArrowLeft,
+  ExternalLink,
+  Layers,
+  Sparkles,
+} from "lucide-react";
+import {
+  getTopicById,
+  updateTopic,
+  deleteTopic,
+  getVocabularies,
+  getVocabulariesByIds,
+} from "@shared/repositories";
+import type { Topic, Vocabulary, TopicQuizQuestion } from "@shared/types";
 
 export default function TopicDetail() {
   const { courseId, topicId } = useParams<{ courseId: string; topicId: string }>();
   const navigate = useNavigate();
+
   const [topic, setTopic] = useState<Topic | null>(null);
-  const [problems, setProblems] = useState<Problem[]>([]);
-  const [tests, setTests] = useState<Test[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showProblemModal, setShowProblemModal] = useState(false);
-  const [showImportTestModal, setShowImportTestModal] = useState(false);
-  const [editingTopic, setEditingTopic] = useState(false);
-  const [editTitle, setEditTitle] = useState("");
-  const [editDesc, setEditDesc] = useState("");
-  const [editingProblem, setEditingProblem] = useState<Problem | null>(null);
+  const [activeTab, setActiveTab] = useState<"theory" | "vocabulary" | "quiz">("theory");
 
-  // Drag and drop tartibini o'zgartirish
-  const [dragIdx, setDragIdx] = useState<number | null>(null);
-  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
-  const [orderChanged, setOrderChanged] = useState(false);
-  const [savingOrder, setSavingOrder] = useState(false);
+  // Topic Header Edit
+  const [editingHeader, setEditingHeader] = useState(false);
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
 
-  // Misol va testlarni bitta tartibli ro'yxatga birlashtirish
-  type ListItem = { type: "problem"; data: Problem } | { type: "test"; data: Test };
-  const [combinedItems, setCombinedItems] = useState<ListItem[]>([]);
+  // Theory State
+  const [theoryContent, setTheoryContent] = useState("");
+  const [mediaList, setMediaList] = useState<Array<{ id: string; type: "image" | "video"; url: string; caption?: string }>>([]);
+  const [showMediaModal, setShowMediaModal] = useState(false);
+  const [newMedia, setNewMedia] = useState<{ type: "image" | "video"; url: string; caption: string }>({
+    type: "image",
+    url: "",
+    caption: "",
+  });
+  const [savingTheory, setSavingTheory] = useState(false);
+
+  // Vocabulary State
+  const [attachedVocabs, setAttachedVocabs] = useState<Vocabulary[]>([]);
+  const [showVocabModal, setShowVocabModal] = useState(false);
+  const [allVocabularies, setAllVocabularies] = useState<Vocabulary[]>([]);
+  const [vocabSearch, setVocabSearch] = useState("");
+  const [selectedVocabIds, setSelectedVocabIds] = useState<Set<string>>(new Set());
+  const [savingVocabs, setSavingVocabs] = useState(false);
+
+  // Quiz State
+  const [quizQuestions, setQuizQuestions] = useState<TopicQuizQuestion[]>([]);
+  const [showQuizModal, setShowQuizModal] = useState(false);
+  const [editingQuestion, setEditingQuestion] = useState<TopicQuizQuestion | null>(null);
+  const [quizForm, setQuizForm] = useState<{
+    question: string;
+    options: string[];
+    correctAnswer: number;
+    explanation: string;
+  }>({
+    question: "",
+    options: ["", "", "", ""],
+    correctAnswer: 0,
+    explanation: "",
+  });
+  const [savingQuiz, setSavingQuiz] = useState(false);
 
   useEffect(() => {
-    if (courseId && topicId) loadData(courseId, topicId);
+    if (courseId && topicId) {
+      loadTopicData();
+    }
   }, [courseId, topicId]);
 
-  useEffect(() => {
-    // Misol va testlarni order bo'yicha birlashtirib tartiblaymiz
-    const items: ListItem[] = [
-      ...problems.map((p) => ({ type: "problem" as const, data: p })),
-      ...tests.map((t) => ({ type: "test" as const, data: t })),
-    ];
-    // Misol order va test order (internalOrder) bo'yicha tartiblash
-    // internalOrder bor bo'lsa — to'g'ridan-to'g'ri ishlatamiz (misollar bilan bir xil tizim)
-    items.sort((a, b) => {
-      const orderA = a.type === "problem" ? a.data.order : ((a.data as Test).internalOrder ?? 99999);
-      const orderB = b.type === "problem" ? b.data.order : ((b.data as Test).internalOrder ?? 99999);
-      return orderA - orderB;
-    });
-    setCombinedItems(items);
-  }, [problems, tests]);
-
-  async function loadData(cId: string, tId: string) {
+  async function loadTopicData() {
+    setLoading(true);
     try {
-      const [t, p, allTests] = await Promise.all([
-        getTopicById(cId, tId),
-        getProblemsByTopic(cId, tId),
-        getTestsByCourse(cId),
-      ]);
-      setTopic(t);
-      setProblems(p);
-      // Faqat shu modulga (topic.order) bog'langan testlarni ko'rsatamiz
-      setTests(t ? allTests.filter((test) => test.afterTopicOrder === t.order) : []);
-      if (t) { setEditTitle(t.title); setEditDesc(t.description); }
+      const t = await getTopicById(courseId!, topicId!);
+      if (t) {
+        setTopic(t);
+        setTitle(t.title || "");
+        setDescription(t.description || "");
+        setTheoryContent(t.theoryContent || "");
+        setMediaList((t.theoryMedia as any) || []);
+        setQuizQuestions(t.quizQuestions || []);
+
+        // Lug'atlarni yuklash
+        if (t.vocabularyIds && t.vocabularyIds.length > 0) {
+          const vocabs = await getVocabulariesByIds(t.vocabularyIds);
+          setAttachedVocabs(vocabs);
+          setSelectedVocabIds(new Set(t.vocabularyIds));
+        } else {
+          setAttachedVocabs([]);
+          setSelectedVocabIds(new Set());
+        }
+      }
     } catch (err) {
-      console.error("Xatolik:", err);
+      console.error("Mavzu ma'lumotlarini yuklashda xatolik:", err);
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleDeleteTest(testId: string) {
-    if (!courseId) return;
-    if (!confirm("Bu testni o'chirishga ishonchingiz komilmi?")) return;
-    await deleteTest(courseId, testId);
-    await loadData(courseId, topicId!);
-  }
-
-  // ===== Drag and Drop handlers =====
-  function handleDragStart(idx: number) {
-    setDragIdx(idx);
-  }
-
-  function handleDragOver(e: React.DragEvent, idx: number) {
-    e.preventDefault();
-    if (dragIdx === null || dragIdx === idx) return;
-    setDragOverIdx(idx);
-    // Ro'yxatda tartibni vizual almashtirish
-    const newItems = [...combinedItems];
-    const [moved] = newItems.splice(dragIdx, 1);
-    newItems.splice(idx, 0, moved);
-    setCombinedItems(newItems);
-    setDragIdx(idx);
-    setOrderChanged(true);
-  }
-
-  function handleDragEnd() {
-    setDragIdx(null);
-    setDragOverIdx(null);
-  }
-
-  async function handleSaveOrder() {
-    if (!courseId || !topicId) return;
-    setSavingOrder(true);
+  // Sarlavhani saqlash
+  async function handleSaveHeader() {
+    if (!title.trim()) return;
     try {
-      // Har bir element uchun yangi order belgilash
-      for (let i = 0; i < combinedItems.length; i++) {
-        const item = combinedItems[i];
-        const newOrder = i + 1;
-        if (item.type === "problem") {
-          await updateProblem(courseId, topicId, item.data.id, { order: newOrder });
-        } else {
-          // Test uchun — afterTopicOrder ni saqlaymiz (qaysi topic'ga tegishli ekanini ko'rsatadi)
-          // internalOrder — shu topic ichidagi tartib (misollar orasidagi joy)
-          await updateTest(courseId, item.data.id, { afterTopicOrder: topic!.order, internalOrder: newOrder } as any);
-        }
-      }
-      setOrderChanged(false);
-      await loadData(courseId, topicId);
-    } catch (err) {
-      console.error("Tartib saqlashda xatolik:", err);
-    } finally {
-      setSavingOrder(false);
+      await updateTopic(courseId!, topicId!, { title, description });
+      setTopic((prev) => (prev ? { ...prev, title, description } : null));
+      setEditingHeader(false);
+    } catch (err: any) {
+      alert("Xatolik: " + err.message);
     }
   }
 
-  async function handleSaveTopic() {
-    if (!courseId || !topicId) return;
-    await updateTopic(courseId, topicId, { title: editTitle, description: editDesc });
-    setTopic((prev) => prev ? { ...prev, title: editTitle, description: editDesc } : prev);
-    setEditingTopic(false);
+  // Teoriya bo'limini saqlash
+  async function handleSaveTheory() {
+    setSavingTheory(true);
+    try {
+      await updateTopic(courseId!, topicId!, {
+        theoryContent,
+        theoryMedia: mediaList,
+      });
+      setTopic((prev) => (prev ? { ...prev, theoryContent, theoryMedia: mediaList } : null));
+      alert("Teoriya muvaffaqiyatli saqlandi!");
+    } catch (err: any) {
+      alert("Xatolik yuz berdi: " + err.message);
+    } finally {
+      setSavingTheory(false);
+    }
   }
 
-  async function handleDeleteTopic() {
-    if (!courseId || !topicId) return;
-    if (!confirm(`"${cleanTopicTitle(topic?.title || "")}" mavzusini o'chirishga ishonchingiz komilmi? Ichidagi barcha misollar ham o'chiriladi.`)) return;
-    await deleteTopic(courseId, topicId);
-    navigate(`/courses/${courseId}`);
+  // Media qo'shish
+  function handleAddMedia() {
+    if (!newMedia.url.trim()) {
+      alert("Media havolasi (URL) kiritilishi shart!");
+      return;
+    }
+    const item = {
+      id: "m_" + Date.now(),
+      type: newMedia.type,
+      url: newMedia.url.trim(),
+      caption: newMedia.caption.trim(),
+    };
+    setMediaList((prev) => [...prev, item]);
+    setNewMedia({ type: "image", url: "", caption: "" });
+    setShowMediaModal(false);
   }
 
-  async function handleTogglePremium() {
-    if (!courseId || !topicId || !topic) return;
-    const newVal = !topic.isPremium;
-    await updateTopic(courseId, topicId, { isPremium: newVal });
-    setTopic((prev) => prev ? { ...prev, isPremium: newVal } : prev);
+  function handleRemoveMedia(id: string) {
+    setMediaList((prev) => prev.filter((m) => m.id !== id));
   }
 
-  async function handleDeleteProblem(problemId: string) {
-    if (!courseId || !topicId) return;
-    if (!confirm("Bu misolni o'chirishga ishonchingiz komilmi?")) return;
-    await deleteProblem(courseId, topicId, problemId);
-    setProblems((prev) => prev.filter((p) => p.id !== problemId));
+  // Lug'atlar bazasidan modal ochish
+  async function openVocabModal() {
+    try {
+      const all = await getVocabularies();
+      setAllVocabularies(all);
+      setSelectedVocabIds(new Set(topic?.vocabularyIds || []));
+      setShowVocabModal(true);
+    } catch (err: any) {
+      alert("Lug'at bazasini yuklashda xatolik: " + err.message);
+    }
+  }
+
+  function toggleSelectVocab(id: string) {
+    setSelectedVocabIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function handleSaveAttachedVocabs() {
+    setSavingVocabs(true);
+    try {
+      const ids = Array.from(selectedVocabIds);
+      await updateTopic(courseId!, topicId!, {
+        vocabularyIds: ids,
+      });
+      const vocabs = await getVocabulariesByIds(ids);
+      setAttachedVocabs(vocabs);
+      setTopic((prev) => (prev ? { ...prev, vocabularyIds: ids } : null));
+      setShowVocabModal(false);
+      alert(`Mavzuga ${ids.length} ta so'z biriktirildi!`);
+    } catch (err: any) {
+      alert("Xatolik: " + err.message);
+    } finally {
+      setSavingVocabs(false);
+    }
+  }
+
+  async function handleRemoveAttachedVocab(id: string) {
+    const nextIds = (topic?.vocabularyIds || []).filter((vId) => vId !== id);
+    try {
+      await updateTopic(courseId!, topicId!, { vocabularyIds: nextIds });
+      setAttachedVocabs((prev) => prev.filter((v) => v.id !== id));
+      setTopic((prev) => (prev ? { ...prev, vocabularyIds: nextIds } : null));
+    } catch (err: any) {
+      alert("O'chirishda xatolik: " + err.message);
+    }
+  }
+
+  // Quiz operatsiyalari
+  function openAddQuizModal() {
+    setEditingQuestion(null);
+    setQuizForm({
+      question: "",
+      options: ["", "", "", ""],
+      correctAnswer: 0,
+      explanation: "",
+    });
+    setShowQuizModal(true);
+  }
+
+  function openEditQuizModal(q: TopicQuizQuestion) {
+    setEditingQuestion(q);
+    setQuizForm({
+      question: q.question,
+      options: [...q.options],
+      correctAnswer: q.correctAnswer,
+      explanation: q.explanation || "",
+    });
+    setShowQuizModal(true);
+  }
+
+  async function handleSaveQuizQuestion(e: React.FormEvent) {
+    e.preventDefault();
+    if (!quizForm.question.trim()) {
+      alert("Savol matnini kiriting!");
+      return;
+    }
+    if (quizForm.options.some((opt) => !opt.trim())) {
+      alert("Barcha 4 ta javob variantini to'ldiring!");
+      return;
+    }
+
+    setSavingQuiz(true);
+    try {
+      let updated: TopicQuizQuestion[];
+      if (editingQuestion) {
+        updated = quizQuestions.map((q) =>
+          q.id === editingQuestion.id ? { ...q, ...quizForm } : q
+        );
+      } else {
+        const newQ: TopicQuizQuestion = {
+          id: "q_" + Date.now(),
+          ...quizForm,
+        };
+        updated = [...quizQuestions, newQ];
+      }
+
+      await updateTopic(courseId!, topicId!, {
+        quizQuestions: updated,
+      });
+      setQuizQuestions(updated);
+      setTopic((prev) => (prev ? { ...prev, quizQuestions: updated } : null));
+      setShowQuizModal(false);
+    } catch (err: any) {
+      alert("Quiz savolini saqlashda xatolik: " + err.message);
+    } finally {
+      setSavingQuiz(false);
+    }
+  }
+
+  async function handleDeleteQuizQuestion(id: string) {
+    if (!confirm("Savolni o'chirishga ishonchingiz komilmi?")) return;
+    try {
+      const updated = quizQuestions.filter((q) => q.id !== id);
+      await updateTopic(courseId!, topicId!, { quizQuestions: updated });
+      setQuizQuestions(updated);
+      setTopic((prev) => (prev ? { ...prev, quizQuestions: updated } : null));
+    } catch (err: any) {
+      alert("O'chirishda xatolik: " + err.message);
+    }
+  }
+
+  // Audio o'qish
+  function playAudio(word: string) {
+    if (!("speechSynthesis" in window)) return;
+    window.speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(word);
+    u.lang = "en-US";
+    u.rate = 0.9;
+    window.speechSynthesis.speak(u);
   }
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-8 h-8 text-primary-500 animate-spin" />
+      <div className="p-8 text-center text-gray-500">
+        <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+        Mavzu yuklanmoqda...
       </div>
     );
   }
 
   if (!topic) {
-    return <div className="text-center py-20 text-gray-500">Modul topilmadi</div>;
+    return (
+      <div className="p-8 text-center text-gray-500">
+        Mavzu topilmadi.
+        <br />
+        <Link to={`/courses/${courseId}`} className="text-indigo-600 underline mt-2 inline-block">
+          Kursga qaytish
+        </Link>
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-6">
+    <div className="p-6 max-w-7xl mx-auto space-y-6">
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-sm text-gray-500">
-        <Link to="/courses" className="hover:text-primary-500">Kurslar</Link>
+        <Link to="/courses" className="hover:text-indigo-600">
+          Kurslar
+        </Link>
         <ChevronRight className="w-4 h-4" />
-        <Link to={`/courses/${courseId}`} className="hover:text-primary-500">Kurs</Link>
+        <Link to={`/courses/${courseId}`} className="hover:text-indigo-600">
+          Kurs tafsilotlari
+        </Link>
         <ChevronRight className="w-4 h-4" />
-        <span className="text-gray-900 font-medium">{cleanTopicTitle(topic.title)}</span>
+        <span className="text-gray-900 font-medium">{topic.title}</span>
       </div>
 
-      {/* Topic header */}
-      <div className="bg-white rounded-xl p-6 border border-gray-100 shadow-sm">
-        {editingTopic ? (
-          /* Edit mode */
-          <div className="space-y-3">
+      {/* Topic Header Card */}
+      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        {editingHeader ? (
+          <div className="w-full space-y-3">
             <input
-              value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-lg font-bold focus:outline-none focus:ring-2 focus:ring-primary-500"
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full text-xl font-bold px-3 py-1.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+              placeholder="Mavzu nomi..."
             />
-            <textarea
-              value={editDesc}
-              onChange={(e) => setEditDesc(e.target.value)}
-              rows={2}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-none"
+            <input
+              type="text"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full text-sm text-gray-600 px-3 py-1.5 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+              placeholder="Mavzu haqida qisqacha tavsif..."
             />
             <div className="flex gap-2">
-              <button onClick={handleSaveTopic} className="btn-primary text-sm">Saqlash</button>
-              <button onClick={() => setEditingTopic(false)} className="btn-outline text-sm">Bekor</button>
+              <button
+                onClick={handleSaveHeader}
+                className="px-4 py-1.5 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700"
+              >
+                Saqlash
+              </button>
+              <button
+                onClick={() => setEditingHeader(false)}
+                className="px-4 py-1.5 border border-gray-200 text-gray-600 rounded-xl text-xs hover:bg-gray-50"
+              >
+                Bekor qilish
+              </button>
             </div>
           </div>
         ) : (
-          /* View mode */
-          <div className="flex items-start justify-between">
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">{cleanTopicTitle(topic.title)}</h1>
-              <p className="text-gray-500 mt-1">{topic.description}</p>
-              <div className="flex items-center gap-3 mt-3 text-sm text-gray-500">
-                <span>📝 {problems.length} ta misol</span>
-                <span>🎬 {problems.filter((p) => p.videoUrl).length} ta video</span>
-                <span className={topic.isPremium ? "text-yellow-600 font-medium" : "text-green-600 font-medium"}>
-                  {topic.isPremium ? "Premium" : "Bepul"}
-                </span>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {/* Premium/Free toggle */}
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold text-gray-900">{topic.title}</h1>
               <button
-                onClick={handleTogglePremium}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border ${
-                  topic.isPremium
-                    ? "border-green-200 text-green-700 hover:bg-green-50"
-                    : "border-yellow-200 text-yellow-700 hover:bg-yellow-50"
-                }`}
+                onClick={() => setEditingHeader(true)}
+                className="p-1 text-gray-400 hover:text-indigo-600 rounded-lg hover:bg-gray-100"
               >
-                {topic.isPremium ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
-                {topic.isPremium ? "Free qilish" : "Premium qilish"}
-              </button>
-              <button onClick={() => setEditingTopic(true)} className="btn-outline text-sm flex items-center gap-2">
                 <Edit className="w-4 h-4" />
-                Tahrirlash
-              </button>
-              <button onClick={handleDeleteTopic} className="btn-outline text-sm text-danger border-red-200 hover:bg-red-50 flex items-center gap-2">
-                <Trash2 className="w-4 h-4" />
-                O'chirish
               </button>
             </div>
-          </div>
-        )}
-      </div>
-
-      {/* Modulni tanishtirish bo'limi — kursni tanishtirish blokiga o'xshash */}
-      <TopicIntroSection
-        courseId={courseId!}
-        topic={topic}
-        onUpdate={(updated) => setTopic(updated)}
-      />
-
-      {/* Add problem / Add test */}
-      <div className="flex items-center gap-3 sticky top-0 z-20 bg-gray-50 py-3 -mx-6 px-6 border-b border-gray-100 shadow-sm">
-        <button onClick={() => setShowProblemModal(true)} className="btn-primary flex items-center gap-2 text-sm">
-          <Plus className="w-4 h-4" />
-          Yangi misol qo'shish
-        </button>
-        <button onClick={() => setShowImportTestModal(true)} className="btn-outline flex items-center gap-2 text-sm">
-          <Plus className="w-4 h-4" />
-          Test qo'shish
-        </button>
-        {orderChanged && (
-          <LoadingButton
-            onClick={handleSaveOrder}
-            loading={savingOrder}
-            className="btn-primary flex items-center gap-2 text-sm ml-auto bg-green-600 hover:bg-green-700"
-          >
-            <Save className="w-4 h-4" /> Tartibni saqlash
-          </LoadingButton>
-        )}
-      </div>
-      {orderChanged && (
-        <p className="text-xs text-amber-600 -mt-3">Tartib o'zgartirildi — saqlash uchun "Tartibni saqlash" tugmasini bosing</p>
-      )}
-
-      {/* Birlashtirilgan misol va testlar ro'yxati — drag-and-drop bilan tartib o'zgartirish */}
-      <div className="space-y-4">
-        {combinedItems.length === 0 && (
-          <div className="text-center py-12 bg-white rounded-xl border border-gray-100">
-            <p className="text-4xl mb-3">📝</p>
-            <p className="text-gray-500">Bu modulda hali misollar yoki testlar yo'q</p>
-            <button onClick={() => setShowProblemModal(true)} className="btn-primary mt-4 text-sm">
-              <Plus className="w-4 h-4 inline mr-2" />
-              Birinchi misolni qo'shing
-            </button>
+            <p className="text-sm text-gray-500 mt-1">
+              {topic.description || "Tavsif berilmagan."}
+            </p>
           </div>
         )}
 
-        {(() => {
-          let problemCounter = 0;
-          return combinedItems.map((item, idx) => (
-          <div
-            key={`${item.type}-${item.data.id}`}
-            draggable
-            onDragStart={() => handleDragStart(idx)}
-            onDragOver={(e) => handleDragOver(e, idx)}
-            onDragEnd={handleDragEnd}
-            className={`transition-all ${dragIdx === idx ? "opacity-50 scale-[0.98]" : ""} ${dragOverIdx === idx ? "ring-2 ring-primary-300" : ""}`}
-          >
-            {item.type === "problem" ? (
-              <ProblemCard
-                problem={item.data as Problem}
-                index={problemCounter++}
-                courseId={courseId!}
-                topicId={topicId!}
-                onStartEdit={(p) => setEditingProblem(p)}
-                onDelete={handleDeleteProblem}
-                onUpdate={() => loadData(courseId!, topicId!)}
-              />
+        <div className="flex items-center gap-3 shrink-0">
+          <span className="px-3 py-1 bg-indigo-50 text-indigo-700 text-xs font-semibold rounded-full border border-indigo-100">
+            {attachedVocabs.length} ta so'z
+          </span>
+          <span className="px-3 py-1 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-full border border-emerald-100">
+            {quizQuestions.length} ta savol
+          </span>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex border-b border-gray-200 gap-8">
+        <button
+          onClick={() => setActiveTab("theory")}
+          className={`pb-3 text-sm font-semibold flex items-center gap-2 border-b-2 transition-all ${
+            activeTab === "theory"
+              ? "border-indigo-600 text-indigo-600"
+              : "border-transparent text-gray-500 hover:text-gray-900"
+          }`}
+        >
+          <BookOpen className="w-4 h-4" />
+          1. Dars Teoriyasi (Theory)
+        </button>
+
+        <button
+          onClick={() => setActiveTab("vocabulary")}
+          className={`pb-3 text-sm font-semibold flex items-center gap-2 border-b-2 transition-all ${
+            activeTab === "vocabulary"
+              ? "border-indigo-600 text-indigo-600"
+              : "border-transparent text-gray-500 hover:text-gray-900"
+          }`}
+        >
+          <Layers className="w-4 h-4" />
+          2. Lug'atlar ({attachedVocabs.length})
+        </button>
+
+        <button
+          onClick={() => setActiveTab("quiz")}
+          className={`pb-3 text-sm font-semibold flex items-center gap-2 border-b-2 transition-all ${
+            activeTab === "quiz"
+              ? "border-indigo-600 text-indigo-600"
+              : "border-transparent text-gray-500 hover:text-gray-900"
+          }`}
+        >
+          <HelpCircle className="w-4 h-4" />
+          3. Mavzu Quizi ({quizQuestions.length})
+        </button>
+      </div>
+
+      {/* TAB 1: THEORY */}
+      {activeTab === "theory" && (
+        <div className="space-y-6">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-gray-900">
+                  Mavzu Nazariyasi (Dars matni)
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Talaba mavzuga kirganda o'qiydigan tushuntirish, qoidalar va matnlar.
+                </p>
+              </div>
+              <button
+                onClick={handleSaveTheory}
+                disabled={savingTheory}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-xs font-semibold rounded-xl hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50"
+              >
+                <Save className="w-4 h-4" />
+                {savingTheory ? "Saqlanmoqda..." : "Teoriyani Saqlash"}
+              </button>
+            </div>
+
+            <textarea
+              rows={12}
+              value={theoryContent}
+              onChange={(e) => setTheoryContent(e.target.value)}
+              placeholder="Mavzu tushuntirishini bu yerga yozing... (Grammatika qoidalari, dars matni, misollar)"
+              className="w-full p-4 border border-gray-200 rounded-xl text-sm font-sans focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 leading-relaxed"
+            />
+          </div>
+
+          {/* Media Section */}
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-gray-900">
+                  Teoriya Rasmlari va Videolari
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  O'quvchi ushbu rasmlar va videolarni dars matnida to'liq ekranda ko'ra oladi.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowMediaModal(true)}
+                className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 text-xs font-semibold rounded-xl transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Media Qo'shish
+              </button>
+            </div>
+
+            {mediaList.length === 0 ? (
+              <p className="text-xs text-gray-400 italic py-4">
+                Hozircha hech qanday rasm yoki video biriktirilmagan.
+              </p>
             ) : (
-              <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-orange-100 shadow-sm">
-                <div className="flex items-center gap-4 flex-1 min-w-0">
-                  <GripVertical className="w-4 h-4 text-gray-300 cursor-grab shrink-0" />
-                  <div className="w-10 h-10 bg-orange-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <FileText className="w-5 h-5 text-orange-500" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h4 className="font-medium text-gray-900">{(item.data as Test).title}</h4>
-                    <p className="text-sm text-gray-500">{(item.data as Test).questions?.length || 0} savol · {(item.data as Test).totalTime} daqiqa</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1.5 ml-2 shrink-0">
-                  <LoadingButton
-                    onClick={async () => {
-                      const test = item.data as Test;
-                      const isPremium = !test.isPremium;
-                      await updateTest(courseId!, test.id, { isPremium } as any);
-                      await loadData(courseId!, topicId!);
-                    }}
-                    className={`text-[10px] font-medium px-2 py-1 rounded border ${(item.data as Test).isPremium ? "border-yellow-200 text-yellow-600 bg-yellow-50 hover:bg-yellow-100" : "border-green-200 text-green-600 bg-green-50 hover:bg-green-100"}`}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {mediaList.map((m) => (
+                  <div
+                    key={m.id}
+                    className="border border-gray-200 rounded-xl p-3 relative group overflow-hidden bg-gray-50"
                   >
-                    {(item.data as Test).isPremium ? "Premium" : "Free"}
-                  </LoadingButton>
-                  <span className={`text-[10px] px-2 py-1 rounded-full font-medium ${(item.data as Test).status === "published" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>
-                    {(item.data as Test).status === "published" ? "Chop etilgan" : "Qoralama"}
-                  </span>
-                  <Link to={`/courses/${courseId}/tests/${(item.data as Test).id}/preview`} className="p-1.5 text-gray-400 hover:text-primary-500 hover:bg-primary-50 rounded" title="Ko'rish / Tahrirlash">
-                    <Edit className="w-4 h-4" />
-                  </Link>
-                  <LoadingButton onClick={() => handleDeleteTest((item.data as Test).id)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded" title="O'chirish" iconOnly>
-                    <Trash2 className="w-4 h-4" />
-                  </LoadingButton>
-                </div>
+                    <button
+                      onClick={() => handleRemoveMedia(m.id)}
+                      className="absolute top-2 right-2 p-1.5 bg-red-600 text-white rounded-lg opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow-sm"
+                      title="O'chirish"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+
+                    {m.type === "image" ? (
+                      <img
+                        src={m.url}
+                        alt={m.caption || "Theory image"}
+                        className="w-full h-40 object-cover rounded-lg mb-2"
+                        onError={(e) => {
+                          (e.target as any).src = "https://placehold.co/600x400?text=Rasm+Topilmadi";
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-40 bg-gray-900 rounded-lg flex items-center justify-center mb-2 text-white">
+                        <Video className="w-10 h-10 text-indigo-400" />
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between text-xs text-gray-600">
+                      <span className="font-semibold uppercase tracking-wider text-[10px] bg-white px-2 py-0.5 rounded border border-gray-200">
+                        {m.type}
+                      </span>
+                      <span className="truncate max-w-[180px] font-medium text-gray-800">
+                        {m.caption || m.url}
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
           </div>
-        ));
-        })()}
-      </div>
+        </div>
+      )}
 
-      {/* Create problem modal */}
-      <CreateProblemModal
-        open={showProblemModal}
-        courseId={courseId!}
-        topicId={topicId!}
-        existingCount={problems.length}
-        onClose={() => setShowProblemModal(false)}
-        onCreated={() => loadData(courseId!, topicId!)}
-      />
-
-      {/* Edit problem modal */}
-      <CreateProblemModal
-        open={!!editingProblem}
-        courseId={courseId!}
-        topicId={topicId!}
-        existingCount={problems.length}
-        editData={editingProblem}
-        onClose={() => setEditingProblem(null)}
-        onCreated={() => { setEditingProblem(null); loadData(courseId!, topicId!); }}
-      />
-
-      {/* Import test modal — testni shu modulga (topic.order) bog'lab qo'shish */}
-      <ImportTestModal
-        open={showImportTestModal}
-        courseId={courseId!}
-        existingTestIds={tests.map((t) => t.id)}
-        folderId={topic.folderId}
-        afterTopicOrder={topic.order}
-        onClose={() => setShowImportTestModal(false)}
-        onImported={() => loadData(courseId!, topicId!)}
-      />
-    </div>
-  );
-}
-
-
-// ===== ProblemCard — flip effekti bilan =====
-function ProblemCard({ problem, index, courseId, topicId, onStartEdit, onDelete, onUpdate }: {
-  problem: Problem; index: number; courseId: string; topicId: string;
-  onStartEdit: (p: Problem) => void; onDelete: (id: string) => void; onUpdate: () => void;
-}) {
-  const [flipped, setFlipped] = useState(false);
-  const [showVideo, setShowVideo] = useState(false);
-
-  const difficultyColors: Record<string, string> = { easy: "bg-green-100 text-green-700", medium: "bg-yellow-100 text-yellow-700", hard: "bg-red-100 text-red-700" };
-  const difficultyLabels: Record<string, string> = { easy: "Oson", medium: "O'rta", hard: "Qiyin" };
-
-  // YouTube embed URL yaratish
-  function getEmbedUrl(url: string): string {
-    const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&?]+)/);
-    const videoId = match ? match[1] : "";
-    const params = new URLSearchParams(url.split("?")[1] || "");
-    const start = params.get("start") || "0";
-    const end = params.get("end");
-    let embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&start=${start}`;
-    if (end) embedUrl += `&end=${end}`;
-    return embedUrl;
-  }
-
-  return (
-    <>
-      <div className={`bg-white rounded-xl border border-gray-100 shadow-sm transition-all duration-300 ${flipped ? "ring-2 ring-blue-300" : ""}`}>
-        <div style={{ perspective: "1600px" }}>
-          <div
-            className="grid transition-transform duration-500"
-            style={{ transformStyle: "preserve-3d", transform: flipped ? "rotateY(180deg)" : "rotateY(0deg)" }}
-          >
-            {/* FRONT — Misol */}
-            <div
-              className="p-6 col-start-1 row-start-1"
-              style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden" }}
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex items-start gap-4">
-                  <div className="w-8 h-8 bg-primary-50 rounded-full flex items-center justify-center text-primary-600 font-bold text-sm shrink-0">{index + 1}</div>
-                  <div>
-                    <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${difficultyColors[problem.difficulty] || ""}`}>{difficultyLabels[problem.difficulty] || problem.difficulty}</span>
-                      {problem.isPremium && <span className="text-xs px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-700">Premium</span>}
-                      {problem.tags?.map((tag) => <span key={tag} className="text-xs text-gray-500">#{tag}</span>)}
-                      {problem.estimatedMinutes && <span className="text-xs text-gray-400">⏱ {problem.estimatedMinutes} daq</span>}
-                    </div>
-                    <p className="text-gray-900 font-medium"><LatexText text={problem.content} /></p>
-                    {problem.image && <img src={problem.image} alt="" className="mt-2 max-h-40 rounded-lg border border-gray-200" />}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  <button onClick={async () => { const v = !problem.isPremium; await updateProblem(courseId, topicId, problem.id, { isPremium: v }); onUpdate(); }} className={`px-2.5 py-1 rounded text-[10px] font-medium border transition-colors ${problem.isPremium ? "border-yellow-200 text-yellow-700 bg-yellow-50 hover:bg-yellow-100" : "border-green-200 text-green-700 bg-green-50 hover:bg-green-100"}`} title={problem.isPremium ? "Free qilish" : "Premium qilish"}>{problem.isPremium ? "🔒 Premium" : "🔓 Free"}</button>
-                  <button onClick={async () => { await updateProblem(courseId, topicId, problem.id, { isHidden: !problem.isHidden }); onUpdate(); }} className={`px-2 py-1 rounded text-[10px] font-medium border flex items-center gap-0.5 ${problem.isHidden ? "border-orange-200 text-orange-600 bg-orange-50" : "border-gray-200 text-gray-500 bg-gray-50"}`} title={problem.isHidden ? "Yashirin — ko'rsatish" : "Yashirish"}>{problem.isHidden ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}</button>
-                  <button onClick={() => onStartEdit(problem)} className="p-2 text-gray-400 hover:text-primary-600 rounded-lg hover:bg-gray-50"><Edit className="w-4 h-4" /></button>
-                  <button onClick={() => onDelete(problem.id)} className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50"><Trash2 className="w-4 h-4" /></button>
-                </div>
-              </div>
-
-              {/* Action buttons */}
-              <div className="flex items-center gap-3 mt-4 pt-3 border-t border-gray-100">
-                {problem.solution && problem.solution.length > 0 && (
-                  <button onClick={() => setFlipped(true)} className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-600 text-sm font-medium rounded-lg hover:bg-blue-100 transition-colors">
-                    <Eye className="w-4 h-4" /> Yechimni ko'rish
-                  </button>
-                )}
-                {problem.videoUrl && (
-                  <button onClick={() => setShowVideo(true)} className="flex items-center gap-2 px-3 py-2 bg-purple-50 text-purple-600 text-sm font-medium rounded-lg hover:bg-purple-100 transition-colors">
-                    <Video className="w-4 h-4" /> Video yechim
-                  </button>
-                )}
-              </div>
+      {/* TAB 2: VOCABULARY */}
+      {activeTab === "vocabulary" && (
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <h3 className="text-base font-bold text-gray-900">
+                Mavzuga Biriktirilgan Lug'atlar
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Teoriya o'qib bo'lingach, talabaga ushbu so'zlar kartochka va o'yin ko'rinishida taqdim etiladi.
+              </p>
             </div>
-
-            {/* BACK — Yechim */}
-            <div
-              className="p-6 bg-blue-50/50 col-start-1 row-start-1 rounded-xl"
-              style={{ backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden", transform: "rotateY(180deg)" }}
-            >
-              <div className="flex items-center justify-between mb-3">
-                <h4 className="text-sm font-bold text-blue-700">📖 Yechim — #{index + 1}</h4>
-                <button onClick={() => setFlipped(false)} className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 bg-white rounded border border-gray-200">← Misolga qaytish</button>
-              </div>
-              <div className="bg-white rounded-lg p-4 border border-blue-200">
-                {problem.solution?.map((step) => (
-                  <p key={step.stepNumber} className="text-sm text-gray-800 mb-1">
-                    <span className="font-bold text-blue-600">{step.stepNumber}.</span> <LatexText text={step.text} />
-                  </p>
-                ))}
-              </div>
+            <div className="flex gap-3">
+              <Link
+                to="/vocabularies"
+                target="_blank"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 text-gray-600 hover:bg-gray-50 text-xs font-semibold rounded-xl"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                Lug'at Bazasiga O'tish
+              </Link>
+              <button
+                onClick={openVocabModal}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-sm transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Lug'at Bazasidan Tanlash
+              </button>
             </div>
           </div>
-        </div>
-      </div>
 
-      {/* Video Modal */}
-      {showVideo && problem.videoUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70" onClick={() => setShowVideo(false)}>
-          <div className="bg-white rounded-2xl w-full max-w-3xl shadow-xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between p-4 border-b border-gray-100">
-              <h3 className="font-bold text-gray-900">🎬 Video yechim — #{index + 1}</h3>
-              <button onClick={() => setShowVideo(false)} className="p-2 text-gray-400 hover:text-gray-600 text-lg">✕</button>
+          {attachedVocabs.length === 0 ? (
+            <div className="p-12 text-center text-gray-400 space-y-2">
+              <Layers className="w-10 h-10 mx-auto text-gray-300" />
+              <p className="text-sm font-medium text-gray-700">Mavzuga hali lug'at biriktirilmagan</p>
+              <p className="text-xs text-gray-400">
+                "Lug'at Bazasidan Tanlash" tugmasini bosib, mavzuga tegishli so'zlarni tanlang.
+              </p>
             </div>
-            <div className="aspect-video bg-black">
-              {problem.videoType === "youtube" || problem.videoUrl.includes("youtube") || problem.videoUrl.includes("youtu.be") ? (
-                <iframe
-                  src={getEmbedUrl(problem.videoUrl)}
-                  className="w-full h-full"
-                  allowFullScreen
-                  allow="autoplay; encrypted-media"
+          ) : (
+            <div className="overflow-x-auto border border-gray-100 rounded-xl">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase">
+                  <tr>
+                    <th className="p-3">So'z</th>
+                    <th className="p-3">Transkripsiya</th>
+                    <th className="p-3">Tarjima</th>
+                    <th className="p-3">Turkumi</th>
+                    <th className="p-3">Misol</th>
+                    <th className="p-3 text-right">O'chirish</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {attachedVocabs.map((v) => (
+                    <tr key={v.id} className="hover:bg-gray-50">
+                      <td className="p-3 font-bold text-gray-900 flex items-center gap-2">
+                        {v.word}
+                        <button
+                          onClick={() => playAudio(v.word)}
+                          className="p-1 text-gray-400 hover:text-indigo-600 rounded"
+                        >
+                          <Volume2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                      <td className="p-3 font-mono text-xs text-gray-500">{v.phonetic || "—"}</td>
+                      <td className="p-3 font-medium text-indigo-950">{v.translation}</td>
+                      <td className="p-3 text-xs text-gray-500">{v.partOfSpeech || "noun"}</td>
+                      <td className="p-3 text-xs text-gray-500 max-w-xs truncate">
+                        {v.exampleSentence || "—"}
+                      </td>
+                      <td className="p-3 text-right">
+                        <button
+                          onClick={() => handleRemoveAttachedVocab(v.id)}
+                          className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50"
+                          title="Mavzudan ajratish"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 3: QUIZ */}
+      {activeTab === "quiz" && (
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-base font-bold text-gray-900">
+                Mavzu Testi (Quiz)
+              </h3>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Lug'atdan keyin o'quvchining mavzuni o'zlashtirishini sinovchi test savollari.
+              </p>
+            </div>
+            <button
+              onClick={openAddQuizModal}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl shadow-sm transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Yangi Savol
+            </button>
+          </div>
+
+          {quizQuestions.length === 0 ? (
+            <div className="p-12 text-center text-gray-400 space-y-2">
+              <HelpCircle className="w-10 h-10 mx-auto text-gray-300" />
+              <p className="text-sm font-medium text-gray-700">Quiz savollari mavjud emas</p>
+              <p className="text-xs text-gray-400">
+                "+ Yangi Savol" tugmasini bosib, birinchi savolni yarating.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {quizQuestions.map((q, idx) => (
+                <div
+                  key={q.id}
+                  className="p-4 border border-gray-200 rounded-xl bg-gray-50/50 space-y-3"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-2">
+                      <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-700 font-bold text-xs flex items-center justify-center shrink-0">
+                        {idx + 1}
+                      </span>
+                      <h4 className="font-semibold text-gray-900 text-sm">{q.question}</h4>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => openEditQuizModal(q)}
+                        className="p-1.5 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteQuizQuestion(q.id)}
+                        className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Options */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pl-8">
+                    {q.options.map((opt, oIdx) => (
+                      <div
+                        key={oIdx}
+                        className={`p-2.5 rounded-lg text-xs font-medium border flex items-center justify-between ${
+                          q.correctAnswer === oIdx
+                            ? "bg-emerald-50 border-emerald-300 text-emerald-900 font-semibold"
+                            : "bg-white border-gray-200 text-gray-700"
+                        }`}
+                      >
+                        <span>{opt}</span>
+                        {q.correctAnswer === oIdx && (
+                          <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {q.explanation && (
+                    <div className="pl-8 text-xs text-gray-500 italic">
+                      Izoh: {q.explanation}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Media Modal */}
+      {showMediaModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-gray-100 p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-base text-gray-900">Media Qo'shish</h3>
+              <button
+                onClick={() => setShowMediaModal(false)}
+                className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
+                  Media Turi
+                </label>
+                <select
+                  value={newMedia.type}
+                  onChange={(e) => setNewMedia({ ...newMedia, type: e.target.value as any })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm"
+                >
+                  <option value="image">Rasm (Image)</option>
+                  <option value="video">Video (YouTube / Direct URL)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
+                  URL Havolasi *
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://..."
+                  value={newMedia.url}
+                  onChange={(e) => setNewMedia({ ...newMedia, url: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm"
                 />
-              ) : (
-                <video src={problem.videoUrl} controls autoPlay className="w-full h-full" />
-              )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
+                  Sarlavha yoki Izoh (Caption)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Masalan: English Alphabet Chart"
+                  value={newMedia.caption}
+                  onChange={(e) => setNewMedia({ ...newMedia, caption: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setShowMediaModal(false)}
+                className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl text-xs font-medium"
+              >
+                Bekor qilish
+              </button>
+              <button
+                onClick={handleAddMedia}
+                className="px-5 py-2 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700"
+              >
+                Qo'shish
+              </button>
             </div>
           </div>
         </div>
       )}
-    </>
+
+      {/* Lug'at Bazasidan Tanlash Modali */}
+      {showVocabModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-xl border border-gray-100 overflow-hidden my-8">
+            <div className="flex items-center justify-between p-5 border-b border-gray-100">
+              <div>
+                <h3 className="font-bold text-lg text-gray-900">
+                  Lug'at Bazasidan Tanlash
+                </h3>
+                <p className="text-xs text-gray-500">
+                  Tanlangan so'zlar ushbu darsga avtomatik biriktiriladi.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowVocabModal(false)}
+                className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="So'z yoki tarjimani qidirish..."
+                  value={vocabSearch}
+                  onChange={(e) => setVocabSearch(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm"
+                />
+              </div>
+
+              <div className="max-h-72 overflow-y-auto divide-y divide-gray-100 border border-gray-200 rounded-xl">
+                {allVocabularies
+                  .filter((v) =>
+                    (v.word + " " + v.translation).toLowerCase().includes(vocabSearch.toLowerCase())
+                  )
+                  .map((v) => {
+                    const isSelected = selectedVocabIds.has(v.id);
+                    return (
+                      <div
+                        key={v.id}
+                        onClick={() => toggleSelectVocab(v.id)}
+                        className={`p-3 flex items-center justify-between cursor-pointer transition-colors ${
+                          isSelected ? "bg-indigo-50/70" : "hover:bg-gray-50"
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-sm text-gray-900">{v.word}</span>
+                            <span className="text-xs font-mono text-gray-500">{v.phonetic}</span>
+                            <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 bg-gray-100 rounded text-gray-600">
+                              {v.level || "A1"}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-600 mt-0.5">{v.translation}</p>
+                        </div>
+                        <div
+                          className={`w-5 h-5 rounded-md border flex items-center justify-center ${
+                            isSelected
+                              ? "bg-indigo-600 border-indigo-600 text-white"
+                              : "border-gray-300"
+                          }`}
+                        >
+                          {isSelected && <CheckCircle className="w-3.5 h-3.5" />}
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+
+              <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                <span className="text-xs text-gray-500">
+                  Tanlandi: <strong>{selectedVocabIds.size} ta</strong> so'z
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowVocabModal(false)}
+                    className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl text-xs font-medium"
+                  >
+                    Bekor qilish
+                  </button>
+                  <button
+                    onClick={handleSaveAttachedVocabs}
+                    disabled={savingVocabs}
+                    className="px-5 py-2 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50"
+                  >
+                    {savingVocabs ? "Saqlanmoqda..." : "Mavzuga Biriktirish"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Quiz Modal */}
+      {showQuizModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white w-full max-w-lg rounded-2xl shadow-xl border border-gray-100 p-6 space-y-4 my-8">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-lg text-gray-900">
+                {editingQuestion ? "Savolni tahrirlash" : "Yangi Quiz Savoli"}
+              </h3>
+              <button
+                onClick={() => setShowQuizModal(false)}
+                className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveQuizQuestion} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
+                  Savol Matni *
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Masalan: Which letter comes after 'C'?"
+                  value={quizForm.question}
+                  onChange={(e) => setQuizForm({ ...quizForm, question: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-xs font-semibold text-gray-700 uppercase">
+                  Variantlar va To'g'ri Javobni belgilang (Radio) *
+                </label>
+                {quizForm.options.map((opt, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <input
+                      type="radio"
+                      name="correctAnswer"
+                      checked={quizForm.correctAnswer === idx}
+                      onChange={() => setQuizForm({ ...quizForm, correctAnswer: idx })}
+                      className="w-4 h-4 text-indigo-600 cursor-pointer"
+                    />
+                    <input
+                      type="text"
+                      required
+                      placeholder={`Variant ${idx + 1}`}
+                      value={opt}
+                      onChange={(e) => {
+                        const next = [...quizForm.options];
+                        next[idx] = e.target.value;
+                        setQuizForm({ ...quizForm, options: next });
+                      }}
+                      className="flex-1 px-3 py-1.5 border border-gray-200 rounded-xl text-sm"
+                    />
+                  </div>
+                ))}
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 uppercase mb-1">
+                  Tushuntirish / Izoh (Ixtiyoriy)
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Nima uchun bu javob to'g'ri ekanligi haqida qisqa izoh..."
+                  value={quizForm.explanation}
+                  onChange={(e) => setQuizForm({ ...quizForm, explanation: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-xl text-sm"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+                <button
+                  type="button"
+                  onClick={() => setShowQuizModal(false)}
+                  className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl text-xs font-medium"
+                >
+                  Bekor qilish
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingQuiz}
+                  className="px-5 py-2 bg-indigo-600 text-white rounded-xl text-xs font-semibold hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  {savingQuiz ? "Saqlanmoqda..." : "Saqlash"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

@@ -33,6 +33,8 @@ import Search from "./pages/Search";
 import BannedScreen from "./components/BannedScreen";
 import DeviceLimitScreen from "./components/DeviceLimitScreen";
 import ErrorBoundary from "./components/ErrorBoundary";
+import ExitConfirmModal from "./components/ExitConfirmModal";
+import { backActionManager } from "./services/backActionManager";
 import { useAuth } from "./hooks/useAuth";
 import { useActivityTracker } from "./hooks/useActivityTracker";
 import { useDeviceSession } from "./hooks/useDeviceSession";
@@ -53,6 +55,7 @@ export default function App() {
   const { user, loading: authLoading } = useAuth();
   const [userData, setUserData] = useState<User | null>(null);
   const [checkingBan, setCheckingBan] = useState(false);
+  const [exitAppModalOpen, setExitAppModalOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -70,11 +73,37 @@ export default function App() {
   // Android back button handler
   useEffect(() => {
     const listener = CapApp.addListener("backButton", ({ canGoBack }) => {
-      // Asosiy sahifalarda (home, courses, tests, profile) — app'ni yopish
-      const mainRoutes = ["/", "/courses", "/tests", "/profile"];
-      if (mainRoutes.includes(location.pathname)) {
-        CapApp.exitApp();
-      } else if (canGoBack) {
+      // 1. Agar biror modal, oyna yoki menyu ochiq bo'lsa — eng ustki modalni yopish
+      if (backActionManager.execute()) {
+        return;
+      }
+
+      // 2. Agar dasturdan chiqish tasdiqlash modali ochiq bo'lsa — uni yopish
+      if (exitAppModalOpen) {
+        setExitAppModalOpen(false);
+        return;
+      }
+
+      // 3. Asosiy sahifada bo'lsa (Home: "/") — chiqish tasdiqlash modalini chiqarish
+      if (location.pathname === "/") {
+        setExitAppModalOpen(true);
+        return;
+      }
+
+      // 4. Asosiy tablarda bo'lsa — Asosiy sahifaga qaytish
+      if (["/courses", "/tests", "/profile", "/continue"].includes(location.pathname)) {
+        navigate("/");
+        return;
+      }
+
+      // 5. Profil ichki sahifalari (/profile/edit, /profile/favorites, ...) -> /profile ga qaytish
+      if (location.pathname.startsWith("/profile/")) {
+        navigate("/profile");
+        return;
+      }
+
+      // 6. Mavzular va boshqa barcha sahifalarda — orqaga qaytish
+      if (canGoBack || (window.history.state && window.history.state.idx > 0)) {
         window.history.back();
       } else {
         navigate(-1);
@@ -82,9 +111,9 @@ export default function App() {
     });
 
     return () => {
-      listener.then(l => l.remove());
+      listener.then((l) => l.remove());
     };
-  }, [location.pathname, navigate]);
+  }, [location.pathname, navigate, exitAppModalOpen]);
 
   // Deep link handler — OAuth callback (Google login APK da qaytganda)
   // OAuth tugagach brauzer uz.edukids.app://auth/callback#access_token=...&refresh_token=...
@@ -288,6 +317,11 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <BottomNav />
+      <ExitConfirmModal
+        open={exitAppModalOpen}
+        onConfirm={() => CapApp.exitApp()}
+        onCancel={() => setExitAppModalOpen(false)}
+      />
     </ErrorBoundary>
   );
 }

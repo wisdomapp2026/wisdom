@@ -9,9 +9,9 @@ interface TelegramLoginButtonProps {
 
 import { isNativeApp } from "../utils/platform";
 
-const BOT_USERNAME = import.meta.env.VITE_TELEGRAM_BOT_USERNAME || "edukids_login_bot";
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+const BOT_USERNAME = import.meta.env.VITE_TELEGRAM_BOT_USERNAME || "wisdom_login_bot";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://qplqvhmkhpgrvksboepf.supabase.co";
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFwbHF2aG1raHBncnZrc2JvZXBmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg1ODc5OTMsImV4cCI6MjEwNDE2Mzk5M30.tGdGFpb-gGdaZjGWFP6OlomgXqWt39CNSrKyksPTgz0";
 
 type Step = "idle" | "waiting" | "code";
 
@@ -61,7 +61,8 @@ export default function TelegramLoginButton({ onSuccess, onError, disabled }: Te
     try {
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (SUPABASE_ANON_KEY) {
-        headers["apikey"] = SUPABASE_ANON_KEY;
+        // Faqat Authorization headerini yuboramiz. 'apikey' yuborilmaydi chunki u
+        // server CORS preflight (OPTIONS) tekshiruvida "Failed to fetch" xatoligiga sabab bo'ladi.
         headers["Authorization"] = `Bearer ${SUPABASE_ANON_KEY}`;
       }
 
@@ -90,8 +91,12 @@ export default function TelegramLoginButton({ onSuccess, onError, disabled }: Te
         throw new Error("Sessiya yaratib bo'lmadi");
       }
     } catch (err: any) {
-      setError(err.message || "Xatolik yuz berdi");
-      onError?.(err.message);
+      let msg = err.message || "Xatolik yuz berdi";
+      if (msg === "Failed to fetch" || msg.includes("NetworkError") || msg.includes("Load failed")) {
+        msg = "Server yoki internet bilan bog'lanishda xatolik. Qaytadan urinib ko'ring.";
+      }
+      setError(msg);
+      onError?.(msg);
     } finally {
       setLoading(false);
     }

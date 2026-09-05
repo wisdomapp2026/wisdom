@@ -4,6 +4,7 @@ import { Menu, X, Moon, Star, CreditCard, Settings, Shield, Bell, HelpCircle, Me
 import { supabase } from "@shared/supabase";
 import { useAuth } from "../hooks/useAuth";
 import { useDarkMode } from "../hooks/useDarkMode";
+import { useBackHandler } from "../services/backActionManager";
 import AuthorModal from "./AuthorModal";
 import LegalModal from "./LegalModal";
 
@@ -16,6 +17,11 @@ export default function HamburgerMenu() {
   const [logoUrl, setLogoUrl] = useState("");
   const [appName, setAppName] = useState("tushunGo");
   const [apkUrl, setApkUrl] = useState("");
+
+  // Menyu ochiq bo'lganda smartfon orqaga (back) tugmasi bosilsa menyuni yopish
+  useBackHandler(() => {
+    setOpen(false);
+  }, open, 10);
 
   // Swipe gesture refs
   const touchStartX = useRef(0);

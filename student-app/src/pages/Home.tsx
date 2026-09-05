@@ -9,6 +9,7 @@ import { useAuth } from "../hooks/useAuth";
 import { HomeLoader } from "../components/PageLoader";
 import { cachedFetch } from "../hooks/useCache";
 import { getLocalProgress } from "../hooks/useLocalProgress";
+import { useBackHandler } from "../services/backActionManager";
 
 interface CourseWithMeta extends Course {
   topicCount: number;
@@ -805,6 +806,9 @@ function SocialIcon({ platform, iconUrl }: { platform: string; iconUrl?: string 
 
 // ===== Yangilik detail modal =====
 function NewsDetailModal({ item, onClose }: { item: NewsItem; onClose: () => void }) {
+  // Android back tugmasi bosilganda yangilik modalini yopish
+  useBackHandler(onClose, true, 20);
+
   // Modal ochilganda orqadagi sahifa scroll bo'lmasligi uchun body scroll ni bloklaymiz
   useEffect(() => {
     const originalOverflow = document.body.style.overflow;

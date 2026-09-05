@@ -1,8 +1,8 @@
 {
-  "name": "edukids",
+  "name": "wisdom",
   "version": "1.0.0",
   "private": true,
-  "description": "EduKids - O'quv markazi platformasi (Admin + Student)",
+  "description": "Wisdom - Ingliz tili o'quv platformasi (Admin + Student)",
   "workspaces": [
     "shared",
     "admin-web",

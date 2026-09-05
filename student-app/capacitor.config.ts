@@ -6,8 +6,8 @@ const config: CapacitorConfig = {
   webDir: 'dist',
   server: {
     androidScheme: 'https',
-    // OAuth callback URL'ni app ichida ushlash uchun
-    allowNavigation: ['*.tushungo.uz', 'accounts.google.com', '*.google.com'],
+    // OAuth callback URL va API'larni app ichida ruxsat berish
+    allowNavigation: ['*.tushungo.uz', 'accounts.google.com', '*.google.com', '*.supabase.co'],
   },
   android: {
     backgroundColor: '#ffffff',

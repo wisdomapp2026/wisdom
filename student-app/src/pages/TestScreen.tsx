@@ -7,6 +7,7 @@ import LatexText from "../components/LatexText";
 import { useAuth } from "../hooks/useAuth";
 import { cachedFetch, invalidateCache } from "../hooks/useCache";
 import { getLocalCourseProgress, setLocalCourseProgress } from "../hooks/useLocalProgress";
+import { useBackHandler } from "../services/backActionManager";
 
 const LOCAL_TEST_RESULTS_KEY = "edukids_local_test_results";
 
@@ -47,6 +48,11 @@ export default function TestScreen() {
   const [skipWarning, setSkipWarning] = useState(false);
   const [reviewMode, setReviewMode] = useState(false); // Belgilanmagan savollarga qaytish rejimi
   const [finishConfirm, setFinishConfirm] = useState<{ unansweredCount: number } | null>(null);
+
+  // Android back tugmasi bosilganda testni yakunlash modali ochiq bo'lsa uni yopish
+  useBackHandler(() => {
+    setFinishConfirm(null);
+  }, !!finishConfirm, 20);
 
   useEffect(() => {
     if (!testId) return;
