@@ -244,7 +244,7 @@ export async function renameVocabularyFolder(oldName: string, newName: string): 
 /** Papkani o'chirish (so'zlarni 'Umumiy' ga ko'chirish yoki to'liq o'chirish) */
 export async function deleteVocabularyFolder(folderName: string, deleteWords = false): Promise<void> {
   const name = folderName.trim();
-  if (!name || name === "Umumiy") return;
+  if (!name) return;
 
   if (deleteWords) {
     try {
@@ -258,7 +258,9 @@ export async function deleteVocabularyFolder(folderName: string, deleteWords = f
       }
     }
   } else {
-    await renameVocabularyFolder(name, "Umumiy");
+    if (name !== "Umumiy") {
+      await renameVocabularyFolder(name, "Umumiy");
+    }
   }
 }
 

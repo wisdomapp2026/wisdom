@@ -75,6 +75,12 @@ export default function Vocabularies() {
   const [showNewFolderModal, setShowNewFolderModal] = useState(false);
   const [createdFolderName, setCreatedFolderName] = useState("");
 
+  // Folder delete modal
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [folderToDelete, setFolderToDelete] = useState("");
+  const [deleteMode, setDeleteMode] = useState<"keepWords" | "deleteWords">("deleteWords");
+  const [isDeletingFolder, setIsDeletingFolder] = useState(false);
+
   // Delete confirm
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -289,16 +295,27 @@ export default function Vocabularies() {
     }
   }
 
-  async function handleDeleteFolder(fName: string) {
-    if (!confirm(`"${fName}" papkasini o'chirmoqchimisiz?\nPapkadagi so'zlar "Umumiy" papkaga o'tkaziladi.`)) return;
+  function openDeleteFolderModal(fName: string) {
+    setFolderToDelete(fName);
+    setDeleteMode("deleteWords");
+    setShowDeleteModal(true);
+  }
+
+  async function handleConfirmDeleteFolder() {
+    if (!folderToDelete) return;
+    setIsDeletingFolder(true);
     try {
-      await deleteVocabularyFolder(fName, false);
-      if (selectedFolder === fName) {
+      await deleteVocabularyFolder(folderToDelete, deleteMode === "deleteWords");
+      alert(`"${folderToDelete}" papkasi muvaffaqiyatli ${deleteMode === "deleteWords" ? "va uning ichidagi barcha so'zlar to'liq" : ""} o'chirildi!`);
+      setShowDeleteModal(false);
+      if (selectedFolder === folderToDelete) {
         setSelectedFolder("All");
       }
       await loadVocabularies();
     } catch (err: any) {
       alert("Papkani o'chirishda xatolik: " + err.message);
+    } finally {
+      setIsDeletingFolder(false);
     }
   }
 
@@ -391,38 +408,41 @@ export default function Vocabularies() {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            {selectedFolder !== "All" && selectedFolder !== "Umumiy" && (
+            {selectedFolder !== "All" && (
               <>
                 <button
+                  type="button"
                   onClick={() => {
                     setRenamingFolder(selectedFolder);
                     setNewFolderName(selectedFolder);
                     setShowRenameModal(true);
                   }}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors border border-indigo-200"
-                  title="Papkani qayta nomlash"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-colors border border-indigo-200 shadow-sm"
+                  title="Tanlangan papka nomini tahrirlash"
                 >
-                  <Edit3 className="w-3.5 h-3.5" />
-                  Qayta nomlash
+                  <Edit3 className="w-3.5 h-3.5 text-indigo-600" />
+                  "{selectedFolder}" nomini tahrirlash
                 </button>
                 <button
-                  onClick={() => handleDeleteFolder(selectedFolder)}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-red-200"
-                  title="Papkani o'chirish"
+                  type="button"
+                  onClick={() => openDeleteFolderModal(selectedFolder)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-700 bg-red-50 hover:bg-red-100 rounded-xl transition-colors border border-red-200 shadow-sm"
+                  title="Tanlangan papkani o'chirish"
                 >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  Papkani o'chirish
+                  <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                  "{selectedFolder}" papkasini o'chirish
                 </button>
               </>
             )}
             <button
+              type="button"
               onClick={() => {
                 setCreatedFolderName("");
                 setShowNewFolderModal(true);
               }}
-              className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg transition-colors"
+              className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-xl transition-colors shadow-sm"
             >
-              <FolderPlus className="w-3.5 h-3.5" />
+              <FolderPlus className="w-3.5 h-3.5 text-indigo-600" />
               + Yangi Papka
             </button>
           </div>
@@ -431,6 +451,7 @@ export default function Vocabularies() {
         {/* Papkalar ro'yxati (Horizontal scroll tabs) */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
           <button
+            type="button"
             onClick={() => setSelectedFolder("All")}
             className={`px-3.5 py-2 rounded-xl text-xs font-bold shrink-0 transition-all flex items-center gap-1.5 ${
               selectedFolder === "All"
@@ -444,18 +465,55 @@ export default function Vocabularies() {
           {folders.map((f) => {
             const isSelected = selectedFolder === f;
             return (
-              <button
+              <div
                 key={f}
-                onClick={() => setSelectedFolder(f)}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold shrink-0 transition-all flex items-center gap-1.5 ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold shrink-0 transition-all flex items-center gap-2 border ${
                   isSelected
-                    ? "bg-indigo-600 text-white shadow-sm"
-                    : "bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200"
+                    ? "bg-indigo-600 text-white border-indigo-600 shadow-sm"
+                    : "bg-gray-50 text-gray-700 hover:bg-gray-100 border-gray-200"
                 }`}
               >
-                <Folder className={`w-3.5 h-3.5 ${isSelected ? "text-white" : "text-indigo-600"}`} />
-                <span>{f}</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedFolder(f)}
+                  className="flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Folder className={`w-3.5 h-3.5 ${isSelected ? "text-white" : "text-indigo-600"}`} />
+                  <span>{f}</span>
+                </button>
+
+                {/* Direct Edit & Delete buttons on each tab */}
+                <div className="flex items-center gap-0.5 pl-1.5 border-l border-current/20">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setRenamingFolder(f);
+                      setNewFolderName(f);
+                      setShowRenameModal(true);
+                    }}
+                    className={`p-1 rounded hover:bg-white/20 transition-colors ${
+                      isSelected ? "text-white" : "text-gray-400 hover:text-indigo-600"
+                    }`}
+                    title="Nomini tahrirlash (Edit)"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openDeleteFolderModal(f);
+                    }}
+                    className={`p-1 rounded hover:bg-red-500/20 transition-colors ${
+                      isSelected ? "text-white hover:text-red-200" : "text-gray-400 hover:text-red-600"
+                    }`}
+                    title="Papkani o'chirish (Delete)"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
             );
           })}
         </div>
@@ -1051,6 +1109,104 @@ export default function Vocabularies() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* Papkani O'chirish Modali (Variantlar bilan) */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-2xl shadow-xl border border-gray-100 p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-base text-red-600 flex items-center gap-2">
+                <Trash2 className="w-5 h-5" />
+                Papkani O'chirish
+              </h3>
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="p-1 text-gray-400 hover:text-gray-600 rounded-lg"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-600">
+              <strong className="text-gray-900 font-bold">"{folderToDelete}"</strong> papkasini qanday o'chirmoqchisiz? Tanlang:
+            </p>
+
+            <div className="space-y-2.5">
+              <label
+                className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
+                  deleteMode === "deleteWords"
+                    ? "border-red-500 bg-red-50/60"
+                    : "border-gray-200 hover:bg-gray-50"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="deleteMode"
+                  checked={deleteMode === "deleteWords"}
+                  onChange={() => setDeleteMode("deleteWords")}
+                  className="mt-0.5 text-red-600 cursor-pointer"
+                />
+                <div>
+                  <p className="text-xs font-bold text-red-700">
+                    Papkani va uning barcha so'zlarini TO'LIQ o'chirish
+                  </p>
+                  <p className="text-[11px] text-red-600 mt-0.5">
+                    Papkadagi barcha so'zlar bazadan butunlay o'chiriladi.
+                  </p>
+                </div>
+              </label>
+
+              <label
+                className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
+                  deleteMode === "keepWords"
+                    ? "border-indigo-500 bg-indigo-50/60"
+                    : "border-gray-200 hover:bg-gray-50"
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="deleteMode"
+                  checked={deleteMode === "keepWords"}
+                  onChange={() => setDeleteMode("keepWords")}
+                  className="mt-0.5 text-indigo-600 cursor-pointer"
+                />
+                <div>
+                  <p className="text-xs font-bold text-gray-800">
+                    Faqat papkani o'chirish (so'zlarni "Umumiy" ga o'tkazish)
+                  </p>
+                  <p className="text-[11px] text-gray-500 mt-0.5">
+                    So'zlar bazada saqlanadi, faqat papka guruhidan chiqariladi.
+                  </p>
+                </div>
+              </label>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(false)}
+                className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl text-xs font-medium hover:bg-gray-50"
+              >
+                Bekor qilish
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingFolder}
+                onClick={handleConfirmDeleteFolder}
+                className="px-5 py-2 bg-red-600 text-white rounded-xl text-xs font-semibold hover:bg-red-700 disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {isDeletingFolder ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    O'chirilmoqda...
+                  </>
+                ) : (
+                  "Tasdiqlash va O'chirish"
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
