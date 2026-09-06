@@ -56,6 +56,45 @@ const UZBEK_STOPWORDS = new Set([
   "qanday", "nega", "nima", "qayerda", "qachon", "qancha", "kim", "kimlar", "natijada"
 ]);
 
+// Nazariya matnidagi YouTube videolarni to'g'rilash va optimizatsiya qilish
+function formatTheoryContent(rawHtml: string): string {
+  if (!rawHtml) return "";
+  let html = rawHtml.includes("<") ? rawHtml : rawHtml.replace(/\n/g, "<br />");
+
+  // 1. Barcha youtube.com/embed havolalarni youtube-nocookie.com/embed ga o'tkazish
+  // (Google Workspace yoki cheklangan hisoblarda "Сервис недоступен" xatosini yo'qotadi)
+  html = html.replace(
+    /https?:\/\/(?:www\.)?youtube\.com\/embed\/([a-zA-Z0-9_-]+)/gi,
+    "https://www.youtube-nocookie.com/embed/$1"
+  );
+
+  // 2. youtube-nocookie iframe lariga referrerpolicy="no-referrer" va xavfsiz parametrlarni qo'shish
+  html = html.replace(
+    /<iframe\s+([^>]*?)src=["'](https:\/\/www\.youtube-nocookie\.com\/embed\/([a-zA-Z0-9_-]+))(?:\?[^"']*)?["']([^>]*)>/gi,
+    (_match, before, _url, videoId, after) => {
+      const rest = (before + " " + after)
+        .replace(/referrerpolicy=["'][^"']*["']/gi, "")
+        .replace(/allow=["'][^"']*["']/gi, "")
+        .replace(/allowfullscreen/gi, "")
+        .trim();
+      return `<iframe referrerpolicy="no-referrer" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen src="https://www.youtube-nocookie.com/embed/${videoId}?rel=0&modestbranding=1" ${rest}>`;
+    }
+  );
+
+  // 3. Har bir video tagiga to'g'ridan-to'g'ri YouTube ilovasida ochish tugmasini qo'shish
+  html = html.replace(
+    /(<div[^>]*class=["'][^"']*video-container[^"']*["'][^>]*>[\s\S]*?youtube-nocookie\.com\/embed\/([a-zA-Z0-9_-]+)[\s\S]*?<\/div>)(?![\s\S]{0,120}video-helper-bar)/gi,
+    `$1<div class="video-helper-bar mt-1.5 mb-5 flex justify-end">
+      <a href="https://www.youtube.com/watch?v=$2" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-xl transition-colors shadow-sm">
+        <svg class="w-3.5 h-3.5 text-red-600 shrink-0" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+        <span>Videoni YouTube'da ko'rish ↗</span>
+      </a>
+    </div>`
+  );
+
+  return html;
+}
+
 export default function TopicDetail() {
   const { courseId, topicId } = useParams<{ courseId: string; topicId: string }>();
   const navigate = useNavigate();
@@ -155,7 +194,10 @@ export default function TopicDetail() {
   // Dars nazariyasidagi so'z ustiga bosganda eshitish va tarjima qilish
   async function handleTheoryClick(e: React.MouseEvent<HTMLDivElement>) {
     const target = e.target as HTMLElement;
-    if (["A", "BUTTON", "IFRAME", "INPUT", "SELECT"].includes(target.tagName)) {
+    if (
+      ["A", "BUTTON", "IFRAME", "INPUT", "SELECT"].includes(target.tagName) ||
+      target.closest("a, button, iframe, .video-container, .video-helper-bar")
+    ) {
       return;
     }
 
@@ -587,9 +629,7 @@ export default function TopicDetail() {
                   title="So'z ustiga bosing: ovoz va tarjima"
                   className="rich-theory-content text-gray-800 text-sm sm:text-base leading-relaxed break-words cursor-pointer select-text"
                   dangerouslySetInnerHTML={{
-                    __html: topic.theoryContent.includes("<")
-                      ? topic.theoryContent
-                      : topic.theoryContent.replace(/\n/g, "<br />"),
+                    __html: formatTheoryContent(topic.theoryContent),
                   }}
                 />
               ) : (

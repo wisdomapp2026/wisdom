@@ -240,7 +240,7 @@ export default function RichTextEditor({
     }
 
     restoreSelection();
-    const embedHtml = `<div class="video-container" style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:16px;margin:20px 0;background:#000;"><iframe src="https://www.youtube.com/embed/${id}" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;border-radius:16px;"></iframe></div><p><br></p>`;
+    const embedHtml = `<div class="video-container" style="position:relative;padding-bottom:56.25%;height:0;overflow:hidden;border-radius:16px;margin:20px 0;background:#000;"><iframe src="https://www.youtube-nocookie.com/embed/${id}?rel=0&modestbranding=1" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="no-referrer" allowfullscreen style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;border-radius:16px;"></iframe></div><p><br></p>`;
 
     if (editorRef.current) {
       editorRef.current.focus();
