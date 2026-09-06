@@ -117,6 +117,7 @@ export default function TopicDetail() {
     translation: string;
     loadingTranslation: boolean;
     phonetic?: string;
+    sourceLang?: "en" | "uz";
   } | null>(null);
 
   // Quiz state
@@ -268,84 +269,120 @@ export default function TopicDetail() {
 
     const lowerWord = cleanWord.toLowerCase();
 
-    // O'zbekcha so'zlarni to'xtatish (o', g', o‘, g‘ va o'zbek stopwords / qo'shimchalar)
-    if (
-      /[oOgG]['’ʻ‘`]/.test(cleanWord) ||
-      /[а-яА-ЯёЁ]/.test(cleanWord) ||
-      UZBEK_STOPWORDS.has(lowerWord) ||
-      /(larning|lardan|larga|larni|larda|larimiz|laringiz|moqda|yapti|yotgan|maslik|sizlar|imizda|ingizda)$/i.test(lowerWord)
-    ) {
-      return; // O'zbekcha so'z, modal ochilmaydi
-    }
-
     // 1-bosqich: Dars lug'atlarida mavjud bo'lsa — darhol o'sha yerdan olamiz
-    const localMatch = vocabularies.find(
+    // 1.1: Agar inglizcha so'z bo'lsa
+    const localEnMatch = vocabularies.find(
       (v) => v.word.toLowerCase() === lowerWord
     );
-    if (localMatch && localMatch.translation) {
+    if (localEnMatch && localEnMatch.translation) {
       setSelectedWordData({
         word: cleanWord,
-        translation: localMatch.translation,
+        translation: localEnMatch.translation,
         loadingTranslation: false,
-        phonetic: localMatch.phonetic,
+        phonetic: localEnMatch.phonetic,
+        sourceLang: "en",
       });
       playSpeech(cleanWord);
       return;
     }
 
-    // 2-bosqich: Inglizcha so'z uchun darhol modalni ochish va ovoz chiqarish (kutib o'tirmasdan)
+    // 1.2: Agar o'zbekcha tarjimasi bo'lsa
+    const localUzMatch = vocabularies.find(
+      (v) => v.translation.toLowerCase() === lowerWord
+    );
+    if (localUzMatch && localUzMatch.word) {
+      setSelectedWordData({
+        word: cleanWord,
+        translation: localUzMatch.word,
+        loadingTranslation: false,
+        phonetic: localUzMatch.phonetic,
+        sourceLang: "uz",
+      });
+      playSpeech(localUzMatch.word);
+      return;
+    }
+
+    // 2-bosqich: Tilni dastlabki aniqlash (o'zbekcha belgilar va so'zlar)
+    const isLikelyUzbek =
+      /[oOgG]['’ʻ‘`]/.test(cleanWord) ||
+      /[а-яА-ЯёЁ]/.test(cleanWord) ||
+      UZBEK_STOPWORDS.has(lowerWord) ||
+      /(larning|lardan|larga|larni|larda|larimiz|laringiz|moqda|yapti|yotgan|maslik|sizlar|imizda|ingizda|ingiz|imiz|miz|dan|dek)$/i.test(lowerWord);
+
+    // Modalni darhol ochish
     setSelectedWordData({
       word: cleanWord,
       translation: "",
       loadingTranslation: true,
+      sourceLang: isLikelyUzbek ? "uz" : "en",
     });
-    playSpeech(cleanWord);
 
-    // 3-bosqich: Tarjimani orqa fonda tezkor yuklash (MyMemory va zaxiralar)
+    if (!isLikelyUzbek) {
+      playSpeech(cleanWord);
+    }
+
+    // 3-bosqich: Aqlli 2 tomonlama tarjima (MyMemory uz<->en)
     (async () => {
-      // 1. MyMemory bepul API (bloklanmaydi va juda tez)
+      const primaryPair = isLikelyUzbek ? "uz|en" : "en|uz";
+      const secondaryPair = isLikelyUzbek ? "en|uz" : "uz|en";
+
       try {
-        const res = await fetch(
-          `https://api.mymemory.translated.net/get?q=${encodeURIComponent(cleanWord)}&langpair=en|uz`
+        // 1-urinish: Dastlabki taxmin bo'yicha
+        const res1 = await fetch(
+          `https://api.mymemory.translated.net/get?q=${encodeURIComponent(cleanWord)}&langpair=${primaryPair}`
         );
-        if (res.ok) {
-          const data = await res.json();
-          const trans = data?.responseData?.translatedText?.trim();
-          if (trans && trans.toLowerCase() !== lowerWord) {
+        if (res1.ok) {
+          const data1 = await res1.json();
+          const trans1 = data1?.responseData?.translatedText?.trim();
+          if (trans1 && trans1.toLowerCase() !== lowerWord) {
+            const detectedLang = isLikelyUzbek ? "uz" : "en";
             setSelectedWordData((prev) =>
               prev && prev.word.toLowerCase() === lowerWord
-                ? { ...prev, translation: trans, loadingTranslation: false }
+                ? {
+                    ...prev,
+                    translation: trans1,
+                    loadingTranslation: false,
+                    sourceLang: detectedLang,
+                  }
                 : prev
             );
+            // Agar o'zbekcha so'z bo'lsa, uning inglizcha tarjimasi ovoz beriladi
+            if (detectedLang === "uz") {
+              playSpeech(trans1);
+            }
+            return;
+          }
+        }
+
+        // 2-urinish: Qarama-qarshi yo'nalish
+        const res2 = await fetch(
+          `https://api.mymemory.translated.net/get?q=${encodeURIComponent(cleanWord)}&langpair=${secondaryPair}`
+        );
+        if (res2.ok) {
+          const data2 = await res2.json();
+          const trans2 = data2?.responseData?.translatedText?.trim();
+          if (trans2 && trans2.toLowerCase() !== lowerWord) {
+            const detectedLang = isLikelyUzbek ? "en" : "uz";
+            setSelectedWordData((prev) =>
+              prev && prev.word.toLowerCase() === lowerWord
+                ? {
+                    ...prev,
+                    translation: trans2,
+                    loadingTranslation: false,
+                    sourceLang: detectedLang,
+                  }
+                : prev
+            );
+            if (detectedLang === "uz") {
+              playSpeech(trans2);
+            } else {
+              playSpeech(cleanWord);
+            }
             return;
           }
         }
       } catch (err) {
         console.warn("MyMemory API xatosi:", err);
-      }
-
-      // 2. Google Translate zaxirasi
-      try {
-        const gRes = await fetch(
-          `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=uz&dt=t&q=${encodeURIComponent(
-            cleanWord
-          )}`
-        );
-        const contentType = gRes.headers.get("content-type") || "";
-        if (gRes.ok && contentType.includes("json")) {
-          const gData = await gRes.json();
-          const gTrans = gData?.[0]?.[0]?.[0]?.trim();
-          if (gTrans && gTrans.toLowerCase() !== lowerWord) {
-            setSelectedWordData((prev) =>
-              prev && prev.word.toLowerCase() === lowerWord
-                ? { ...prev, translation: gTrans, loadingTranslation: false }
-                : prev
-            );
-            return;
-          }
-        }
-      } catch (err) {
-        console.warn("Google Translate zaxira xatosi:", err);
       }
 
       // Agar tarjima topilmasa
@@ -1247,8 +1284,14 @@ export default function TopicDetail() {
               {/* Sarlavha qismi */}
               <div className="flex items-start justify-between">
                 <div>
-                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full">
-                    Inglizcha so'z
+                  <span
+                    className={`text-[10px] font-extrabold uppercase tracking-wider px-2.5 py-1 rounded-full border ${
+                      selectedWordData.sourceLang === "uz"
+                        ? "text-emerald-700 bg-emerald-50 border-emerald-200/60"
+                        : "text-indigo-700 bg-indigo-50 border-indigo-200/60"
+                    }`}
+                  >
+                    {selectedWordData.sourceLang === "uz" ? "O'zbekcha so'z" : "Inglizcha so'z"}
                   </span>
                   <h3 className="text-2xl font-black text-gray-900 mt-1 capitalize">
                     {selectedWordData.word}
@@ -1267,10 +1310,10 @@ export default function TopicDetail() {
                 </button>
               </div>
 
-              {/* O'zbekcha tarjima qismi */}
+              {/* Tarjima qismi */}
               <div className="bg-gradient-to-br from-indigo-50/80 to-purple-50/40 rounded-2xl p-4 border border-indigo-100/80 space-y-1">
                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                  O'zbekcha tarjimasi:
+                  {selectedWordData.sourceLang === "uz" ? "Inglizcha tarjimasi:" : "O'zbekcha tarjimasi:"}
                 </span>
                 {selectedWordData.loadingTranslation ? (
                   <div className="flex items-center gap-2 text-sm text-indigo-600 py-1 font-medium">
@@ -1285,30 +1328,42 @@ export default function TopicDetail() {
               </div>
 
               {/* Boshqaruv tugmalari */}
-              <div className="flex gap-2 pt-1">
-                <button
-                  onClick={() => playSpeech(selectedWordData.word, false)}
-                  className="flex-1 inline-flex items-center justify-center gap-1.5 py-3 px-3 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-2xl font-bold text-xs shadow-md shadow-indigo-600/20 transition-all"
-                  title="Oddiy tezlikda tinglash"
-                >
-                  <Volume2 className="w-4 h-4" />
-                  <span>Tinglash</span>
-                </button>
-                <button
-                  onClick={() => playSpeech(selectedWordData.word, true)}
-                  className="inline-flex items-center justify-center gap-1.5 py-3 px-3.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 active:scale-95 text-amber-800 rounded-2xl font-bold text-xs transition-all shadow-sm"
-                  title="Sekinlashtirilgan talaffuz (Toshbaqa: 0.55x)"
-                >
-                  <Turtle className="w-4 h-4 text-amber-600" />
-                  <span>Sekin (0.55x)</span>
-                </button>
-                <button
-                  onClick={() => setSelectedWordData(null)}
-                  className="px-4 py-3 border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-2xl font-semibold text-xs transition-colors"
-                >
-                  Yopish
-                </button>
-              </div>
+              {(() => {
+                const speechWord =
+                  selectedWordData.sourceLang === "uz"
+                    ? selectedWordData.translation
+                    : selectedWordData.word;
+                const canSpeak = !!speechWord && speechWord !== "Tarjima topilmadi";
+
+                return (
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      onClick={() => canSpeak && playSpeech(speechWord, false)}
+                      disabled={!canSpeak}
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 py-3 px-3 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 active:scale-95 text-white rounded-2xl font-bold text-xs shadow-md shadow-indigo-600/20 transition-all"
+                      title="Oddiy tezlikda inglizcha talaffuz"
+                    >
+                      <Volume2 className="w-4 h-4" />
+                      <span>{selectedWordData.sourceLang === "uz" ? "Talaffuz" : "Tinglash"}</span>
+                    </button>
+                    <button
+                      onClick={() => canSpeak && playSpeech(speechWord, true)}
+                      disabled={!canSpeak}
+                      className="inline-flex items-center justify-center gap-1.5 py-3 px-3.5 bg-amber-50 hover:bg-amber-100 disabled:opacity-50 border border-amber-200 active:scale-95 text-amber-800 rounded-2xl font-bold text-xs transition-all shadow-sm"
+                      title="Sekinlashtirilgan talaffuz (Toshbaqa: 0.55x)"
+                    >
+                      <Turtle className="w-4 h-4 text-amber-600" />
+                      <span>Sekin (0.55x)</span>
+                    </button>
+                    <button
+                      onClick={() => setSelectedWordData(null)}
+                      className="px-4 py-3 border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-2xl font-semibold text-xs transition-colors"
+                    >
+                      Yopish
+                    </button>
+                  </div>
+                );
+              })()}
             </div>
           </div>,
           document.body
