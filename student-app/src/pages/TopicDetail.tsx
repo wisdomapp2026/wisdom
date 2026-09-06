@@ -1,5 +1,6 @@
 import { Link, useParams, useNavigate } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import {
   ChevronLeft,
   BookOpen,
@@ -158,34 +159,49 @@ export default function TopicDetail() {
       return;
     }
 
-    // 1. Foydalanuvchi matnni belgilagan bo'lsa
+    // 1. Foydalanuvchi matnni belgilagan bo'lsa (mouse bilan tortib belgilash)
     const selection = window.getSelection();
     let word = selection?.toString().trim() || "";
 
-    // 2. Agar qo'lda belgilanmagan bo'lsa, bosilgan so'zni aniqlaymiz
+    // 2. Agar qo'lda belgilanmagan bo'lsa, bosilgan nuqta yoki elementdan so'zni aniqlash
     if (!word) {
-      let range: Range | null = null;
+      let textNode: Node | null = null;
+      let offset = 0;
+
       if (document.caretRangeFromPoint) {
-        range = document.caretRangeFromPoint(e.clientX, e.clientY);
+        const range = document.caretRangeFromPoint(e.clientX, e.clientY);
+        if (range) {
+          textNode = range.startContainer;
+          offset = range.startOffset;
+        }
       } else if ((document as any).caretPositionFromPoint) {
         const pos = (document as any).caretPositionFromPoint(e.clientX, e.clientY);
-        if (pos && pos.offsetNode) {
-          range = document.createRange();
-          range.setStart(pos.offsetNode, pos.offset);
-          range.setEnd(pos.offsetNode, pos.offset);
+        if (pos) {
+          textNode = pos.offsetNode;
+          offset = pos.offset;
         }
       }
 
-      if (range && range.startContainer.nodeType === Node.TEXT_NODE) {
-        const text = range.startContainer.textContent || "";
-        const offset = range.startOffset;
+      // Agar textNode to'g'ridan-to'g'ri TextNode bo'lmasa (masalan <b>, <span>, <td>, <p>)
+      if (textNode && textNode.nodeType !== Node.TEXT_NODE) {
+        const child =
+          textNode.childNodes[offset] ||
+          textNode.childNodes[offset - 1] ||
+          textNode.firstChild;
+        if (child && child.nodeType === Node.TEXT_NODE) {
+          textNode = child;
+          offset = Math.min(offset, (child.textContent || "").length);
+        }
+      }
 
+      if (textNode && textNode.nodeType === Node.TEXT_NODE) {
+        const text = textNode.textContent || "";
         let start = offset;
         let end = offset;
-        while (start > 0 && /[a-zA-Z'’-]/.test(text[start - 1])) {
+        while (start > 0 && /[a-zA-Z'’`ʻ-]/.test(text[start - 1])) {
           start--;
         }
-        while (end < text.length && /[a-zA-Z'’-]/.test(text[end])) {
+        while (end < text.length && /[a-zA-Z'’`ʻ-]/.test(text[end])) {
           end++;
         }
 
@@ -193,16 +209,34 @@ export default function TopicDetail() {
           word = text.substring(start, end).trim();
         }
       }
+
+      // 3. Fallback: agar to'g'ridan-to'g'ri bitta so'zli teg (<b>, <td>, <span>) bosilgan bo'lsa
+      if (!word && target) {
+        const tText = (target.textContent || "").trim();
+        if (/^[a-zA-Z'’`ʻ-]+$/.test(tText)) {
+          word = tText;
+        }
+      }
     }
 
     const cleanWord = word.replace(/^[^\w]+|[^\w]+$/g, "");
-    if (!cleanWord || !/^[a-zA-Z'’-\s]+$/.test(cleanWord) || cleanWord.length < 2 || cleanWord.length > 35) {
+    if (!cleanWord || !/^[a-zA-Z'’`ʻ-\s]+$/.test(cleanWord) || cleanWord.length < 1 || cleanWord.length > 35) {
       return;
     }
 
     const lowerWord = cleanWord.toLowerCase();
 
-    // 1-bosqich: Dars lug'atlaridan qidirish (agar ro'yxatda bo'lsa, aniq inglizcha so'z)
+    // O'zbekcha so'zlarni to'xtatish (o', g', o‘, g‘ va o'zbek stopwords / qo'shimchalar)
+    if (
+      /[oOgG]['’ʻ‘`]/.test(cleanWord) ||
+      /[а-яА-ЯёЁ]/.test(cleanWord) ||
+      UZBEK_STOPWORDS.has(lowerWord) ||
+      /(larning|lardan|larga|larni|larda|larimiz|laringiz|moqda|yapti|yotgan|maslik|sizlar|imizda|ingizda)$/i.test(lowerWord)
+    ) {
+      return; // O'zbekcha so'z, modal ochilmaydi
+    }
+
+    // 1-bosqich: Dars lug'atlarida mavjud bo'lsa — darhol o'sha yerdan olamiz
     const localMatch = vocabularies.find(
       (v) => v.word.toLowerCase() === lowerWord
     );
@@ -217,76 +251,68 @@ export default function TopicDetail() {
       return;
     }
 
-    // 2-bosqich: O'zbekcha so'zlarni filtrlab to'xtatish (o', g', o‘, g‘ va o'zbek so'zlari / qo'shimchalari)
-    if (
-      /[oOgG]['’ʻ‘`]/.test(cleanWord) ||
-      UZBEK_STOPWORDS.has(lowerWord) ||
-      /(larning|lardan|larga|larni|larda|larimiz|laringiz|moqda|yapti|yotgan|maslik|sizlar|imizda|ingizda)$/i.test(lowerWord)
-    ) {
-      return; // O'zbekcha so'z, modal ochilmaydi
-    }
+    // 2-bosqich: Inglizcha so'z uchun darhol modalni ochish va ovoz chiqarish (kutib o'tirmasdan)
+    setSelectedWordData({
+      word: cleanWord,
+      translation: "",
+      loadingTranslation: true,
+    });
+    playSpeech(cleanWord);
 
-    // 3-bosqich: Bepul Google Translate orqali tilni aniqlash (sl=auto)
-    // FAQAT ingliz tili (detected = "en") bo'lsagina modal ochiladi!
-    try {
-      const res = await fetch(
-        `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=uz&dt=t&q=${encodeURIComponent(
-          cleanWord
-        )}`
-      );
-      if (res.ok) {
-        const data = await res.json();
-        const detectedLang = data?.[2];
-        const trans = data?.[0]?.[0]?.[0]?.trim();
-
-        // Faqat Inglizcha so'z bo'lsa va tarjimasi o'zidan farq qilsa ochilsin
-        if (
-          detectedLang === "en" &&
-          trans &&
-          trans.toLowerCase() !== lowerWord
-        ) {
-          setSelectedWordData({
-            word: cleanWord,
-            translation: trans,
-            loadingTranslation: false,
-          });
-          playSpeech(cleanWord);
-          return;
-        } else {
-          // O'zbekcha yoki boshqa tildagi so'z — modal ochilmaydi
-          return;
+    // 3-bosqich: Tarjimani orqa fonda tezkor yuklash (MyMemory va zaxiralar)
+    (async () => {
+      // 1. MyMemory bepul API (bloklanmaydi va juda tez)
+      try {
+        const res = await fetch(
+          `https://api.mymemory.translated.net/get?q=${encodeURIComponent(cleanWord)}&langpair=en|uz`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          const trans = data?.responseData?.translatedText?.trim();
+          if (trans && trans.toLowerCase() !== lowerWord) {
+            setSelectedWordData((prev) =>
+              prev && prev.word.toLowerCase() === lowerWord
+                ? { ...prev, translation: trans, loadingTranslation: false }
+                : prev
+            );
+            return;
+          }
         }
+      } catch (err) {
+        console.warn("MyMemory API xatosi:", err);
       }
-    } catch (err) {
-      console.warn("Google Translate tekshiruv xatosi:", err);
-    }
 
-    // 4-bosqich: Bepul MyMemory API zaxira (faqat agar Google Translate javob bermasa)
-    try {
-      const res = await fetch(
-        `https://api.mymemory.translated.net/get?q=${encodeURIComponent(cleanWord)}&langpair=en|uz`
-      );
-      if (res.ok) {
-        const data = await res.json();
-        const trans = data?.responseData?.translatedText?.trim();
-        const matchQuality = data?.responseData?.match;
-        if (
-          trans &&
-          trans.toLowerCase() !== lowerWord &&
-          (matchQuality === undefined || matchQuality > 0.4)
-        ) {
-          setSelectedWordData({
-            word: cleanWord,
-            translation: trans,
-            loadingTranslation: false,
-          });
-          playSpeech(cleanWord);
-          return;
+      // 2. Google Translate zaxirasi
+      try {
+        const gRes = await fetch(
+          `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=uz&dt=t&q=${encodeURIComponent(
+            cleanWord
+          )}`
+        );
+        const contentType = gRes.headers.get("content-type") || "";
+        if (gRes.ok && contentType.includes("json")) {
+          const gData = await gRes.json();
+          const gTrans = gData?.[0]?.[0]?.[0]?.trim();
+          if (gTrans && gTrans.toLowerCase() !== lowerWord) {
+            setSelectedWordData((prev) =>
+              prev && prev.word.toLowerCase() === lowerWord
+                ? { ...prev, translation: gTrans, loadingTranslation: false }
+                : prev
+            );
+            return;
+          }
         }
+      } catch (err) {
+        console.warn("Google Translate zaxira xatosi:", err);
       }
-    } catch (err) {
-      console.warn("MyMemory xatosi:", err);
-    }
+
+      // Agar tarjima topilmasa
+      setSelectedWordData((prev) =>
+        prev && prev.word.toLowerCase() === lowerWord
+          ? { ...prev, translation: "Tarjima topilmadi", loadingTranslation: false }
+          : prev
+      );
+    })();
   }
 
   // Quiz operatsiyalari
@@ -1167,84 +1193,86 @@ export default function TopicDetail() {
         </div>
       )}
 
-      {/* So'z ustiga bosilgandagi Tinglash va Tarjima modali */}
-      {selectedWordData && (
-        <div
-          className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 transition-all animate-fadeIn"
-          onClick={() => setSelectedWordData(null)}
-        >
+      {/* So'z ustiga bosilgandagi Tinglash va Tarjima modali (document.body ga portal orqali o'rnatiladi) */}
+      {selectedWordData &&
+        createPortal(
           <div
-            className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-gray-100 space-y-4 animate-in zoom-in-95 max-h-[85vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 transition-all animate-fadeIn"
+            onClick={() => setSelectedWordData(null)}
           >
-            {/* Sarlavha qismi */}
-            <div className="flex items-start justify-between">
-              <div>
-                <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full">
-                  Inglizcha so'z
+            <div
+              className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-gray-100 space-y-4 animate-in zoom-in-95 max-h-[85vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Sarlavha qismi */}
+              <div className="flex items-start justify-between">
+                <div>
+                  <span className="text-[10px] font-extrabold uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full">
+                    Inglizcha so'z
+                  </span>
+                  <h3 className="text-2xl font-black text-gray-900 mt-1 capitalize">
+                    {selectedWordData.word}
+                  </h3>
+                  {selectedWordData.phonetic && (
+                    <p className="text-xs font-mono text-gray-500 mt-0.5">
+                      {selectedWordData.phonetic}
+                    </p>
+                  )}
+                </div>
+                <button
+                  onClick={() => setSelectedWordData(null)}
+                  className="p-1.5 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* O'zbekcha tarjima qismi */}
+              <div className="bg-gradient-to-br from-indigo-50/80 to-purple-50/40 rounded-2xl p-4 border border-indigo-100/80 space-y-1">
+                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                  O'zbekcha tarjimasi:
                 </span>
-                <h3 className="text-2xl font-black text-gray-900 mt-1 capitalize">
-                  {selectedWordData.word}
-                </h3>
-                {selectedWordData.phonetic && (
-                  <p className="text-xs font-mono text-gray-500 mt-0.5">
-                    {selectedWordData.phonetic}
+                {selectedWordData.loadingTranslation ? (
+                  <div className="flex items-center gap-2 text-sm text-indigo-600 py-1 font-medium">
+                    <span className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                    <span>Tarjima qilinmoqda...</span>
+                  </div>
+                ) : (
+                  <p className="text-lg font-bold text-indigo-950 capitalize">
+                    {selectedWordData.translation || "Tarjima topilmadi"}
                   </p>
                 )}
               </div>
-              <button
-                onClick={() => setSelectedWordData(null)}
-                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
 
-            {/* O'zbekcha tarjima qismi */}
-            <div className="bg-gradient-to-br from-indigo-50/80 to-purple-50/40 rounded-2xl p-4 border border-indigo-100/80 space-y-1">
-              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-                O'zbekcha tarjimasi:
-              </span>
-              {selectedWordData.loadingTranslation ? (
-                <div className="flex items-center gap-2 text-sm text-indigo-600 py-1 font-medium">
-                  <span className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-                  <span>Tarjima qilinmoqda...</span>
-                </div>
-              ) : (
-                <p className="text-lg font-bold text-indigo-950 capitalize">
-                  {selectedWordData.translation || "Tarjima topilmadi"}
-                </p>
-              )}
+              {/* Boshqaruv tugmalari */}
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => playSpeech(selectedWordData.word, false)}
+                  className="flex-1 inline-flex items-center justify-center gap-1.5 py-3 px-3 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-2xl font-bold text-xs shadow-md shadow-indigo-600/20 transition-all"
+                  title="Oddiy tezlikda tinglash"
+                >
+                  <Volume2 className="w-4 h-4" />
+                  <span>Tinglash</span>
+                </button>
+                <button
+                  onClick={() => playSpeech(selectedWordData.word, true)}
+                  className="inline-flex items-center justify-center gap-1.5 py-3 px-3.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 active:scale-95 text-amber-800 rounded-2xl font-bold text-xs transition-all shadow-sm"
+                  title="Sekinlashtirilgan talaffuz (Toshbaqa: 0.55x)"
+                >
+                  <Turtle className="w-4 h-4 text-amber-600" />
+                  <span>Sekin (0.55x)</span>
+                </button>
+                <button
+                  onClick={() => setSelectedWordData(null)}
+                  className="px-4 py-3 border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-2xl font-semibold text-xs transition-colors"
+                >
+                  Yopish
+                </button>
+              </div>
             </div>
-
-            {/* Boshqaruv tugmalari */}
-            <div className="flex gap-2 pt-1">
-              <button
-                onClick={() => playSpeech(selectedWordData.word, false)}
-                className="flex-1 inline-flex items-center justify-center gap-1.5 py-3 px-3 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white rounded-2xl font-bold text-xs shadow-md shadow-indigo-600/20 transition-all"
-                title="Oddiy tezlikda tinglash"
-              >
-                <Volume2 className="w-4 h-4" />
-                <span>Tinglash</span>
-              </button>
-              <button
-                onClick={() => playSpeech(selectedWordData.word, true)}
-                className="inline-flex items-center justify-center gap-1.5 py-3 px-3.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 active:scale-95 text-amber-800 rounded-2xl font-bold text-xs transition-all shadow-sm"
-                title="Sekinlashtirilgan talaffuz (Toshbaqa: 0.55x)"
-              >
-                <Turtle className="w-4 h-4 text-amber-600" />
-                <span>Sekin (0.55x)</span>
-              </button>
-              <button
-                onClick={() => setSelectedWordData(null)}
-                className="px-4 py-3 border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-2xl font-semibold text-xs transition-colors"
-              >
-                Yopish
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
